@@ -394,14 +394,20 @@ function inferSourceDocument(
       assignmentSource: "path",
     };
   }
-  if (normalized.includes("/elevation") || normalized.includes("/elevations/") || side) {
+  if (
+    normalized.includes("/elevation") ||
+    normalized.includes("/elevations/") ||
+    normalized.includes("elevation") ||
+    normalized.includes("wall") ||
+    side
+  ) {
     return {
       sourcePath: relativePath,
       fileName,
       classification: "elevation",
       application: "siding",
       side,
-      assignmentSource: side ? "path" : "default",
+      assignmentSource: "path",
     };
   }
 

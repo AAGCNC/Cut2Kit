@@ -16,6 +16,7 @@ import { ProjectPdfWorkspace } from "../features/cut2kit-pdf/components/ProjectP
 import {
   buildProjectPdfOptions,
   findProjectPdfOption,
+  isFramingWorkspacePdfOption,
 } from "../features/cut2kit-pdf/lib/projectPdfFiles";
 import { openInPreferredEditor } from "../editorPreferences";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
@@ -118,12 +119,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     [snapshot],
   );
   const elevationPdfOptions = useMemo(
-    () =>
-      snapshot
-        ? buildProjectPdfOptions(snapshot).filter(
-            (option) => option.classification === "elevation" || option.classification === null,
-          )
-        : [],
+    () => (snapshot ? buildProjectPdfOptions(snapshot).filter(isFramingWorkspacePdfOption) : []),
     [snapshot],
   );
   const selectedElevationOption = useMemo(

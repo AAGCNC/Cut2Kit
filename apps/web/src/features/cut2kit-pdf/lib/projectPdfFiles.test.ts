@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProjectPdfOptions,
   describeProjectPdfOption,
+  isFramingWorkspacePdfOption,
   resolveSelectedProjectPdf,
 } from "./projectPdfFiles";
 
@@ -83,5 +84,32 @@ describe("projectPdfFiles", () => {
     expect(describeProjectPdfOption(front!)).toContain("elevation");
     expect(describeProjectPdfOption(front!)).toContain("front");
     expect(describeProjectPdfOption(front!)).toContain("elevations/front-wall.pdf");
+  });
+
+  it("keeps unclassified source PDFs available to the framing workspace", () => {
+    const options = [
+      {
+        relativePath: "elevation2.pdf",
+        fileName: "elevation2.pdf",
+        classification: "unknown",
+        application: null,
+        side: null,
+        assignmentSource: "default",
+        source: "source-document",
+      },
+      {
+        relativePath: "floor/main-floor.pdf",
+        fileName: "main-floor.pdf",
+        classification: "floor",
+        application: "flooring",
+        side: null,
+        assignmentSource: "settings",
+        source: "source-document",
+      },
+    ] as const;
+
+    expect(
+      options.filter(isFramingWorkspacePdfOption).map((option) => option.relativePath),
+    ).toEqual(["elevation2.pdf"]);
   });
 });

@@ -12,6 +12,7 @@ import {
   buildProjectPdfOptions,
   fallbackProjectPdfFileName,
   findProjectPdfOption,
+  isFramingWorkspacePdfOption,
   resolveSelectedProjectPdf,
 } from "../lib/projectPdfFiles";
 import { BasePdfSelector } from "./BasePdfSelector";
@@ -191,10 +192,7 @@ export function ProjectPdfWorkspace({
   onSelectedSourcePdfPathChange: (nextPath: string | null) => void;
 }) {
   const options = useMemo(
-    () =>
-      buildProjectPdfOptions(project).filter(
-        (option) => option.classification === "elevation" || option.classification === null,
-      ),
+    () => buildProjectPdfOptions(project).filter(isFramingWorkspacePdfOption),
     [project],
   );
 

@@ -89,6 +89,14 @@ export function describeProjectPdfOption(option: ProjectPdfOption): string {
   return tags.length > 0 ? `${tags.join(" · ")} · ${option.relativePath}` : option.relativePath;
 }
 
+export function isFramingWorkspacePdfOption(option: ProjectPdfOption): boolean {
+  return (
+    option.classification === "elevation" ||
+    option.classification === "unknown" ||
+    option.classification === null
+  );
+}
+
 export function resolveSelectedProjectPdf(
   options: ReadonlyArray<ProjectPdfOption>,
   preferredPath: string | null | undefined,

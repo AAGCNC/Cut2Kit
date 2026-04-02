@@ -100,6 +100,25 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         expect(project.issues.some((issue) => issue.code === "settings.invalid")).toBe(true);
       }),
     );
+
+    it.effect("classifies a root-level elevation PDF as an elevation source document", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const projectDir = yield* makeTempDir("cut2kit-root-elevation-project-");
+
+        yield* fileSystem.writeFileString(path.join(projectDir, "elevation2.pdf"), "%PDF-1.7\n");
+
+        const project = yield* cut2kitProjects.inspectProject({ cwd: projectDir });
+
+        expect(project.summary.pdfCount).toBe(1);
+        expect(project.sourceDocuments).toHaveLength(1);
+        expect(project.sourceDocuments[0]?.sourcePath).toBe("elevation2.pdf");
+        expect(project.sourceDocuments[0]?.classification).toBe("elevation");
+        expect(project.issues.some((issue) => issue.code === "pdf.unclassified")).toBe(false);
+      }),
+    );
   });
 
   describe("generateOutputs", () => {
