@@ -22,7 +22,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstab
 import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
 
 import { CheckpointDiffQuery } from "./checkpointing/Services/CheckpointDiffQuery";
-import { ServerConfig } from "./config";
+import { prefixServerPath, ServerConfig } from "./config";
 import { GitCore } from "./git/Services/GitCore";
 import { GitManager } from "./git/Services/GitManager";
 import { Keybindings } from "./keybindings";
@@ -260,6 +260,18 @@ const WsRpcLayer = WsRpcGroup.toLayer(
               }),
           ),
         ),
+      [WS_METHODS.cut2kitRenderFramingLayout]: (input) =>
+        cut2kitProjects.renderFramingLayout(input).pipe(
+          Effect.mapError(
+            (cause) =>
+              new Cut2KitProjectError({
+                cwd: input.cwd,
+                operation: "cut2kit.renderFramingLayout",
+                detail: cause.detail,
+                cause,
+              }),
+          ),
+        ),
       [WS_METHODS.shellOpenInEditor]: (input) => open.openInEditor(input),
       [WS_METHODS.gitStatus]: (input) => gitManager.status(input),
       [WS_METHODS.gitPull]: (input) => git.pullCurrentBranch(input.cwd),
@@ -357,15 +369,16 @@ const WsRpcLayer = WsRpcGroup.toLayer(
 
 export const websocketRpcRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
+    const config = yield* ServerConfig;
+    const websocketRoutePath = prefixServerPath(config.basePath, "/ws") as `/${string}`;
     const rpcWebSocketHttpEffect = yield* RpcServer.toHttpEffectWebsocket(WsRpcGroup).pipe(
       Effect.provide(Layer.mergeAll(WsRpcLayer, RpcSerialization.layerJson)),
     );
     return HttpRouter.add(
       "GET",
-      "/ws",
+      websocketRoutePath,
       Effect.gen(function* () {
         const request = yield* HttpServerRequest.HttpServerRequest;
-        const config = yield* ServerConfig;
         if (config.authToken) {
           const url = HttpServerRequest.toURL(request);
           if (Option.isNone(url)) {

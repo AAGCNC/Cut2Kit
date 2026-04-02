@@ -30,7 +30,8 @@
     "@pierre/diffs": "^1.1.0-beta.16",
     "effect": "catalog:",
     "node-pty": "^1.1.0",
-    "open": "^10.1.0"
+    "open": "^10.1.0",
+    "pdfkit": "^0.17.2"
   },
   "devDependencies": {
     "@effect/language-service": "catalog:",
@@ -40,6 +41,7 @@
     "@t3tools/web": "workspace:*",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
+    "@types/pdfkit": "^0.17.3",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

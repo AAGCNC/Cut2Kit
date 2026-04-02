@@ -69,6 +69,14 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         expect(project.queueManifest.entries).toHaveLength(4);
         expect(project.ncJobs).toHaveLength(4);
         expect(project.outputStatus.generated).toBe(false);
+        expect(
+          project.files.some(
+            (file) =>
+              file.relativePath ===
+                "output/reports/framing-layouts/elevations-front-wall.framing-layout.pdf" &&
+              file.role === "generated-report",
+          ),
+        ).toBe(true);
       }),
     );
 
@@ -310,6 +318,40 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         expect(project.issues.some((issue) => issue.code === "manufacturing_plan.missing")).toBe(
           true,
         );
+      }),
+    );
+  });
+
+  describe("renderFramingLayout", () => {
+    it.effect("renders a framing-layout PDF from the structured JSON artifact", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const projectDir = yield* makeTempDir("cut2kit-framing-layout-project-");
+        yield* copyFixtureProject(projectDir);
+
+        yield* fileSystem.remove(
+          path.join(
+            projectDir,
+            "output/reports/framing-layouts/elevations-front-wall.framing-layout.pdf",
+          ),
+        );
+
+        const result = yield* cut2kitProjects.renderFramingLayout({
+          cwd: projectDir,
+          relativePath: "output/reports/framing-layouts/elevations-front-wall.framing-layout.json",
+        });
+
+        expect(result.pdfPath).toBe(
+          "output/reports/framing-layouts/elevations-front-wall.framing-layout.pdf",
+        );
+        expect(result.project.files.some((file) => file.relativePath === result.pdfPath)).toBe(
+          true,
+        );
+
+        const renderedPdf = yield* fileSystem.readFile(path.join(projectDir, result.pdfPath));
+        expect(renderedPdf.byteLength).toBeGreaterThan(1000);
       }),
     );
   });

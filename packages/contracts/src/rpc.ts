@@ -58,6 +58,8 @@ import {
   Cut2KitInspectProjectInput,
   Cut2KitProject,
   Cut2KitProjectError,
+  Cut2KitRenderFramingLayoutInput,
+  Cut2KitRenderFramingLayoutResult,
 } from "./cut2kit";
 import {
   TerminalClearInput,
@@ -90,6 +92,7 @@ export const WS_METHODS = {
   projectsWriteFile: "projects.writeFile",
   cut2kitInspectProject: "cut2kit.inspectProject",
   cut2kitGenerateOutputs: "cut2kit.generateOutputs",
+  cut2kitRenderFramingLayout: "cut2kit.renderFramingLayout",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -185,6 +188,12 @@ export const WsCut2KitInspectProjectRpc = Rpc.make(WS_METHODS.cut2kitInspectProj
 export const WsCut2KitGenerateOutputsRpc = Rpc.make(WS_METHODS.cut2kitGenerateOutputs, {
   payload: Cut2KitGenerateOutputsInput,
   success: Cut2KitGenerateOutputsResult,
+  error: Cut2KitProjectError,
+});
+
+export const WsCut2KitRenderFramingLayoutRpc = Rpc.make(WS_METHODS.cut2kitRenderFramingLayout, {
+  payload: Cut2KitRenderFramingLayoutInput,
+  success: Cut2KitRenderFramingLayoutResult,
   error: Cut2KitProjectError,
 });
 
@@ -363,6 +372,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsWriteFileRpc,
   WsCut2KitInspectProjectRpc,
   WsCut2KitGenerateOutputsRpc,
+  WsCut2KitRenderFramingLayoutRpc,
   WsShellOpenInEditorRpc,
   WsGitStatusRpc,
   WsGitPullRpc,

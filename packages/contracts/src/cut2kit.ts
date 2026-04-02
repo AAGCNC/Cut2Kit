@@ -41,6 +41,7 @@ export const Cut2KitFileRole = Schema.Literals([
   "source-pdf",
   "generated-manifest",
   "generated-nc",
+  "generated-report",
   "reference",
   "other",
 ]);
@@ -457,6 +458,94 @@ export const Cut2KitSourceDocument = Schema.Struct({
 });
 export type Cut2KitSourceDocument = typeof Cut2KitSourceDocument.Type;
 
+export const Cut2KitFramingLayoutOpeningKind = Schema.Literals(["window", "door"]);
+export type Cut2KitFramingLayoutOpeningKind = typeof Cut2KitFramingLayoutOpeningKind.Type;
+
+export const Cut2KitFramingLayoutMemberKind = Schema.Literals([
+  "bottom-plate",
+  "top-plate",
+  "header",
+  "sill",
+  "end-stud",
+  "jamb-stud",
+  "common-stud",
+  "cripple-stud",
+]);
+export type Cut2KitFramingLayoutMemberKind = typeof Cut2KitFramingLayoutMemberKind.Type;
+
+export const Cut2KitFramingLayoutPlateOrientation = Schema.Literals(["flat", "on_edge"]);
+export type Cut2KitFramingLayoutPlateOrientation = typeof Cut2KitFramingLayoutPlateOrientation.Type;
+
+export const Cut2KitFramingLayoutOriginEdge = Schema.Literals(["left", "right"]);
+export type Cut2KitFramingLayoutOriginEdge = typeof Cut2KitFramingLayoutOriginEdge.Type;
+
+export const Cut2KitFramingLayoutOpening = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  kind: Cut2KitFramingLayoutOpeningKind,
+  left: Schema.Number,
+  right: Schema.Number,
+  bottom: Schema.Number,
+  top: Schema.Number,
+  width: Schema.Number,
+  height: Schema.Number,
+  clearOpening: Schema.Boolean,
+});
+export type Cut2KitFramingLayoutOpening = typeof Cut2KitFramingLayoutOpening.Type;
+
+export const Cut2KitFramingLayoutMember = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  kind: Cut2KitFramingLayoutMemberKind,
+  x: Schema.Number,
+  y: Schema.Number,
+  width: Schema.Number,
+  height: Schema.Number,
+  centerlineX: Schema.optionalKey(Schema.Number),
+  sourceOpeningId: Schema.optionalKey(TrimmedNonEmptyString),
+  notes: Schema.optionalKey(TrimmedNonEmptyString),
+});
+export type Cut2KitFramingLayoutMember = typeof Cut2KitFramingLayoutMember.Type;
+
+export const Cut2KitFramingLayoutValidation = Schema.Struct({
+  wallWidthMatchesElevation: Schema.Boolean,
+  wallHeightMatchesElevation: Schema.Boolean,
+  openingSizesMatchElevation: Schema.Boolean,
+  headHeightMatchesElevation: Schema.Boolean,
+  sillHeightMatchesElevation: Schema.Boolean,
+  endStudsDoubled: Schema.Boolean,
+  jambStudsPresent: Schema.Boolean,
+  commonStudSpacingApplied: Schema.Boolean,
+  noCommonStudThroughVoid: Schema.Boolean,
+  plateOrientationMatchesExpectation: Schema.Boolean,
+  notes: Schema.Array(TrimmedNonEmptyString),
+});
+export type Cut2KitFramingLayoutValidation = typeof Cut2KitFramingLayoutValidation.Type;
+
+export const Cut2KitFramingLayout = Schema.Struct({
+  schemaVersion: Schema.Literal("0.1.0"),
+  sourcePdfPath: TrimmedNonEmptyString,
+  settingsFilePath: TrimmedNonEmptyString,
+  units: Cut2KitNcUnits,
+  wall: Schema.Struct({
+    width: Schema.Number,
+    height: Schema.Number,
+    memberThickness: Schema.Number,
+    studNominalSize: TrimmedNonEmptyString,
+    material: TrimmedNonEmptyString,
+    topMemberOrientation: Cut2KitFramingLayoutPlateOrientation,
+    bottomMemberOrientation: Cut2KitFramingLayoutPlateOrientation,
+  }),
+  studLayout: Schema.Struct({
+    originEdge: Cut2KitFramingLayoutOriginEdge,
+    spacing: Schema.Number,
+    commonStudCenterlines: Schema.Array(Schema.Number),
+  }),
+  openings: Schema.Array(Cut2KitFramingLayoutOpening),
+  members: Schema.Array(Cut2KitFramingLayoutMember),
+  validation: Cut2KitFramingLayoutValidation,
+  notes: Schema.Array(TrimmedNonEmptyString),
+});
+export type Cut2KitFramingLayout = typeof Cut2KitFramingLayout.Type;
+
 export const Cut2KitPanelCandidate = Schema.Struct({
   panelId: TrimmedNonEmptyString,
   sourcePath: TrimmedNonEmptyString,
@@ -591,6 +680,20 @@ export const Cut2KitGenerateOutputsResult = Schema.Struct({
   writtenPaths: Schema.Array(TrimmedNonEmptyString),
 });
 export type Cut2KitGenerateOutputsResult = typeof Cut2KitGenerateOutputsResult.Type;
+
+export const Cut2KitRenderFramingLayoutInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  relativePath: TrimmedNonEmptyString,
+});
+export type Cut2KitRenderFramingLayoutInput = typeof Cut2KitRenderFramingLayoutInput.Type;
+
+export const Cut2KitRenderFramingLayoutResult = Schema.Struct({
+  project: Cut2KitProject,
+  jsonPath: TrimmedNonEmptyString,
+  pdfPath: TrimmedNonEmptyString,
+  writtenPaths: Schema.Array(TrimmedNonEmptyString),
+});
+export type Cut2KitRenderFramingLayoutResult = typeof Cut2KitRenderFramingLayoutResult.Type;
 
 export class Cut2KitProjectError extends Schema.TaggedErrorClass<Cut2KitProjectError>()(
   "Cut2KitProjectError",

@@ -49,6 +49,7 @@ export function createWsNativeApi(): NativeApi {
     cut2kit: {
       inspectProject: rpcClient.cut2kit.inspectProject,
       generateOutputs: rpcClient.cut2kit.generateOutputs,
+      renderFramingLayout: rpcClient.cut2kit.renderFramingLayout,
     },
     shell: {
       openInEditor: (cwd, editor) => rpcClient.shell.openInEditor({ cwd, editor }),

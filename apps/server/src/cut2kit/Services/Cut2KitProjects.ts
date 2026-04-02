@@ -15,6 +15,8 @@ import type {
   Cut2KitGenerateOutputsResult,
   Cut2KitInspectProjectInput,
   Cut2KitProject,
+  Cut2KitRenderFramingLayoutInput,
+  Cut2KitRenderFramingLayoutResult,
 } from "@t3tools/contracts";
 
 export class Cut2KitProjectsError extends Schema.TaggedErrorClass<Cut2KitProjectsError>()(
@@ -34,6 +36,9 @@ export interface Cut2KitProjectsShape {
   readonly generateOutputs: (
     input: Cut2KitGenerateOutputsInput,
   ) => Effect.Effect<Cut2KitGenerateOutputsResult, Cut2KitProjectsError>;
+  readonly renderFramingLayout: (
+    input: Cut2KitRenderFramingLayoutInput,
+  ) => Effect.Effect<Cut2KitRenderFramingLayoutResult, Cut2KitProjectsError>;
 }
 
 export class Cut2KitProjects extends ServiceMap.Service<Cut2KitProjects, Cut2KitProjectsShape>()(

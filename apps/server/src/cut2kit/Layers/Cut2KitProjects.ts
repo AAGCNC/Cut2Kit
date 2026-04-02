@@ -7,6 +7,7 @@ import {
   type Cut2KitApplication,
   type Cut2KitFileClassification,
   type Cut2KitFileRole,
+  type Cut2KitFramingLayout,
   type Cut2KitGenerateOutputsResult,
   type Cut2KitIssue,
   type Cut2KitManufacturingPlan,
@@ -16,8 +17,10 @@ import {
   type Cut2KitProject,
   type Cut2KitQueueMode,
   type Cut2KitQueueingSettings,
+  type Cut2KitRenderFramingLayoutResult,
   type Cut2KitSettings,
   type Cut2KitSourceDocument,
+  Cut2KitFramingLayout as Cut2KitFramingLayoutSchema,
   Cut2KitManufacturingPlan as Cut2KitManufacturingPlanSchema,
   Cut2KitSettings as Cut2KitSettingsSchema,
   type NCJobRecord,
@@ -34,6 +37,7 @@ import {
   type Cut2KitProjectsShape,
 } from "../Services/Cut2KitProjects.ts";
 import { A2mcPostError, getA2mcTargetController, renderA2mcProgram } from "../cam/A2mcPost.ts";
+import { renderFramingLayoutPdf } from "../framing/renderFramingLayoutPdf.ts";
 import { WorkspaceEntries } from "../../workspace/Services/WorkspaceEntries.ts";
 import { WorkspacePaths } from "../../workspace/Services/WorkspacePaths.ts";
 
@@ -44,6 +48,7 @@ const DEFAULT_DISCOVERED_AT = "1970-01-01T00:00:00.000Z";
 const IGNORED_DIRECTORY_NAMES = new Set([".git", "node_modules", ".turbo", "dist", "build"]);
 const SettingsJson = fromLenientJson(Cut2KitSettingsSchema);
 const ManufacturingPlanJson = fromLenientJson(Cut2KitManufacturingPlanSchema);
+const FramingLayoutJson = fromLenientJson(Cut2KitFramingLayoutSchema);
 
 const DEFAULT_OUTPUT_SETTINGS: Cut2KitOutputSettings = {
   root: "output",
@@ -104,6 +109,9 @@ function inferSide(relativePath: string): string | null {
 function isLikelySourcePdf(relativePath: string): boolean {
   const normalized = toPosixPath(relativePath).toLowerCase();
   if (!normalized.endsWith(".pdf")) {
+    return false;
+  }
+  if (normalized.startsWith("output/") || normalized.includes(".framing-layout.")) {
     return false;
   }
 
@@ -173,6 +181,20 @@ function classifyEntry(input: { relativePath: string; kind: ProjectFileRecord["k
     return {
       classification: "manufacturing-plan",
       role: "manufacturing-plan",
+      extension: "json",
+    };
+  }
+  if (normalizedPath.startsWith("output/reports/") && normalizedPath.endsWith(".pdf")) {
+    return {
+      classification: "pdf",
+      role: "generated-report",
+      extension: "pdf",
+    };
+  }
+  if (normalizedPath.startsWith("output/reports/") && normalizedPath.endsWith(".json")) {
+    return {
+      classification: "json",
+      role: "generated-report",
       extension: "json",
     };
   }
@@ -711,6 +733,45 @@ async function readManufacturingPlanFile(
   }
 }
 
+async function readFramingLayoutFile(
+  cwd: string,
+  relativePath: string,
+): Promise<{ framingLayout: Cut2KitFramingLayout | null; issues: Cut2KitIssue[] }> {
+  try {
+    const raw = await fsPromises.readFile(nodePath.join(cwd, relativePath), "utf8");
+    const decoded = Schema.decodeUnknownExit(FramingLayoutJson)(raw);
+    if (decoded._tag === "Failure") {
+      return {
+        framingLayout: null,
+        issues: [
+          makeIssue(
+            "error",
+            "framing_layout.invalid",
+            formatSchemaError(decoded.cause),
+            relativePath,
+          ),
+        ],
+      };
+    }
+    return {
+      framingLayout: decoded.value,
+      issues: [],
+    };
+  } catch (error) {
+    return {
+      framingLayout: null,
+      issues: [
+        makeIssue(
+          "error",
+          "framing_layout.read_failed",
+          error instanceof Error ? error.message : String(error),
+          relativePath,
+        ),
+      ],
+    };
+  }
+}
+
 function deriveProject(input: {
   cwd: string;
   files: ReadonlyArray<ProjectFileRecord>;
@@ -1097,9 +1158,85 @@ export const makeCut2KitProjects = Effect.gen(function* () {
     };
   });
 
+  const renderFramingLayout: Cut2KitProjectsShape["renderFramingLayout"] = Effect.fn(
+    "Cut2KitProjects.renderFramingLayout",
+  )(function* (input): Effect.fn.Return<Cut2KitRenderFramingLayoutResult, Cut2KitProjectsError> {
+    const project = yield* inspectProject({ cwd: input.cwd });
+    const framingLayoutResult = yield* Effect.tryPromise({
+      try: () => readFramingLayoutFile(project.cwd, input.relativePath),
+      catch: (error) =>
+        new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "renderFramingLayout.readFramingLayoutFile",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+    });
+
+    if (framingLayoutResult.issues.length > 0 || framingLayoutResult.framingLayout === null) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "renderFramingLayout.validateFramingLayout",
+        detail:
+          framingLayoutResult.issues[0]?.message ?? "Framing layout JSON could not be validated.",
+      });
+    }
+
+    const pdfBytes = yield* Effect.tryPromise({
+      try: () => renderFramingLayoutPdf(framingLayoutResult.framingLayout!),
+      catch: (error) =>
+        new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "renderFramingLayout.renderPdf",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+    });
+
+    const pdfPath = input.relativePath.replace(/\.json$/i, ".pdf");
+    const resolved = yield* workspacePaths
+      .resolveRelativePathWithinRoot({
+        workspaceRoot: project.cwd,
+        relativePath: pdfPath,
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new Cut2KitProjectsError({
+              cwd: project.cwd,
+              operation: "renderFramingLayout.resolveRelativePathWithinRoot",
+              detail: "Rendered PDF path escaped the workspace root.",
+              cause,
+            }),
+        ),
+      );
+
+    yield* Effect.tryPromise({
+      try: async () => {
+        await fsPromises.mkdir(nodePath.dirname(resolved.absolutePath), { recursive: true });
+        await fsPromises.writeFile(resolved.absolutePath, Buffer.from(pdfBytes));
+      },
+      catch: (error) =>
+        new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "renderFramingLayout.writePdf",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+    });
+
+    yield* workspaceEntries.invalidate(project.cwd);
+    const refreshedProject = yield* inspectProject({ cwd: project.cwd });
+
+    return {
+      project: refreshedProject,
+      jsonPath: input.relativePath,
+      pdfPath: resolved.relativePath,
+      writtenPaths: [resolved.relativePath],
+    };
+  });
+
   return {
     inspectProject,
     generateOutputs,
+    renderFramingLayout,
   } satisfies Cut2KitProjectsShape;
 });
 

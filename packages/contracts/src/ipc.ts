@@ -29,6 +29,8 @@ import type {
   Cut2KitGenerateOutputsResult,
   Cut2KitInspectProjectInput,
   Cut2KitProject,
+  Cut2KitRenderFramingLayoutInput,
+  Cut2KitRenderFramingLayoutResult,
 } from "./cut2kit";
 import type {
   ServerConfig,
@@ -151,6 +153,9 @@ export interface NativeApi {
   cut2kit: {
     inspectProject: (input: Cut2KitInspectProjectInput) => Promise<Cut2KitProject>;
     generateOutputs: (input: Cut2KitGenerateOutputsInput) => Promise<Cut2KitGenerateOutputsResult>;
+    renderFramingLayout: (
+      input: Cut2KitRenderFramingLayoutInput,
+    ) => Promise<Cut2KitRenderFramingLayoutResult>;
   };
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;

@@ -54,6 +54,7 @@ export interface WsRpcClient {
   readonly cut2kit: {
     readonly inspectProject: RpcUnaryMethod<typeof WS_METHODS.cut2kitInspectProject>;
     readonly generateOutputs: RpcUnaryMethod<typeof WS_METHODS.cut2kitGenerateOutputs>;
+    readonly renderFramingLayout: RpcUnaryMethod<typeof WS_METHODS.cut2kitRenderFramingLayout>;
   };
   readonly shell: {
     readonly openInEditor: (input: {
@@ -141,6 +142,8 @@ export function createWsRpcClient(transport = new WsTransport()): WsRpcClient {
         transport.request((client) => client[WS_METHODS.cut2kitInspectProject](input)),
       generateOutputs: (input) =>
         transport.request((client) => client[WS_METHODS.cut2kitGenerateOutputs](input)),
+      renderFramingLayout: (input) =>
+        transport.request((client) => client[WS_METHODS.cut2kitRenderFramingLayout](input)),
     },
     shell: {
       openInEditor: (input) =>
