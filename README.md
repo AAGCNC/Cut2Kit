@@ -5,7 +5,7 @@ Cut2Kit is an AI-first CAM foundation for prefab housing, built on the existing 
 The current first vertical slice is directory-first:
 
 - open a project directory
-- detect `cut2kit.settings.json` and DXFs
+- detect `cut2kit.settings.json` and source PDFs
 - detect `cut2kit.manufacturing.json` manufacturing intent
 - validate settings against an explicit schema
 - inspect project health in the app
@@ -40,7 +40,7 @@ It includes:
 
 - `cut2kit.settings.json`
 - `cut2kit.manufacturing.json`
-- sample DXF placeholders under `elevations/`, `floor/`, and `roof/`
+- sample dimensioned PDFs under `elevations/`, `floor/`, and `roof/`
 - deterministic A2MC manifest and NC generation inputs
 
 A reusable settings example also lives at `examples/cut2kit.settings.example.json`.
@@ -50,7 +50,7 @@ An A2MC manufacturing-plan example also lives at `examples/cut2kit.manufacturing
 
 1. Launch the app.
 2. Open the sample project directory from the left sidebar.
-3. Review the project workspace route for validation, DXF detection, manufacturing-plan status,
+3. Review the project workspace route for validation, source-PDF detection, manufacturing-plan status,
    and planned outputs.
 4. Generate A2MC outputs to write:
    - `output/manifests/panel-manifest.json`
@@ -87,5 +87,6 @@ bun run test
 - Codex integration still flows through the existing local app-server and approval plumbing.
 - The first real post path is AXYZ A2MC and is driven by explicit manufacturing intent in
   `cut2kit.manufacturing.json`.
-- Geometry extraction from DXF and richer CAM planning still need follow-on work; the current safe
-  path is explicit manufacturing intent rather than guessed toolpaths.
+- The app now uses dimensioned PDFs as its drawing source; richer PDF understanding and CAM planning
+  still need follow-on work, so the current safe path remains explicit manufacturing intent rather
+  than guessed toolpaths.

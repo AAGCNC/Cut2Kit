@@ -12,7 +12,7 @@
   "jobs": [
     {
       "jobId": "front-wall-contour",
-      "sourcePath": "elevations/front-wall.dxf",
+      "sourcePath": "elevations/front-wall.pdf",
       "operations": [
         { "type": "tool_change", "toolNumber": 1 },
         { "type": "spindle_on", "direction": "cw", "rpm": 18000 },
@@ -27,7 +27,7 @@
     },
     {
       "jobId": "rear-wall-contour",
-      "sourcePath": "elevations/rear-wall.dxf",
+      "sourcePath": "elevations/rear-wall.pdf",
       "operations": [
         { "type": "tool_change", "toolNumber": 1 },
         { "type": "spindle_on", "direction": "cw", "rpm": 18000 },
@@ -42,7 +42,7 @@
     },
     {
       "jobId": "main-floor-contour",
-      "sourcePath": "floor/main-floor.dxf",
+      "sourcePath": "floor/main-floor.pdf",
       "operations": [
         { "type": "tool_change", "toolNumber": 2 },
         { "type": "spindle_on", "direction": "cw", "rpm": 16000 },
@@ -57,7 +57,7 @@
     },
     {
       "jobId": "main-roof-contour",
-      "sourcePath": "roof/main-roof.dxf",
+      "sourcePath": "roof/main-roof.pdf",
       "operations": [
         { "type": "tool_change", "toolNumber": 3 },
         { "type": "spindle_on", "direction": "cw", "rpm": 16000 },

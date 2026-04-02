@@ -24,8 +24,11 @@ function fileIcon(entry: ProjectFileRecord) {
   ) {
     return <FileJsonIcon aria-hidden="true" className="size-3 shrink-0 text-sky-500/80" />;
   }
-  if (entry.classification === "dxf" || entry.classification === "nc") {
+  if (entry.classification === "nc") {
     return <FileCodeIcon aria-hidden="true" className="size-3 shrink-0 text-emerald-500/80" />;
+  }
+  if (entry.classification === "pdf") {
+    return <FileTextIcon aria-hidden="true" className="size-3 shrink-0 text-rose-500/80" />;
   }
   if (entry.classification === "manifest") {
     return <HammerIcon aria-hidden="true" className="size-3 shrink-0 text-amber-500/80" />;
@@ -52,10 +55,10 @@ function fileBadge(entry: ProjectFileRecord) {
       </Badge>
     );
   }
-  if (entry.classification === "dxf") {
+  if (entry.classification === "pdf") {
     return (
-      <Badge size="sm" variant="success">
-        dxf
+      <Badge size="sm" variant={entry.role === "source-pdf" ? "success" : "secondary"}>
+        pdf
       </Badge>
     );
   }
@@ -85,7 +88,7 @@ export function Cut2KitProjectExplorer({ project }: { project: Cut2KitProject })
         <span>
           {project.summary.totalFiles} files, {project.summary.totalDirectories} folders
         </span>
-        <span>{project.summary.dxfCount} DXFs</span>
+        <span>{project.summary.pdfCount} PDFs</span>
       </div>
       <div className="space-y-0.5">
         {visibleEntries.map((entry) => (

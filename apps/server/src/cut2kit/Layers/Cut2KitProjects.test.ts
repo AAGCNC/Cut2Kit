@@ -63,7 +63,7 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         expect(project.settingsFilePath).toBe("cut2kit.settings.json");
         expect(project.manufacturingPlanFilePath).toBe("cut2kit.manufacturing.json");
         expect(project.manufacturingPlan?.targetController).toBe("axyz-a2mc");
-        expect(project.summary.dxfCount).toBe(4);
+        expect(project.summary.pdfCount).toBe(4);
         expect(project.panelManifest.panels).toHaveLength(4);
         expect(project.nestManifest.nests.length).toBeGreaterThan(0);
         expect(project.queueManifest.entries).toHaveLength(4);
@@ -82,8 +82,8 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         yield* fileSystem.writeFileString(path.join(projectDir, "cut2kit.settings.json"), "{");
         yield* fileSystem.makeDirectory(path.join(projectDir, "elevations"), { recursive: true });
         yield* fileSystem.writeFileString(
-          path.join(projectDir, "elevations", "front.dxf"),
-          "0\nEOF\n",
+          path.join(projectDir, "elevations", "front.pdf"),
+          "%PDF-1.7\n",
         );
 
         const project = yield* cut2kitProjects.inspectProject({ cwd: projectDir });
@@ -138,8 +138,8 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
 
         yield* fileSystem.makeDirectory(path.join(projectDir, "elevations"), { recursive: true });
         yield* fileSystem.writeFileString(
-          path.join(projectDir, "elevations", "front.dxf"),
-          "0\nEOF\n",
+          path.join(projectDir, "elevations", "front.pdf"),
+          "%PDF-1.7\n",
         );
 
         const error = yield* cut2kitProjects.generateOutputs({ cwd: projectDir }).pipe(Effect.flip);
@@ -182,20 +182,11 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
                 preferredFolders: ["elevations"],
                 knownSettingsFileNames: ["cut2kit.settings.json"],
               },
-              dxf: {
-                defaultUnits: "inch",
+              pdf: {
                 autoClassify: true,
-                layerMappings: {
-                  outline: ["OUTLINE"],
-                  openings: ["OPENINGS"],
-                  studs: ["STUDS"],
-                  joists: ["JOISTS"],
-                  dimensions: ["DIM"],
-                  annotations: ["NOTES"],
-                },
                 fileAssignments: [
                   {
-                    pathPattern: "elevations/front*.dxf",
+                    pathPattern: "elevations/front*.pdf",
                     classification: "elevation",
                     side: "front",
                     application: "siding",
@@ -309,8 +300,8 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         );
         yield* fileSystem.makeDirectory(path.join(projectDir, "elevations"), { recursive: true });
         yield* fileSystem.writeFileString(
-          path.join(projectDir, "elevations", "front.dxf"),
-          "0\nEOF\n",
+          path.join(projectDir, "elevations", "front.pdf"),
+          "%PDF-1.7\n",
         );
 
         const project = yield* cut2kitProjects.inspectProject({ cwd: projectDir });

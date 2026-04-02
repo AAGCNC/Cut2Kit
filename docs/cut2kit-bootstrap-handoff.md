@@ -41,7 +41,7 @@ The repo now has:
   - recursively scans project folders
   - detects `cut2kit.settings.json`
   - detects `cut2kit.manufacturing.json`
-  - classifies DXFs/settings/manifests/NC/reference files
+  - classifies source PDFs/settings/manifests/NC/reference files
   - validates settings JSON and manufacturing-plan JSON via schema
   - derives source docs, panel candidates, panel/nest/queue manifests
   - writes deterministic A2MC outputs under `output/manifests` and `output/nc`
@@ -66,7 +66,7 @@ The repo now has:
 - Added:
   - `examples/cut2kit.settings.example.json`
   - `examples/prefab-demo-project/cut2kit.settings.json`
-  - placeholder DXFs under `examples/prefab-demo-project/`
+  - source PDFs under `examples/prefab-demo-project/`
 - Wrote:
   - `docs/cut2kit-bootstrap-notes.md`
   - updated `README.md`
@@ -145,10 +145,10 @@ These still need confirmation in an environment with the required desktop runtim
 - `apps/web/src/routeTree.gen.ts`
 - `examples/cut2kit.settings.example.json`
 - `examples/prefab-demo-project/cut2kit.settings.json`
-- `examples/prefab-demo-project/elevations/front-wall.dxf`
-- `examples/prefab-demo-project/elevations/rear-wall.dxf`
-- `examples/prefab-demo-project/floor/main-floor.dxf`
-- `examples/prefab-demo-project/roof/main-roof.dxf`
+- `examples/prefab-demo-project/elevations/front-wall.pdf`
+- `examples/prefab-demo-project/elevations/rear-wall.pdf`
+- `examples/prefab-demo-project/floor/main-floor.pdf`
+- `examples/prefab-demo-project/roof/main-roof.pdf`
 - `package.json`
 - `packages/shared/src/Net.ts`
 - `packages/shared/src/Net.test.ts`

@@ -33,7 +33,7 @@ export class WorkspaceFileSystemError extends Schema.TaggedErrorClass<WorkspaceF
  */
 export interface WorkspaceFileSystemShape {
   /**
-   * Read a UTF-8 text file relative to the workspace root.
+   * Read a file relative to the workspace root and return base64-encoded contents.
    *
    * Rejects paths that escape the workspace root.
    */

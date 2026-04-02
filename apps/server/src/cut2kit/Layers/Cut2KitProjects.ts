@@ -5,7 +5,6 @@ import { Effect, Layer, Schema } from "effect";
 
 import {
   type Cut2KitApplication,
-  type Cut2KitDxfFileAssignment,
   type Cut2KitFileClassification,
   type Cut2KitFileRole,
   type Cut2KitGenerateOutputsResult,
@@ -13,6 +12,7 @@ import {
   type Cut2KitManufacturingPlan,
   type Cut2KitOutputSettings,
   type Cut2KitPanelCandidate,
+  type Cut2KitPdfFileAssignment,
   type Cut2KitProject,
   type Cut2KitQueueMode,
   type Cut2KitQueueingSettings,
@@ -85,6 +85,42 @@ function fileDepth(relativePath: string): number {
   return Math.max(0, splitSegments(relativePath).length - 1);
 }
 
+function inferSide(relativePath: string): string | null {
+  const candidates = new Set(
+    splitSegments(relativePath)
+      .join(" ")
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 0),
+  );
+  for (const side of ["front", "rear", "left", "right", "east", "west", "north", "south"]) {
+    if (candidates.has(side)) {
+      return side;
+    }
+  }
+  return null;
+}
+
+function isLikelySourcePdf(relativePath: string): boolean {
+  const normalized = toPosixPath(relativePath).toLowerCase();
+  if (!normalized.endsWith(".pdf")) {
+    return false;
+  }
+
+  return (
+    normalized.includes("/elevation") ||
+    normalized.includes("/elevations/") ||
+    normalized.includes("elevation") ||
+    normalized.includes("/floor/") ||
+    normalized.includes("floor") ||
+    normalized.includes("/roof/") ||
+    normalized.includes("roof") ||
+    normalized.includes("framing") ||
+    normalized.includes("wall") ||
+    inferSide(relativePath) !== null
+  );
+}
+
 function slugify(input: string): string {
   const slug = input
     .toLowerCase()
@@ -140,13 +176,6 @@ function classifyEntry(input: { relativePath: string; kind: ProjectFileRecord["k
       extension: "json",
     };
   }
-  if (normalizedPath.endsWith(".dxf")) {
-    return {
-      classification: "dxf",
-      role: "source-dxf",
-      extension: "dxf",
-    };
-  }
   if (normalizedPath.startsWith("output/manifests/") && normalizedPath.endsWith(".json")) {
     return {
       classification: "manifest",
@@ -171,7 +200,7 @@ function classifyEntry(input: { relativePath: string; kind: ProjectFileRecord["k
   if (normalizedPath.endsWith(".pdf")) {
     return {
       classification: "pdf",
-      role: "reference",
+      role: isLikelySourcePdf(input.relativePath) ? "source-pdf" : "reference",
       extension: "pdf",
     };
   }
@@ -297,25 +326,9 @@ function globToRegExp(pattern: string): RegExp {
 
 function matchAssignmentPattern(
   relativePath: string,
-  assignment: Cut2KitDxfFileAssignment,
+  assignment: Cut2KitPdfFileAssignment,
 ): boolean {
   return globToRegExp(assignment.pathPattern).test(toPosixPath(relativePath).toLowerCase());
-}
-
-function inferSide(relativePath: string): string | null {
-  const candidates = new Set(
-    splitSegments(relativePath)
-      .join(" ")
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((token) => token.length > 0),
-  );
-  for (const side of ["front", "rear", "left", "right", "east", "west", "north", "south"]) {
-    if (candidates.has(side)) {
-      return side;
-    }
-  }
-  return null;
 }
 
 function inferSourceDocument(
@@ -323,7 +336,7 @@ function inferSourceDocument(
   settings: Cut2KitSettings | null,
 ): Cut2KitSourceDocument {
   const fileName = nodePath.basename(relativePath);
-  const assignment = settings?.dxf.fileAssignments.find((candidate) =>
+  const assignment = settings?.pdf.fileAssignments.find((candidate) =>
     matchAssignmentPattern(relativePath, candidate),
   );
   if (assignment) {
@@ -380,6 +393,14 @@ function inferSourceDocument(
   };
 }
 
+function hasPdfAssignmentMatch(relativePath: string, settings: Cut2KitSettings | null): boolean {
+  return (
+    settings?.pdf.fileAssignments.some((candidate) =>
+      matchAssignmentPattern(relativePath, candidate),
+    ) ?? false
+  );
+}
+
 function getPrimaryQueueMode(settings: Cut2KitSettings | null): Cut2KitQueueMode {
   return settings?.production.primaryMode === "line-side" ? "line-side" : "kitting";
 }
@@ -431,7 +452,7 @@ function buildPanelCandidates(
       sourcePath: sourceDocument.sourcePath,
       application: sourceDocument.application,
       side: sourceDocument.side,
-      placeholderStrategy: "single-source-dxf-placeholder",
+      placeholderStrategy: "single-source-pdf-placeholder",
       kitGroup: queueGroupFor(sourceDocument, "kitting", queueingSettings),
     }));
 }
@@ -531,7 +552,7 @@ function buildQueueArtifacts(input: {
         makeIssue(
           "error",
           "manufacturing_plan.unknown_source",
-          `Manufacturing job '${job.jobId}' references '${job.sourcePath}', which is not a discovered DXF source document.`,
+          `Manufacturing job '${job.jobId}' references '${job.sourcePath}', which is not a discovered PDF source document.`,
           input.manufacturingPlanFilePath,
         ),
       );
@@ -748,7 +769,12 @@ function deriveProject(input: {
   }
 
   const sourceDocuments = input.files
-    .filter((entry) => entry.kind === "file" && entry.classification === "dxf")
+    .filter(
+      (entry) =>
+        entry.kind === "file" &&
+        entry.classification === "pdf" &&
+        (entry.role === "source-pdf" || hasPdfAssignmentMatch(entry.relativePath, input.settings)),
+    )
     .map((entry) => inferSourceDocument(entry.relativePath, input.settings))
     .toSorted((left, right) => left.sourcePath.localeCompare(right.sourcePath));
 
@@ -756,8 +782,8 @@ function deriveProject(input: {
     issues.push(
       makeIssue(
         "error",
-        "dxf.missing",
-        "No DXF files were found in the selected project directory.",
+        "pdf.missing",
+        "No source PDF files were found in the selected project directory.",
       ),
     );
   }
@@ -767,8 +793,8 @@ function deriveProject(input: {
       issues.push(
         makeIssue(
           "warning",
-          "dxf.unclassified",
-          "DXF file could not be classified from settings or path heuristics.",
+          "pdf.unclassified",
+          "PDF file could not be classified from settings or path heuristics.",
           sourceDocument.sourcePath,
         ),
       );
@@ -885,7 +911,7 @@ function deriveProject(input: {
     summary: {
       totalFiles: input.files.filter((entry) => entry.kind === "file").length,
       totalDirectories: input.files.filter((entry) => entry.kind === "directory").length,
-      dxfCount: sourceDocuments.length,
+      pdfCount: sourceDocuments.length,
       settingsCount: settingsFiles.length,
       warningCount,
       errorCount,

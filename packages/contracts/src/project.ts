@@ -43,6 +43,7 @@ export type ProjectReadFileInput = typeof ProjectReadFileInput.Type;
 export const ProjectReadFileResult = Schema.Struct({
   relativePath: TrimmedNonEmptyString,
   contents: Schema.String,
+  encoding: Schema.Literal("base64"),
   sizeBytes: Schema.NullOr(NonNegativeInt),
   modifiedAt: Schema.NullOr(IsoDateTime),
 });

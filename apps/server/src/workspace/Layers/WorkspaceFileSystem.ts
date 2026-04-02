@@ -43,7 +43,7 @@ export const makeWorkspaceFileSystem = Effect.gen(function* () {
         });
       }
 
-      const contents = yield* fileSystem.readFileString(target.absolutePath).pipe(
+      const contents = yield* fileSystem.readFile(target.absolutePath).pipe(
         Effect.mapError(
           (cause) =>
             new WorkspaceFileSystemError({
@@ -58,7 +58,8 @@ export const makeWorkspaceFileSystem = Effect.gen(function* () {
 
       return {
         relativePath: target.relativePath,
-        contents,
+        contents: Buffer.from(contents).toString("base64"),
+        encoding: "base64" as const,
         sizeBytes: typeof fileInfo.size === "bigint" ? Number(fileInfo.size) : fileInfo.size,
         modifiedAt: Option.getOrNull(Option.map(fileInfo.mtime, (mtime) => mtime.toISOString())),
       };

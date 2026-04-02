@@ -25,7 +25,6 @@ export const Cut2KitFileClassification = Schema.Literals([
   "directory",
   "settings",
   "manufacturing-plan",
-  "dxf",
   "manifest",
   "nc",
   "json",
@@ -39,7 +38,7 @@ export type Cut2KitFileClassification = typeof Cut2KitFileClassification.Type;
 export const Cut2KitFileRole = Schema.Literals([
   "settings",
   "manufacturing-plan",
-  "source-dxf",
+  "source-pdf",
   "generated-manifest",
   "generated-nc",
   "reference",
@@ -95,7 +94,7 @@ const Cut2KitDirectionalReference = Schema.Literals([
   "customer_defined",
 ]);
 
-const Cut2KitDxfClassification = Schema.Literals(["elevation", "floor", "roof", "reference"]);
+const Cut2KitPdfClassification = Schema.Literals(["elevation", "floor", "roof", "reference"]);
 const Cut2KitStudContinuityPolicy = Schema.Literals([
   "continuous",
   "stop_at_openings",
@@ -120,16 +119,6 @@ const Cut2KitOverwritePolicy = Schema.Literals([
   "skip_if_exists",
   "version_if_exists",
 ]);
-const Cut2KitLayerMappingKey = Schema.Literals([
-  "outline",
-  "openings",
-  "studs",
-  "joists",
-  "dimensions",
-  "annotations",
-]);
-
-const StringArray = Schema.Array(TrimmedNonEmptyString);
 
 export const Cut2KitProjectMetadata = Schema.Struct({
   projectId: TrimmedNonEmptyString,
@@ -162,21 +151,19 @@ export const Cut2KitDiscoverySettings = Schema.Struct({
 });
 export type Cut2KitDiscoverySettings = typeof Cut2KitDiscoverySettings.Type;
 
-export const Cut2KitDxfFileAssignment = Schema.Struct({
+export const Cut2KitPdfFileAssignment = Schema.Struct({
   pathPattern: TrimmedNonEmptyString,
-  classification: Cut2KitDxfClassification,
+  classification: Cut2KitPdfClassification,
   side: Schema.optionalKey(TrimmedNonEmptyString),
   application: Cut2KitApplication,
 });
-export type Cut2KitDxfFileAssignment = typeof Cut2KitDxfFileAssignment.Type;
+export type Cut2KitPdfFileAssignment = typeof Cut2KitPdfFileAssignment.Type;
 
-export const Cut2KitDxfSettings = Schema.Struct({
-  defaultUnits: TrimmedNonEmptyString,
+export const Cut2KitPdfSettings = Schema.Struct({
   autoClassify: Schema.Boolean,
-  layerMappings: Schema.Record(Cut2KitLayerMappingKey, StringArray),
-  fileAssignments: Schema.Array(Cut2KitDxfFileAssignment),
+  fileAssignments: Schema.Array(Cut2KitPdfFileAssignment),
 });
-export type Cut2KitDxfSettings = typeof Cut2KitDxfSettings.Type;
+export type Cut2KitPdfSettings = typeof Cut2KitPdfSettings.Type;
 
 const Cut2KitStudRules = Schema.Struct({
   enabled: Schema.Boolean,
@@ -426,7 +413,7 @@ export const Cut2KitSettingsV0_1_0 = Schema.Struct({
   production: Cut2KitProductionSettings,
   machineProfile: Cut2KitMachineProfile,
   discovery: Cut2KitDiscoverySettings,
-  dxf: Cut2KitDxfSettings,
+  pdf: Cut2KitPdfSettings,
   framing: FramingRuleSet,
   openings: Cut2KitOpeningSettings,
   panelization: Cut2KitPanelizationSettings,
@@ -557,7 +544,7 @@ export type Cut2KitOutputStatus = typeof Cut2KitOutputStatus.Type;
 export const Cut2KitProjectSummary = Schema.Struct({
   totalFiles: NonNegativeInt,
   totalDirectories: NonNegativeInt,
-  dxfCount: NonNegativeInt,
+  pdfCount: NonNegativeInt,
   settingsCount: NonNegativeInt,
   warningCount: NonNegativeInt,
   errorCount: NonNegativeInt,

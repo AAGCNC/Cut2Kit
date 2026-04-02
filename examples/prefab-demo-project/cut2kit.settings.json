@@ -5,7 +5,7 @@
     "jobName": "Prefab Demo House 001",
     "customer": "AXYZ Demo Homes",
     "site": "shop-floor",
-    "description": "Bootstrap sample for Cut2Kit scanning, validation, and A2MC output generation",
+    "description": "Bootstrap sample for Cut2Kit PDF scanning, validation, and A2MC output generation",
     "units": "imperial"
   },
   "production": {
@@ -23,37 +23,28 @@
     "preferredFolders": ["elevations", "floor", "roof"],
     "knownSettingsFileNames": ["cut2kit.settings.json"]
   },
-  "dxf": {
-    "defaultUnits": "inch",
+  "pdf": {
     "autoClassify": true,
-    "layerMappings": {
-      "outline": ["OUTLINE"],
-      "openings": ["OPENINGS"],
-      "studs": ["STUDS"],
-      "joists": ["JOISTS"],
-      "dimensions": ["DIM"],
-      "annotations": ["NOTES"]
-    },
     "fileAssignments": [
       {
-        "pathPattern": "elevations/front*.dxf",
+        "pathPattern": "elevations/front*.pdf",
         "classification": "elevation",
         "side": "front",
         "application": "siding"
       },
       {
-        "pathPattern": "elevations/rear*.dxf",
+        "pathPattern": "elevations/rear*.pdf",
         "classification": "elevation",
         "side": "rear",
         "application": "siding"
       },
       {
-        "pathPattern": "floor/*.dxf",
+        "pathPattern": "floor/*.pdf",
         "classification": "floor",
         "application": "flooring"
       },
       {
-        "pathPattern": "roof/*.dxf",
+        "pathPattern": "roof/*.pdf",
         "classification": "roof",
         "application": "roofing"
       }

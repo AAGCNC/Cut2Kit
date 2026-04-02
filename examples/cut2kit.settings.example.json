@@ -5,7 +5,7 @@
     "jobName": "Triple M Sample House 001",
     "customer": "Triple M Housing",
     "site": "pilot",
-    "description": "Sample Cut2Kit project for elevation-driven panelization",
+    "description": "Sample Cut2Kit project for PDF-driven panelization",
     "units": "imperial"
   },
   "production": {
@@ -23,37 +23,28 @@
     "preferredFolders": ["elevations", "floor", "roof", "references"],
     "knownSettingsFileNames": ["cut2kit.settings.json"]
   },
-  "dxf": {
-    "defaultUnits": "inch",
+  "pdf": {
     "autoClassify": true,
-    "layerMappings": {
-      "outline": ["OUTLINE", "WALL_OUTLINE", "PROFILE"],
-      "openings": ["OPENINGS", "WINDOW", "DOOR"],
-      "studs": ["STUD", "STUDS", "FRAMING_STUD"],
-      "joists": ["JOIST", "JOISTS", "FRAMING_JOIST"],
-      "dimensions": ["DIM", "DIMS"],
-      "annotations": ["TEXT", "NOTES", "ANNO"]
-    },
     "fileAssignments": [
       {
-        "pathPattern": "elevations/front*.dxf",
+        "pathPattern": "elevations/front*.pdf",
         "classification": "elevation",
         "side": "front",
         "application": "siding"
       },
       {
-        "pathPattern": "elevations/rear*.dxf",
+        "pathPattern": "elevations/rear*.pdf",
         "classification": "elevation",
         "side": "rear",
         "application": "siding"
       },
       {
-        "pathPattern": "floor/*.dxf",
+        "pathPattern": "floor/*.pdf",
         "classification": "floor",
         "application": "flooring"
       },
       {
-        "pathPattern": "roof/*.dxf",
+        "pathPattern": "roof/*.pdf",
         "classification": "roof",
         "application": "roofing"
       }

@@ -1624,7 +1624,7 @@ export default function Sidebar() {
         ? `${projectWorkspaceSnapshot.summary.errorCount} errors`
         : projectWorkspaceSnapshot.status === "warning"
           ? `${projectWorkspaceSnapshot.summary.warningCount} warnings`
-          : `${projectWorkspaceSnapshot.summary.dxfCount} DXFs`
+          : `${projectWorkspaceSnapshot.summary.pdfCount} PDFs`
       : activeExplorerProjectId === project.id && activeExplorerProjectSnapshotQuery.isLoading
         ? "Scanning..."
         : "Inspect";

@@ -289,20 +289,21 @@ describe("wsNativeApi", () => {
 
   it("forwards workspace file reads to the project RPC", async () => {
     rpcClientMock.projects.readFile.mockResolvedValue({
-      relativePath: "elevations/front-wall.dxf",
-      contents: "0\nEOF\n",
+      relativePath: "elevations/front-wall.pdf",
+      contents: "JVBERi0xLjcK",
+      encoding: "base64",
       sizeBytes: 6,
       modifiedAt: "2026-04-02T00:00:00.000Z",
     });
     const api = createWsNativeApi();
     await api.projects.readFile({
       cwd: "/tmp/project",
-      relativePath: "elevations/front-wall.dxf",
+      relativePath: "elevations/front-wall.pdf",
     });
 
     expect(rpcClientMock.projects.readFile).toHaveBeenCalledWith({
       cwd: "/tmp/project",
-      relativePath: "elevations/front-wall.dxf",
+      relativePath: "elevations/front-wall.pdf",
     });
   });
 

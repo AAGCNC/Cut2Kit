@@ -7,7 +7,7 @@ export function summarizeCut2KitProjectHealth(project: Cut2KitProject): string {
       : project.status === "warning"
         ? "attention needed"
         : "ready";
-  return `${statusLabel}: ${project.summary.dxfCount} DXFs, ${project.summary.warningCount} warnings, ${project.summary.errorCount} errors`;
+  return `${statusLabel}: ${project.summary.pdfCount} PDFs, ${project.summary.warningCount} warnings, ${project.summary.errorCount} errors`;
 }
 
 export function buildCut2KitAgentPrompt(project: Cut2KitProject): string {

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BotIcon, CheckIcon, FolderIcon, HammerIcon, TriangleAlertIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
-import { ProjectDxfWorkspace } from "../features/cut2kit-dxf/components/ProjectDxfWorkspace";
+import { ProjectPdfWorkspace } from "../features/cut2kit-pdf/components/ProjectPdfWorkspace";
 import { openInPreferredEditor } from "../editorPreferences";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { cut2kitProjectQueryOptions, cut2kitQueryKeys } from "../lib/cut2kitReactQuery";
@@ -198,7 +198,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 {statusLabel(snapshot.status)}
               </Badge>
               <Badge variant="outline">{snapshot.settings?.schemaVersion ?? "No settings"}</Badge>
-              <Badge variant="secondary">{snapshot.summary.dxfCount} DXFs</Badge>
+              <Badge variant="secondary">{snapshot.summary.pdfCount} PDFs</Badge>
             </div>
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">{snapshot.name}</h1>
@@ -235,15 +235,15 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       <div className="mx-auto flex h-full w-full max-w-[1600px] min-h-0 flex-col gap-6 px-6 py-6 xl:flex-row">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
           <div className="flex min-h-0 flex-[2_1_0%]">
-            <ProjectDxfWorkspace project={snapshot} projectId={projectId} />
+            <ProjectPdfWorkspace project={snapshot} projectId={projectId} />
           </div>
 
           <Card className="flex min-h-0 flex-[1_1_0%] flex-col overflow-hidden">
             <CardHeader className="border-b border-border/70">
               <CardTitle>Cut to Kit Agent</CardTitle>
               <CardDescription>
-                The DXF viewport owns the workspace above, while the supervised agent stays visible
-                below it for approval-driven planning and manufacturing updates.
+                The PDF workspace owns the review surface above, while the supervised agent stays
+                visible below it for approval-driven planning and manufacturing updates.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -354,7 +354,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 <CardHeader>
                   <CardTitle>Validation</CardTitle>
                   <CardDescription>
-                    Settings schema, DXF discovery, and project readiness checks.
+                    Settings schema, PDF discovery, and project readiness checks.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -470,15 +470,15 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Detected DXFs</CardTitle>
+                  <CardTitle>Detected Source PDFs</CardTitle>
                   <CardDescription>
-                    Base-DXF candidates come from the active project snapshot only.
+                    Source-PDF candidates come from the active project snapshot only.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {snapshot.sourceDocuments.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                      No DXF source documents were found.
+                      No source PDF documents were found.
                     </p>
                   ) : (
                     snapshot.sourceDocuments.map((sourceDocument) => (

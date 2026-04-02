@@ -56,16 +56,17 @@ it.layer(TestLayer)("WorkspaceFileSystemLive", (it) => {
         const workspaceFileSystem = yield* WorkspaceFileSystem;
         const cwd = yield* makeTempDir;
 
-        yield* writeTextFile(cwd, "drawings/front-wall.dxf", "0\nEOF\n");
+        yield* writeTextFile(cwd, "drawings/front-wall.pdf", "%PDF-1.7\n");
 
         const result = yield* workspaceFileSystem.readFile({
           cwd,
-          relativePath: "drawings/front-wall.dxf",
+          relativePath: "drawings/front-wall.pdf",
         });
 
-        expect(result.relativePath).toBe("drawings/front-wall.dxf");
-        expect(result.contents).toBe("0\nEOF\n");
-        expect(result.sizeBytes).toBe(6);
+        expect(result.relativePath).toBe("drawings/front-wall.pdf");
+        expect(result.contents).toBe(Buffer.from("%PDF-1.7\n").toString("base64"));
+        expect(result.encoding).toBe("base64");
+        expect(result.sizeBytes).toBe(9);
         expect(typeof result.modifiedAt).toBe("string");
       }),
     );
@@ -78,12 +79,12 @@ it.layer(TestLayer)("WorkspaceFileSystemLive", (it) => {
         const error = yield* workspaceFileSystem
           .readFile({
             cwd,
-            relativePath: "../escape.dxf",
+            relativePath: "../escape.pdf",
           })
           .pipe(Effect.flip);
 
         expect(error.message).toContain(
-          "Workspace file path must be relative to the project root: ../escape.dxf",
+          "Workspace file path must be relative to the project root: ../escape.pdf",
         );
       }),
     );

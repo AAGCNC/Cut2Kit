@@ -33,7 +33,7 @@ describe("renderA2mcProgram", () => {
   it("renders a controller-safe startup, contour, and shutdown block", () => {
     const program = renderJob({
       jobId: "front-wall-contour",
-      sourcePath: "elevations/front-wall.dxf",
+      sourcePath: "elevations/front-wall.pdf",
       operations: [
         { type: "tool_change", toolNumber: 1 },
         { type: "spindle_on", direction: "cw", rpm: 18000 },
@@ -68,7 +68,7 @@ describe("renderA2mcProgram", () => {
   it("renders dwell with G4 before P", () => {
     const program = renderJob({
       jobId: "dwell-test",
-      sourcePath: "elevations/front-wall.dxf",
+      sourcePath: "elevations/front-wall.pdf",
       operations: [
         { type: "tool_change", toolNumber: 1 },
         { type: "spindle_on", direction: "cw", rpm: 18000 },
@@ -83,7 +83,7 @@ describe("renderA2mcProgram", () => {
   it("renders M272 with the exact structured payload order", () => {
     const program = renderJob({
       jobId: "label-template-test",
-      sourcePath: "elevations/front-wall.dxf",
+      sourcePath: "elevations/front-wall.pdf",
       operations: [
         {
           type: "label_template",
@@ -111,7 +111,7 @@ describe("renderA2mcProgram", () => {
   it("renders M273 as an image-label command and normalizes the file name", () => {
     const program = renderJob({
       jobId: "label-image-test",
-      sourcePath: "elevations/front-wall.dxf",
+      sourcePath: "elevations/front-wall.pdf",
       operations: [
         {
           type: "label_image",
@@ -131,7 +131,7 @@ describe("renderA2mcProgram", () => {
     expect(() =>
       renderJob({
         jobId: "oversize-arc",
-        sourcePath: "elevations/front-wall.dxf",
+        sourcePath: "elevations/front-wall.pdf",
         operations: [
           { type: "tool_change", toolNumber: 1 },
           { type: "spindle_on", direction: "cw", rpm: 18000 },
@@ -155,7 +155,7 @@ describe("renderA2mcProgram", () => {
     expect(() =>
       renderJob({
         jobId: "bad-label",
-        sourcePath: "elevations/front-wall.dxf",
+        sourcePath: "elevations/front-wall.pdf",
         operations: [
           {
             type: "label_template",

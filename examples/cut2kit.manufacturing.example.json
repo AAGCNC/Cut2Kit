@@ -12,7 +12,7 @@
   "jobs": [
     {
       "jobId": "panel-a-contour",
-      "sourcePath": "elevations/front.dxf",
+      "sourcePath": "elevations/front.pdf",
       "operations": [
         { "type": "tool_change", "toolNumber": 1 },
         { "type": "spindle_on", "direction": "cw", "rpm": 18000 },
