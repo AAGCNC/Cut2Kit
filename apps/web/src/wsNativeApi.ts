@@ -6,9 +6,9 @@ import { __resetWsRpcClientForTests, getWsRpcClient } from "./wsRpcClient";
 
 let instance: { api: NativeApi } | null = null;
 
-export function __resetWsNativeApiForTests() {
+export async function __resetWsNativeApiForTests() {
   instance = null;
-  __resetWsRpcClientForTests();
+  await __resetWsRpcClientForTests();
   resetServerStateForTests();
 }
 
@@ -43,6 +43,7 @@ export function createWsNativeApi(): NativeApi {
     },
     projects: {
       searchEntries: rpcClient.projects.searchEntries,
+      readFile: rpcClient.projects.readFile,
       writeFile: rpcClient.projects.writeFile,
     },
     cut2kit: {

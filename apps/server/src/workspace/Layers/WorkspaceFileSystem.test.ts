@@ -50,6 +50,45 @@ const writeTextFile = Effect.fn("writeTextFile")(function* (
 });
 
 it.layer(TestLayer)("WorkspaceFileSystemLive", (it) => {
+  describe("readFile", () => {
+    it.effect("reads files relative to the workspace root", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+
+        yield* writeTextFile(cwd, "drawings/front-wall.dxf", "0\nEOF\n");
+
+        const result = yield* workspaceFileSystem.readFile({
+          cwd,
+          relativePath: "drawings/front-wall.dxf",
+        });
+
+        expect(result.relativePath).toBe("drawings/front-wall.dxf");
+        expect(result.contents).toBe("0\nEOF\n");
+        expect(result.sizeBytes).toBe(6);
+        expect(typeof result.modifiedAt).toBe("string");
+      }),
+    );
+
+    it.effect("rejects reads outside the workspace root", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+
+        const error = yield* workspaceFileSystem
+          .readFile({
+            cwd,
+            relativePath: "../escape.dxf",
+          })
+          .pipe(Effect.flip);
+
+        expect(error.message).toContain(
+          "Workspace file path must be relative to the project root: ../escape.dxf",
+        );
+      }),
+    );
+  });
+
   describe("writeFile", () => {
     it.effect("writes files relative to the workspace root", () =>
       Effect.gen(function* () {

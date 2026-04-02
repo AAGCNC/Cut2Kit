@@ -10,7 +10,7 @@ import {
   type TerminalEvent,
   ThreadId,
 } from "@t3tools/contracts";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ContextMenuItem } from "@t3tools/contracts";
 
@@ -47,6 +47,7 @@ const rpcClientMock = {
   },
   projects: {
     searchEntries: vi.fn(),
+    readFile: vi.fn(),
     writeFile: vi.fn(),
   },
   cut2kit: {
@@ -166,23 +167,32 @@ const baseServerConfig: ServerConfig = {
   settings: DEFAULT_SERVER_SETTINGS,
 };
 
-beforeEach(() => {
-  vi.resetModules();
+let createWsNativeApi: typeof import("./wsNativeApi").createWsNativeApi;
+let resetWsNativeApiForTests: typeof import("./wsNativeApi").__resetWsNativeApiForTests;
+
+beforeAll(async () => {
+  const wsNativeApiModule = await import("./wsNativeApi");
+  createWsNativeApi = wsNativeApiModule.createWsNativeApi;
+  resetWsNativeApiForTests = wsNativeApiModule.__resetWsNativeApiForTests;
+});
+
+beforeEach(async () => {
   vi.clearAllMocks();
   showContextMenuFallbackMock.mockReset();
   terminalEventListeners.clear();
   orchestrationEventListeners.clear();
   Reflect.deleteProperty(getWindowForTest(), "desktopBridge");
+  await resetWsNativeApiForTests();
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks();
+  await resetWsNativeApiForTests();
 });
 
 describe("wsNativeApi", () => {
   it("forwards server config fetches directly to the RPC client", async () => {
     rpcClientMock.server.getConfig.mockResolvedValue(baseServerConfig);
-    const { createWsNativeApi } = await import("./wsNativeApi");
 
     const api = createWsNativeApi();
 
@@ -190,11 +200,9 @@ describe("wsNativeApi", () => {
     expect(rpcClientMock.server.getConfig).toHaveBeenCalledWith();
     expect(rpcClientMock.server.subscribeConfig).not.toHaveBeenCalled();
     expect(rpcClientMock.server.subscribeLifecycle).not.toHaveBeenCalled();
-  });
+  }, 10_000);
 
   it("forwards terminal and orchestration stream events", async () => {
-    const { createWsNativeApi } = await import("./wsNativeApi");
-
     const api = createWsNativeApi();
     const onTerminalEvent = vi.fn();
     const onDomainEvent = vi.fn();
@@ -243,7 +251,6 @@ describe("wsNativeApi", () => {
 
   it("sends orchestration dispatch commands as the direct RPC payload", async () => {
     rpcClientMock.orchestration.dispatchCommand.mockResolvedValue({ sequence: 1 });
-    const { createWsNativeApi } = await import("./wsNativeApi");
 
     const api = createWsNativeApi();
     const command = {
@@ -265,7 +272,6 @@ describe("wsNativeApi", () => {
 
   it("forwards workspace file writes to the project RPC", async () => {
     rpcClientMock.projects.writeFile.mockResolvedValue({ relativePath: "plan.md" });
-    const { createWsNativeApi } = await import("./wsNativeApi");
 
     const api = createWsNativeApi();
     await api.projects.writeFile({
@@ -281,9 +287,27 @@ describe("wsNativeApi", () => {
     });
   });
 
+  it("forwards workspace file reads to the project RPC", async () => {
+    rpcClientMock.projects.readFile.mockResolvedValue({
+      relativePath: "elevations/front-wall.dxf",
+      contents: "0\nEOF\n",
+      sizeBytes: 6,
+      modifiedAt: "2026-04-02T00:00:00.000Z",
+    });
+    const api = createWsNativeApi();
+    await api.projects.readFile({
+      cwd: "/tmp/project",
+      relativePath: "elevations/front-wall.dxf",
+    });
+
+    expect(rpcClientMock.projects.readFile).toHaveBeenCalledWith({
+      cwd: "/tmp/project",
+      relativePath: "elevations/front-wall.dxf",
+    });
+  });
+
   it("forwards full-thread diff requests to the orchestration RPC", async () => {
     rpcClientMock.orchestration.getFullThreadDiff.mockResolvedValue({ diff: "patch" });
-    const { createWsNativeApi } = await import("./wsNativeApi");
 
     const api = createWsNativeApi();
     await api.orchestration.getFullThreadDiff({
@@ -305,8 +329,6 @@ describe("wsNativeApi", () => {
       },
     ];
     rpcClientMock.server.refreshProviders.mockResolvedValue({ providers: nextProviders });
-    const { createWsNativeApi } = await import("./wsNativeApi");
-
     const api = createWsNativeApi();
 
     await expect(api.server.refreshProviders()).resolves.toEqual({ providers: nextProviders });
@@ -319,8 +341,6 @@ describe("wsNativeApi", () => {
       enableAssistantStreaming: true,
     };
     rpcClientMock.server.updateSettings.mockResolvedValue(nextSettings);
-    const { createWsNativeApi } = await import("./wsNativeApi");
-
     const api = createWsNativeApi();
 
     await expect(api.server.updateSettings({ enableAssistantStreaming: true })).resolves.toEqual(
@@ -335,7 +355,6 @@ describe("wsNativeApi", () => {
     const showContextMenu = vi.fn().mockResolvedValue("delete");
     getWindowForTest().desktopBridge = makeDesktopBridge({ showContextMenu });
 
-    const { createWsNativeApi } = await import("./wsNativeApi");
     const api = createWsNativeApi();
     const items = [{ id: "delete", label: "Delete" }] as const;
 
@@ -345,7 +364,6 @@ describe("wsNativeApi", () => {
 
   it("falls back to the browser context menu helper when the desktop bridge is missing", async () => {
     showContextMenuFallbackMock.mockResolvedValue("rename");
-    const { createWsNativeApi } = await import("./wsNativeApi");
 
     const api = createWsNativeApi();
     const items = [{ id: "rename", label: "Rename" }] as const;

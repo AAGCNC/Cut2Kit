@@ -1,16 +1,10 @@
 import { buildCut2KitAgentPrompt, summarizeCut2KitProjectHealth } from "@t3tools/shared/cut2kit";
 import type { Cut2KitProject, ProjectId } from "@t3tools/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  BotIcon,
-  CheckIcon,
-  FolderIcon,
-  HammerIcon,
-  TriangleAlertIcon,
-  WrenchIcon,
-} from "lucide-react";
+import { BotIcon, CheckIcon, FolderIcon, HammerIcon, TriangleAlertIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
+import { ProjectDxfWorkspace } from "../features/cut2kit-dxf/components/ProjectDxfWorkspace";
 import { openInPreferredEditor } from "../editorPreferences";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { cut2kitProjectQueryOptions, cut2kitQueryKeys } from "../lib/cut2kitReactQuery";
@@ -18,12 +12,12 @@ import { readNativeApi } from "../nativeApi";
 import { useProjectById } from "../storeSelectors";
 import { toastManager } from "./ui/toast";
 import { useComposerDraftStore } from "../composerDraftStore";
+import { Cut2KitProjectExplorer } from "./sidebar/Cut2KitProjectExplorer";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { ScrollArea } from "./ui/scroll-area";
-import { Separator } from "./ui/separator";
 
 function statusBadgeVariant(projectStatus: Cut2KitProject["status"]) {
   if (projectStatus === "error") return "error" as const;
@@ -91,6 +85,10 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     () => (snapshot ? buildCut2KitAgentPrompt(snapshot) : ""),
     [snapshot],
   );
+  const draftThread = useComposerDraftStore((store) => {
+    const draftThreadId = store.projectDraftThreadIdByProjectId[projectId];
+    return draftThreadId ? (store.draftThreadsByThreadId[draftThreadId] ?? null) : null;
+  });
 
   const handleGenerateOutputs = useCallback(async () => {
     if (!project) return;
@@ -234,340 +232,296 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         </div>
       </header>
 
-      <ScrollArea className="flex-1">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
-          {snapshot.summary.errorCount > 0 ? (
-            <Alert>
-              <TriangleAlertIcon className="size-4" />
-              <AlertTitle>Project validation is blocking output generation</AlertTitle>
-              <AlertDescription>
-                Resolve the settings, manufacturing-plan, or source-file errors below before writing
-                A2MC manifests and NC output files.
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          <div className="grid gap-4 md:grid-cols-3">
-            <MetricCard
-              label="Detected Files"
-              value={snapshot.summary.totalFiles}
-              description={`${snapshot.summary.totalDirectories} folders indexed in the project tree.`}
-            />
-            <MetricCard
-              label="Validation"
-              value={issueSummary.errors > 0 ? issueSummary.errors : issueSummary.warnings}
-              description={
-                issueSummary.errors > 0
-                  ? `${issueSummary.errors} blocking errors need attention.`
-                  : issueSummary.warnings > 0
-                    ? `${issueSummary.warnings} warnings are worth reviewing.`
-                    : "No warnings or errors were found."
-              }
-            />
-            <MetricCard
-              label="Planned NC Jobs"
-              value={snapshot.ncJobs.length}
-              description={`${snapshot.outputStatus.generated ? "A2MC output files already exist." : "A2MC output files have not been written yet."}`}
-            />
+      <div className="mx-auto flex h-full w-full max-w-[1600px] min-h-0 flex-col gap-6 px-6 py-6 xl:flex-row">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+          <div className="flex min-h-0 flex-[2_1_0%]">
+            <ProjectDxfWorkspace project={snapshot} projectId={projectId} />
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <Card>
-              <CardHeader>
-                <CardTitle>Validation</CardTitle>
-                <CardDescription>
-                  Settings schema, DXF discovery, and project readiness checks.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                    <p className="text-xs font-medium text-muted-foreground">Settings file</p>
-                    <p className="mt-1 break-all text-sm text-foreground">
-                      {snapshot.settingsFilePath ?? "Not found"}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                    <p className="text-xs font-medium text-muted-foreground">Schema version</p>
-                    <p className="mt-1 text-sm text-foreground">
-                      {snapshot.settings?.schemaVersion ?? "Missing or invalid"}
-                    </p>
-                  </div>
+          <Card className="flex min-h-0 flex-[1_1_0%] flex-col overflow-hidden">
+            <CardHeader className="border-b border-border/70">
+              <CardTitle>Cut to Kit Agent</CardTitle>
+              <CardDescription>
+                The DXF viewport owns the workspace above, while the supervised agent stays visible
+                below it for approval-driven planning and manufacturing updates.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+              <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-background/60">
+                <div className="border-b border-border/70 px-3 py-2 text-xs font-medium text-muted-foreground">
+                  Prompt preview
                 </div>
-                <div className="space-y-2">
-                  {snapshot.issues.length === 0 ? (
-                    <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/60 p-3 text-sm text-foreground">
-                      <CheckIcon className="size-4 text-emerald-500" />
-                      No validation issues detected.
-                    </div>
-                  ) : (
-                    snapshot.issues.map((issue) => (
-                      <div
-                        key={`${issue.code}:${issue.path ?? issue.message}`}
-                        className="rounded-xl border border-border/70 bg-background/60 p-3"
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant={severityBadgeVariant(issue.severity)}>
-                            {issue.severity}
-                          </Badge>
-                          <span className="text-sm font-medium text-foreground">{issue.code}</span>
-                        </div>
-                        <p className="mt-2 text-sm text-foreground">{issue.message}</p>
-                        {issue.path ? (
-                          <p className="mt-1 break-all text-xs text-muted-foreground">
-                            {issue.path}
-                          </p>
-                        ) : null}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                <ScrollArea className="min-h-0 flex-1">
+                  <pre className="whitespace-pre-wrap px-3 py-3 text-xs leading-5 text-foreground">
+                    {agentPrompt}
+                  </pre>
+                </ScrollArea>
+              </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Detected DXFs</CardTitle>
-                <CardDescription>
-                  Source documents classified from settings and path heuristics.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {snapshot.sourceDocuments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No DXF source documents were found.
+              <div className="space-y-3">
+                <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                  <p className="text-xs font-medium text-muted-foreground">Thread status</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Badge variant={draftThread ? "success" : "outline"}>
+                      {draftThread ? "Draft ready" : "No draft yet"}
+                    </Badge>
+                    <Badge variant="outline">Approval required</Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {draftThread
+                      ? "A supervised draft thread already exists for this project. Re-opening the agent will refresh the prompt and return to that thread."
+                      : "Preparing the agent opens a supervised Codex draft thread seeded with the current project snapshot."}
                   </p>
-                ) : (
-                  snapshot.sourceDocuments.map((sourceDocument) => (
-                    <div
-                      key={sourceDocument.sourcePath}
-                      className="rounded-xl border border-border/70 bg-background/60 p-3"
-                    >
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary">{sourceDocument.classification}</Badge>
-                        {sourceDocument.application ? (
-                          <Badge variant="outline">{sourceDocument.application}</Badge>
-                        ) : null}
-                        {sourceDocument.side ? (
-                          <Badge variant="outline">{sourceDocument.side}</Badge>
-                        ) : null}
-                      </div>
-                      <p className="mt-2 break-all text-sm text-foreground">
-                        {sourceDocument.sourcePath}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Classified via {sourceDocument.assignmentSource}.
-                      </p>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-            <Card>
-              <CardHeader>
-                <CardTitle>Planned Outputs</CardTitle>
-                <CardDescription>
-                  Deterministic A2MC manifests and NC jobs derived from the explicit manufacturing
-                  plan and project state.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                    <p className="text-xs font-medium text-muted-foreground">Panels</p>
-                    <p className="mt-1 text-2xl font-semibold text-foreground">
-                      {snapshot.panelManifest.panels.length}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                    <p className="text-xs font-medium text-muted-foreground">Nests</p>
-                    <p className="mt-1 text-2xl font-semibold text-foreground">
-                      {snapshot.nestManifest.nests.length}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                    <p className="text-xs font-medium text-muted-foreground">Queue entries</p>
-                    <p className="mt-1 text-2xl font-semibold text-foreground">
-                      {snapshot.queueManifest.entries.length}
-                    </p>
-                  </div>
                 </div>
 
                 <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-medium text-muted-foreground">Manufacturing plan</p>
-                    <Badge variant={snapshot.manufacturingPlan ? "success" : "outline"}>
-                      {snapshot.manufacturingPlan
-                        ? snapshot.manufacturingPlan.targetController
-                        : "Missing"}
-                    </Badge>
-                  </div>
+                  <p className="text-xs font-medium text-muted-foreground">Manufacturing plan</p>
                   <p className="mt-2 break-all text-sm text-foreground">
                     {snapshot.manufacturingPlanFilePath ?? "cut2kit.manufacturing.json not found"}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {snapshot.manufacturingPlan
                       ? `${snapshot.manufacturingPlan.jobs.length} manufacturing jobs are ready for deterministic A2MC posting.`
-                      : "Use the Cut to Kit Agent or manual edits to create cut2kit.manufacturing.json before generating outputs."}
+                      : "The agent should author or repair cut2kit.manufacturing.json before controller output is generated."}
                   </p>
                 </div>
 
-                <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-medium text-muted-foreground">Generation status</p>
-                    <Badge variant={snapshot.outputStatus.generated ? "success" : "outline"}>
-                      {snapshot.outputStatus.generated ? "Outputs detected" : "Not generated yet"}
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-sm text-foreground">
-                    {snapshot.outputStatus.generated
-                      ? `${snapshot.outputStatus.ncFilePaths.length} A2MC NC files are present under output/nc.`
-                      : "Run Generate A2MC Outputs to write manifests and controller-safe NC files to disk."}
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">Manifest paths</p>
-                  <div className="mt-2 space-y-1">
-                    {snapshot.outputStatus.manifestPaths.map((manifestPath) => (
-                      <p key={manifestPath} className="break-all text-sm text-foreground">
-                        {manifestPath}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">Generated NC paths</p>
-                  <div className="mt-2 space-y-1">
-                    {snapshot.outputStatus.ncFilePaths.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        No A2MC NC files have been written yet.
-                      </p>
-                    ) : (
-                      snapshot.outputStatus.ncFilePaths.slice(0, 6).map((ncPath) => (
-                        <p key={ncPath} className="break-all text-sm text-foreground">
-                          {ncPath}
-                        </p>
-                      ))
-                    )}
-                  </div>
-                  {snapshot.outputStatus.ncFilePaths.length > 6 ? (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Showing first 6 of {snapshot.outputStatus.ncFilePaths.length} generated NC
-                      files.
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">NC jobs</p>
-                  <div className="mt-2 space-y-2">
-                    {snapshot.ncJobs.slice(0, 6).map((job) => (
-                      <div key={job.jobId} className="rounded-lg border border-border/60 px-3 py-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary">{job.queueMode}</Badge>
-                          <Badge variant="outline">{job.queueGroup}</Badge>
-                          <Badge variant="outline">{job.targetController}</Badge>
-                          {job.application ? (
-                            <Badge variant="outline">{job.application}</Badge>
-                          ) : null}
-                        </div>
-                        <p className="mt-2 break-all text-sm text-foreground">
-                          {job.relativeOutputPath}
-                        </p>
-                        <p className="mt-1 break-all text-xs text-muted-foreground">
-                          {job.sourcePath}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {job.operationCount} operations from {job.planSourcePath}
-                        </p>
-                      </div>
-                    ))}
-                    {snapshot.ncJobs.length > 6 ? (
-                      <p className="text-xs text-muted-foreground">
-                        Showing first 6 of {snapshot.ncJobs.length} planned NC jobs.
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Cut to Kit Agent</CardTitle>
-                <CardDescription>
-                  Supervised Codex workflow seeded with the current project snapshot and A2MC
-                  manufacturing-plan path.
-                </CardDescription>
-                <CardAction>
+                <div className="flex flex-col gap-2">
                   <Button
-                    size="sm"
                     variant="outline"
                     onClick={() => void handlePrepareAgent()}
                     disabled={isPreparingAgent}
                   >
-                    <WrenchIcon className="size-4" />
-                    {isPreparingAgent ? "Preparing..." : "Prepare Thread"}
+                    <BotIcon className="size-4" />
+                    {isPreparingAgent ? "Preparing Agent..." : "Open Cut to Kit Agent"}
                   </Button>
-                </CardAction>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="rounded-xl border border-border/70 bg-background/60 p-3 text-sm text-muted-foreground">
-                  The prepared thread runs in supervised mode. Any settings or manufacturing-plan
-                  edits still require explicit file-change approval before they are applied.
+                  <Button
+                    onClick={() => void handleGenerateOutputs()}
+                    disabled={isGenerating || snapshot.summary.errorCount > 0}
+                  >
+                    <HammerIcon className="size-4" />
+                    {isGenerating ? "Generating..." : "Generate A2MC Outputs"}
+                  </Button>
                 </div>
-                <div className="rounded-xl border border-border/70 bg-background/60">
-                  <div className="border-b border-border/70 px-3 py-2 text-xs font-medium text-muted-foreground">
-                    Prompt preview
-                  </div>
-                  <ScrollArea className="h-72">
-                    <pre className="whitespace-pre-wrap px-3 py-3 text-xs leading-5 text-foreground">
-                      {agentPrompt}
-                    </pre>
-                  </ScrollArea>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>File Classification</CardTitle>
-              <CardDescription>
-                Recognized files currently discovered in the selected project directory.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {snapshot.files
-                .filter((entry) => entry.kind === "file")
-                .slice(0, 16)
-                .map((entry, index) => (
-                  <div key={entry.relativePath}>
-                    {index > 0 ? <Separator className="mb-3" /> : null}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline">{entry.classification}</Badge>
-                      <Badge variant="secondary">{entry.role}</Badge>
-                    </div>
-                    <p className="mt-2 break-all text-sm text-foreground">{entry.relativePath}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {entry.sizeBytes ?? 0} bytes
-                    </p>
-                  </div>
-                ))}
-              {snapshot.files.filter((entry) => entry.kind === "file").length > 16 ? (
-                <p className="text-xs text-muted-foreground">
-                  Showing first 16 files from the classified project inventory.
-                </p>
-              ) : null}
+              </div>
             </CardContent>
           </Card>
         </div>
-      </ScrollArea>
+
+        <div className="min-h-0 xl:w-[380px] xl:min-w-[380px]">
+          <ScrollArea className="h-full">
+            <div className="space-y-4 xl:pr-2">
+              {snapshot.summary.errorCount > 0 ? (
+                <Alert>
+                  <TriangleAlertIcon className="size-4" />
+                  <AlertTitle>Project validation is blocking output generation</AlertTitle>
+                  <AlertDescription>
+                    Resolve the settings, manufacturing-plan, or source-file errors below before
+                    writing A2MC manifests and NC output files.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
+              <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-1">
+                <MetricCard
+                  label="Detected Files"
+                  value={snapshot.summary.totalFiles}
+                  description={`${snapshot.summary.totalDirectories} folders indexed in the project tree.`}
+                />
+                <MetricCard
+                  label="Validation"
+                  value={issueSummary.errors > 0 ? issueSummary.errors : issueSummary.warnings}
+                  description={
+                    issueSummary.errors > 0
+                      ? `${issueSummary.errors} blocking errors need attention.`
+                      : issueSummary.warnings > 0
+                        ? `${issueSummary.warnings} warnings are worth reviewing.`
+                        : "No warnings or errors were found."
+                  }
+                />
+                <MetricCard
+                  label="Planned NC Jobs"
+                  value={snapshot.ncJobs.length}
+                  description={
+                    snapshot.outputStatus.generated
+                      ? "A2MC output files already exist."
+                      : "A2MC output files have not been written yet."
+                  }
+                />
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Validation</CardTitle>
+                  <CardDescription>
+                    Settings schema, DXF discovery, and project readiness checks.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                    <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                      <p className="text-xs font-medium text-muted-foreground">Settings file</p>
+                      <p className="mt-1 break-all text-sm text-foreground">
+                        {snapshot.settingsFilePath ?? "Not found"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                      <p className="text-xs font-medium text-muted-foreground">Schema version</p>
+                      <p className="mt-1 text-sm text-foreground">
+                        {snapshot.settings?.schemaVersion ?? "Missing or invalid"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {snapshot.issues.length === 0 ? (
+                      <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-background/60 p-3 text-sm text-foreground">
+                        <CheckIcon className="size-4 text-emerald-500" />
+                        No validation issues detected.
+                      </div>
+                    ) : (
+                      snapshot.issues.map((issue) => (
+                        <div
+                          key={`${issue.code}:${issue.path ?? issue.message}`}
+                          className="rounded-xl border border-border/70 bg-background/60 p-3"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Badge variant={severityBadgeVariant(issue.severity)}>
+                              {issue.severity}
+                            </Badge>
+                            <span className="text-sm font-medium text-foreground">
+                              {issue.code}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm text-foreground">{issue.message}</p>
+                          {issue.path ? (
+                            <p className="mt-1 break-all text-xs text-muted-foreground">
+                              {issue.path}
+                            </p>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Planned Outputs</CardTitle>
+                  <CardDescription>
+                    Deterministic manifests and A2MC jobs derived from the explicit manufacturing
+                    plan.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                    <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                      <p className="text-xs font-medium text-muted-foreground">Panels</p>
+                      <p className="mt-1 text-2xl font-semibold text-foreground">
+                        {snapshot.panelManifest.panels.length}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                      <p className="text-xs font-medium text-muted-foreground">Nests</p>
+                      <p className="mt-1 text-2xl font-semibold text-foreground">
+                        {snapshot.nestManifest.nests.length}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                      <p className="text-xs font-medium text-muted-foreground">Queue entries</p>
+                      <p className="mt-1 text-2xl font-semibold text-foreground">
+                        {snapshot.queueManifest.entries.length}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-muted-foreground">Generation status</p>
+                      <Badge variant={snapshot.outputStatus.generated ? "success" : "outline"}>
+                        {snapshot.outputStatus.generated ? "Outputs detected" : "Not generated yet"}
+                      </Badge>
+                    </div>
+                    <p className="mt-2 text-sm text-foreground">
+                      {snapshot.outputStatus.generated
+                        ? `${snapshot.outputStatus.ncFilePaths.length} A2MC NC files are present under output/nc.`
+                        : "Run Generate A2MC Outputs to write manifests and controller-safe NC files to disk."}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Generated NC paths</p>
+                    <div className="mt-2 space-y-1">
+                      {snapshot.outputStatus.ncFilePaths.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          No A2MC NC files have been written yet.
+                        </p>
+                      ) : (
+                        snapshot.outputStatus.ncFilePaths.slice(0, 6).map((ncPath) => (
+                          <p key={ncPath} className="break-all text-sm text-foreground">
+                            {ncPath}
+                          </p>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Detected DXFs</CardTitle>
+                  <CardDescription>
+                    Base-DXF candidates come from the active project snapshot only.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {snapshot.sourceDocuments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      No DXF source documents were found.
+                    </p>
+                  ) : (
+                    snapshot.sourceDocuments.map((sourceDocument) => (
+                      <div
+                        key={sourceDocument.sourcePath}
+                        className="rounded-xl border border-border/70 bg-background/60 p-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary">{sourceDocument.classification}</Badge>
+                          {sourceDocument.application ? (
+                            <Badge variant="outline">{sourceDocument.application}</Badge>
+                          ) : null}
+                          {sourceDocument.side ? (
+                            <Badge variant="outline">{sourceDocument.side}</Badge>
+                          ) : null}
+                        </div>
+                        <p className="mt-2 break-all text-sm text-foreground">
+                          {sourceDocument.sourcePath}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Classified via {sourceDocument.assignmentSource}.
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Project Explorer</CardTitle>
+                  <CardDescription>
+                    Active-project files and generated artifacts discovered for this snapshot.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0 pb-2">
+                  <Cut2KitProjectExplorer project={snapshot} />
+                </CardContent>
+              </Card>
+            </div>
+          </ScrollArea>
+        </div>
+      </div>
     </div>
   );
 }

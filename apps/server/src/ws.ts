@@ -9,9 +9,10 @@ import {
   OrchestrationGetSnapshotError,
   OrchestrationGetTurnDiffError,
   ORCHESTRATION_WS_METHODS,
+  ProjectReadFileError,
   ProjectSearchEntriesError,
-  ProjectWriteFileError,
   OrchestrationReplayEventsError,
+  ProjectWriteFileError,
   type TerminalEvent,
   WS_METHODS,
   WsRpcGroup,
@@ -210,6 +211,18 @@ const WsRpcLayer = WsRpcGroup.toLayer(
                 cause,
               }),
           ),
+        ),
+      [WS_METHODS.projectsReadFile]: (input) =>
+        workspaceFileSystem.readFile(input).pipe(
+          Effect.mapError((cause) => {
+            const message = Schema.is(WorkspacePathOutsideRootError)(cause)
+              ? "Workspace file path must stay within the project root."
+              : "Failed to read workspace file";
+            return new ProjectReadFileError({
+              message,
+              cause,
+            });
+          }),
         ),
       [WS_METHODS.projectsWriteFile]: (input) =>
         workspaceFileSystem.writeFile(input).pipe(
