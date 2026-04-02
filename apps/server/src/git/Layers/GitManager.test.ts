@@ -720,7 +720,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
                 {
                   number: 1661,
                   title: "Fork PR from main",
-                  url: "https://github.com/pingdotgg/t3code/pull/1661",
+                  url: "https://github.com/AAGCNC/Cut2Kit/pull/1661",
                   baseRefName: "main",
                   headRefName: "main",
                   state: "OPEN",
@@ -846,7 +846,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
                 {
                   number: 1618,
                   title: "Correct PR",
-                  url: "https://github.com/pingdotgg/t3code/pull/1618",
+                  url: "https://github.com/AAGCNC/Cut2Kit/pull/1618",
                   baseRefName: "main",
                   headRefName: "effect-atom",
                   state: "OPEN",
@@ -857,7 +857,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
                 {
                   number: 1518,
                   title: "Wrong PR",
-                  url: "https://github.com/pingdotgg/t3code/pull/1518",
+                  url: "https://github.com/AAGCNC/Cut2Kit/pull/1518",
                   baseRefName: "main",
                   headRefName: "upstream/effect-atom",
                   state: "OPEN",
@@ -870,7 +870,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
                 {
                   number: 1518,
                   title: "Wrong PR",
-                  url: "https://github.com/pingdotgg/t3code/pull/1518",
+                  url: "https://github.com/AAGCNC/Cut2Kit/pull/1518",
                   baseRefName: "main",
                   headRefName: "upstream/effect-atom",
                   state: "OPEN",
@@ -881,7 +881,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
                 {
                   number: 1518,
                   title: "Wrong PR",
-                  url: "https://github.com/pingdotgg/t3code/pull/1518",
+                  url: "https://github.com/AAGCNC/Cut2Kit/pull/1518",
                   baseRefName: "main",
                   headRefName: "upstream/effect-atom",
                   state: "OPEN",
@@ -897,7 +897,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         expect(status.pr).toEqual({
           number: 1618,
           title: "Correct PR",
-          url: "https://github.com/pingdotgg/t3code/pull/1618",
+          url: "https://github.com/AAGCNC/Cut2Kit/pull/1618",
           baseBranch: "main",
           headBranch: "effect-atom",
           state: "open",
@@ -1588,7 +1588,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
                 {
                   number: 1618,
                   title: "Correct PR",
-                  url: "https://github.com/pingdotgg/t3code/pull/1618",
+                  url: "https://github.com/AAGCNC/Cut2Kit/pull/1618",
                   baseRefName: "main",
                   headRefName: "effect-atom",
                 },
@@ -1597,7 +1597,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
                 {
                   number: 1518,
                   title: "Wrong PR",
-                  url: "https://github.com/pingdotgg/t3code/pull/1518",
+                  url: "https://github.com/AAGCNC/Cut2Kit/pull/1518",
                   baseRefName: "main",
                   headRefName: "upstream/effect-atom",
                 },
@@ -1608,7 +1608,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
                 {
                   number: 1518,
                   title: "Wrong PR",
-                  url: "https://github.com/pingdotgg/t3code/pull/1518",
+                  url: "https://github.com/AAGCNC/Cut2Kit/pull/1518",
                   baseRefName: "main",
                   headRefName: "upstream/effect-atom",
                 },
@@ -1617,7 +1617,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
                 {
                   number: 1518,
                   title: "Wrong PR",
-                  url: "https://github.com/pingdotgg/t3code/pull/1518",
+                  url: "https://github.com/AAGCNC/Cut2Kit/pull/1518",
                   baseRefName: "main",
                   headRefName: "upstream/effect-atom",
                 },
@@ -1838,7 +1838,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
                 {
                   number: 1661,
                   title: "Fork PR with same branch name",
-                  url: "https://github.com/pingdotgg/t3code/pull/1661",
+                  url: "https://github.com/AAGCNC/Cut2Kit/pull/1661",
                   baseRefName: "main",
                   headRefName: "feature/no-fork-match",
                   state: "OPEN",
@@ -2289,7 +2289,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
           pullRequest: {
             number: 642,
             title: "fix: use commit as the default git action without origin",
-            url: "https://github.com/pingdotgg/t3code/pull/642",
+            url: "https://github.com/AAGCNC/Cut2Kit/pull/642",
             baseRefName: "main",
             headRefName: "fix/git-action-default-without-origin",
             state: "open",

@@ -1,9 +1,9 @@
-const REPO = "pingdotgg/t3code";
+const REPO = "AAGCNC/Cut2Kit";
 
 export const RELEASES_URL = `https://github.com/${REPO}/releases`;
 
 const API_URL = `https://api.github.com/repos/${REPO}/releases/latest`;
-const CACHE_KEY = "t3code-latest-release";
+const CACHE_KEY = "cut2kit-latest-release";
 
 export interface ReleaseAsset {
   name: string;
