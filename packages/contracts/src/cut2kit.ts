@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { IsoDateTime, NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas";
 
-export const CUT2KIT_SETTINGS_SCHEMA_VERSIONS = ["0.1.0"] as const;
+export const CUT2KIT_SETTINGS_SCHEMA_VERSIONS = ["0.2.0"] as const;
 
 export const Cut2KitSettingsSchemaVersion = Schema.Literals(CUT2KIT_SETTINGS_SCHEMA_VERSIONS);
 export type Cut2KitSettingsSchemaVersion = typeof Cut2KitSettingsSchemaVersion.Type;
@@ -165,6 +165,183 @@ export const Cut2KitPdfSettings = Schema.Struct({
   fileAssignments: Schema.Array(Cut2KitPdfFileAssignment),
 });
 export type Cut2KitPdfSettings = typeof Cut2KitPdfSettings.Type;
+
+const Cut2KitElevationGeometrySource = Schema.Literals(["dimension_text", "drawn_geometry"]);
+const Cut2KitElevationHorizontalDimensionMode = Schema.Literal(
+  "cumulative_from_left_edge",
+);
+const Cut2KitElevationOpeningPairingStrategy = Schema.Literal("consecutive_pairs");
+const Cut2KitElevationOpeningTypeInference = Schema.Literal("sill_line_detection");
+const Cut2KitWallEdge = Schema.Literals(["left", "right"]);
+const Cut2KitWallDirection = Schema.Literals(["left_to_right", "right_to_left"]);
+const Cut2KitLeftJambOffsetMode = Schema.Literals(["shift_left", "none"]);
+const Cut2KitMemberContinuity = Schema.Literals(["continuous"]);
+const Cut2KitDrawingOrientation = Schema.Literals(["flat", "on_edge"]);
+const Cut2KitInstalledSheetOrientation = Schema.Literals(["vertical", "horizontal"]);
+const Cut2KitSheetRunDirection = Schema.Literals(["left_to_right", "right_to_left"]);
+const Cut2KitSupportedEdgeBehavior = Schema.Literals(["edges_over_framing_or_blocking"]);
+const Cut2KitPageSize = Schema.Literals(["letter", "a4"]);
+const Cut2KitPageOrientation = Schema.Literals(["landscape", "portrait"]);
+const Cut2KitDimensionFormat = Schema.Literals(["feet-and-inches", "decimal-inch"]);
+
+const Cut2KitMargins = Schema.Struct({
+  left: Schema.Number,
+  right: Schema.Number,
+  top: Schema.Number,
+  bottom: Schema.Number,
+});
+
+export const Cut2KitElevationIntakeSettings = Schema.Struct({
+  enabled: Schema.Boolean,
+  geometrySourcePriority: Schema.Array(Cut2KitElevationGeometrySource),
+  horizontalDimensionMode: Cut2KitElevationHorizontalDimensionMode,
+  openingPairingStrategy: Cut2KitElevationOpeningPairingStrategy,
+  openingTypeInference: Cut2KitElevationOpeningTypeInference,
+  requireCommonHeadHeight: Schema.Boolean,
+  requireCommonWindowSillHeight: Schema.Boolean,
+  units: Cut2KitNcUnits,
+});
+export type Cut2KitElevationIntakeSettings = typeof Cut2KitElevationIntakeSettings.Type;
+
+export const Cut2KitPdfWorkflowSettings = Schema.Struct({
+  autoClassify: Schema.Boolean,
+  fileAssignments: Schema.Array(Cut2KitPdfFileAssignment),
+  elevationIntake: Cut2KitElevationIntakeSettings,
+});
+export type Cut2KitPdfWorkflowSettings = typeof Cut2KitPdfWorkflowSettings.Type;
+
+export const Cut2KitFramingMaterialSettings = Schema.Struct({
+  label: TrimmedNonEmptyString,
+  nominalSize: TrimmedNonEmptyString,
+  thickness: Schema.Number,
+  depth: Schema.Number,
+});
+export type Cut2KitFramingMaterialSettings = typeof Cut2KitFramingMaterialSettings.Type;
+
+const Cut2KitPlateSettings = Schema.Struct({
+  enabled: Schema.Boolean,
+  continuity: Cut2KitMemberContinuity,
+  orientationInElevation: Cut2KitDrawingOrientation,
+});
+
+export const Cut2KitFramingSettings = Schema.Struct({
+  enabled: Schema.Boolean,
+  material: Cut2KitFramingMaterialSettings,
+  plates: Schema.Struct({
+    top: Cut2KitPlateSettings,
+    bottom: Cut2KitPlateSettings,
+  }),
+  horizontalMembers: Schema.Struct({
+    orientationInElevation: Cut2KitDrawingOrientation,
+  }),
+  endStuds: Schema.Struct({
+    leftCount: PositiveInt,
+    rightCount: PositiveInt,
+  }),
+  jambStuds: Schema.Struct({
+    countPerSide: PositiveInt,
+    leftOffsetMode: Cut2KitLeftJambOffsetMode,
+    leftOffset: Schema.Number,
+    preserveClearOpenings: Schema.Boolean,
+  }),
+  studLayout: Schema.Struct({
+    enabled: Schema.Boolean,
+    spacing: PositiveInt,
+    originSide: Cut2KitWallEdge,
+    direction: Cut2KitWallDirection,
+    stopBeforeNextBearingStudWithinOrEqual: PositiveInt,
+  }),
+  openings: Schema.Struct({
+    clearArchitecturalOpenings: Schema.Boolean,
+    headMember: Schema.Struct({
+      windows: Schema.Boolean,
+      doors: Schema.Boolean,
+    }),
+    sillMember: Schema.Struct({
+      windows: Schema.Boolean,
+      doors: Schema.Boolean,
+    }),
+  }),
+  crippleStuds: Schema.Struct({
+    aboveHeads: Schema.Boolean,
+    belowWindowSills: Schema.Boolean,
+    splitGridStudsInsideOpenings: Schema.Boolean,
+  }),
+  labeling: Schema.Struct({
+    includeMemberSchedule: Schema.Boolean,
+    includeStudCenterSchedule: Schema.Boolean,
+  }),
+});
+export type Cut2KitFramingSettings = typeof Cut2KitFramingSettings.Type;
+
+export const Cut2KitSheathingSettings = Schema.Struct({
+  enabled: Schema.Boolean,
+  materialLabel: TrimmedNonEmptyString,
+  panelThickness: Schema.Number,
+  sheet: Schema.Struct({
+    nominalWidth: PositiveInt,
+    nominalHeight: PositiveInt,
+    installedOrientation: Cut2KitInstalledSheetOrientation,
+    runDirection: Cut2KitSheetRunDirection,
+    allowTerminalRip: Schema.Boolean,
+  }),
+  openingsRemainUncovered: Schema.Boolean,
+  output: Schema.Struct({
+    includeOverallLayoutPage: Schema.Boolean,
+    includePerSheetCutoutPages: Schema.Boolean,
+    includeFasteningPage: Schema.Boolean,
+  }),
+  notes: Schema.Struct({
+    includeDisclaimer: Schema.Boolean,
+    panelEdgeGap: Schema.Number,
+    supportedEdgeBehavior: Cut2KitSupportedEdgeBehavior,
+  }),
+});
+export type Cut2KitSheathingSettings = typeof Cut2KitSheathingSettings.Type;
+
+export const Cut2KitFasteningSettings = Schema.Struct({
+  enabled: Schema.Boolean,
+  typicalReferenceOnly: Schema.Boolean,
+  supportedEdgeSpacing: PositiveInt,
+  fieldSpacing: PositiveInt,
+  edgeDistance: Schema.Number,
+  includeOverdrivingWarning: Schema.Boolean,
+  disclaimerText: TrimmedNonEmptyString,
+  noteLines: Schema.Array(TrimmedNonEmptyString),
+});
+export type Cut2KitFasteningSettings = typeof Cut2KitFasteningSettings.Type;
+
+const Cut2KitRenderingSheet = Schema.Struct({
+  pageSize: Cut2KitPageSize,
+  pageOrientation: Cut2KitPageOrientation,
+  margins: Cut2KitMargins,
+});
+
+export const Cut2KitRenderingSettings = Schema.Struct({
+  units: Cut2KitNcUnits,
+  dimensionFormat: Cut2KitDimensionFormat,
+  framing: Cut2KitRenderingSheet.pipe(
+    Schema.extend(
+      Schema.Struct({
+        includeMemberSchedule: Schema.Boolean,
+        titleTemplate: TrimmedNonEmptyString,
+        subtitleTemplate: TrimmedNonEmptyString,
+      }),
+    ),
+  ),
+  sheathing: Cut2KitRenderingSheet.pipe(
+    Schema.extend(
+      Schema.Struct({
+        scaleToFitFirstPage: Schema.Boolean,
+        cutoutDetailsPerPage: PositiveInt,
+        titleTemplate: TrimmedNonEmptyString,
+        subtitleTemplate: TrimmedNonEmptyString,
+        fasteningTitleTemplate: TrimmedNonEmptyString,
+      }),
+    ),
+  ),
+});
+export type Cut2KitRenderingSettings = typeof Cut2KitRenderingSettings.Type;
 
 const Cut2KitStudRules = Schema.Struct({
   enabled: Schema.Boolean,
