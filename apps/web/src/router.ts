@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterHistory } from "@tanstack/react-router";
 
 import { AppAtomRegistryProvider } from "./rpc/atomRegistry";
+import { appBasePath } from "./env";
 import { routeTree } from "./routeTree.gen";
 
 export function getRouter(history: RouterHistory) {
@@ -11,6 +12,7 @@ export function getRouter(history: RouterHistory) {
   return createRouter({
     routeTree,
     history,
+    basepath: appBasePath || "/",
     context: {
       queryClient,
     },

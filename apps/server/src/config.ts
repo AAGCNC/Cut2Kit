@@ -43,11 +43,50 @@ export interface ServerConfigShape extends ServerDerivedPaths {
   readonly baseDir: string;
   readonly staticDir: string | undefined;
   readonly devUrl: URL | undefined;
+  readonly basePath: string;
   readonly noBrowser: boolean;
   readonly authToken: string | undefined;
   readonly autoBootstrapProjectFromCwd: boolean;
   readonly logWebSocketEvents: boolean;
 }
+
+export const normalizeBasePath = (value: string | undefined): string => {
+  const trimmed = value?.trim() ?? "";
+  if (trimmed.length === 0 || trimmed === "/") {
+    return "";
+  }
+
+  const withLeadingSlash = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  const withoutTrailingSlash = withLeadingSlash.replace(/\/+$/, "");
+  return withoutTrailingSlash === "/" ? "" : withoutTrailingSlash;
+};
+
+export const prefixServerPath = (basePath: string, pathname: string): string => {
+  const normalizedBasePath = normalizeBasePath(basePath);
+  const normalizedPathname = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  if (normalizedBasePath.length === 0) {
+    return normalizedPathname;
+  }
+  if (normalizedPathname === "/") {
+    return `${normalizedBasePath}/`;
+  }
+  return `${normalizedBasePath}${normalizedPathname}`;
+};
+
+export const stripBasePath = (pathname: string, basePath: string): string | null => {
+  const normalizedBasePath = normalizeBasePath(basePath);
+  if (normalizedBasePath.length === 0) {
+    return pathname;
+  }
+  if (pathname === normalizedBasePath || pathname === `${normalizedBasePath}/`) {
+    return "/";
+  }
+  if (!pathname.startsWith(`${normalizedBasePath}/`)) {
+    return null;
+  }
+  const strippedPath = pathname.slice(normalizedBasePath.length);
+  return strippedPath.startsWith("/") ? strippedPath : `/${strippedPath}`;
+};
 
 export const deriveServerPaths = Effect.fn(function* (
   baseDir: ServerConfigShape["baseDir"],
@@ -128,6 +167,7 @@ export class ServerConfig extends ServiceMap.Service<ServerConfig, ServerConfigS
           authToken: undefined,
           staticDir: undefined,
           devUrl,
+          basePath: "",
           noBrowser: false,
         } satisfies ServerConfigShape;
       }),

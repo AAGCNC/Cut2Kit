@@ -19,7 +19,7 @@ import {
   ServiceMap,
 } from "effect";
 
-import { ServerConfig } from "./config";
+import { prefixServerPath, ServerConfig } from "./config";
 import { Keybindings } from "./keybindings";
 import { Open } from "./open";
 import { OrchestrationEngineService } from "./orchestration/Services/OrchestrationEngine";
@@ -237,7 +237,8 @@ const maybeOpenBrowser = Effect.gen(function* () {
     serverConfig.host && !isWildcardHost(serverConfig.host)
       ? `http://${formatHostForUrl(serverConfig.host)}:${serverConfig.port}`
       : localUrl;
-  const target = serverConfig.devUrl?.toString() ?? bindUrl;
+  const target =
+    serverConfig.devUrl?.toString() ?? `${bindUrl}${prefixServerPath(serverConfig.basePath, "/")}`;
 
   yield* openBrowser(target).pipe(
     Effect.catch(() =>

@@ -154,6 +154,7 @@ const buildAppUnderTest = (options?: {
       ...derivedPaths,
       staticDir: undefined,
       devUrl,
+      basePath: "",
       noBrowser: true,
       authToken: undefined,
       autoBootstrapProjectFromCwd: false,
@@ -314,6 +315,30 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("redirects the bare root to the configured base path", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const staticDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-router-static-base-path-",
+      });
+      yield* fileSystem.writeFileString(path.join(staticDir, "index.html"), "<html>ok</html>");
+
+      yield* buildAppUnderTest({
+        config: {
+          staticDir,
+          basePath: "/cut2kit",
+        },
+      });
+
+      const url = yield* getHttpServerUrl("/");
+      const response = yield* Effect.promise(() => fetch(url, { redirect: "manual" }));
+
+      assert.equal(response.status, 302);
+      assert.equal(response.headers.get("location"), "/cut2kit/");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("redirects to dev URL when configured", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest({
@@ -395,6 +420,32 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("serves attachment files from the configured base path", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const attachmentId = "thread-22222222-2222-4222-8222-222222222222";
+
+      const config = yield* buildAppUnderTest({
+        config: {
+          basePath: "/cut2kit",
+        },
+      });
+      const attachmentPath = resolveAttachmentRelativePath({
+        attachmentsDir: config.attachmentsDir,
+        relativePath: `${attachmentId}.bin`,
+      });
+      assert.isNotNull(attachmentPath, "Attachment path should be resolvable");
+
+      yield* fileSystem.makeDirectory(path.dirname(attachmentPath), { recursive: true });
+      yield* fileSystem.writeFileString(attachmentPath, "attachment-base-path-ok");
+
+      const response = yield* HttpClient.get(`/cut2kit/attachments/${attachmentId}`);
+      assert.equal(response.status, 200);
+      assert.equal(yield* response.text, "attachment-base-path-ok");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("serves attachment files for URL-encoded paths", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -456,6 +507,45 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const wsUrl = yield* getWsServerUrl("/ws");
+      const response = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverUpsertKeybinding](rule)),
+      );
+
+      assert.deepEqual(response.issues, []);
+      assert.deepEqual(response.keybindings, [resolved]);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("routes websocket rpc server.upsertKeybinding from the configured base path", () =>
+    Effect.gen(function* () {
+      const rule: KeybindingRule = {
+        command: "terminal.toggle",
+        key: "ctrl+k",
+      };
+      const resolved: ResolvedKeybindingRule = {
+        command: "terminal.toggle",
+        shortcut: {
+          key: "k",
+          metaKey: false,
+          ctrlKey: true,
+          shiftKey: false,
+          altKey: false,
+          modKey: true,
+        },
+      };
+
+      yield* buildAppUnderTest({
+        config: {
+          basePath: "/cut2kit",
+        },
+        layers: {
+          keybindings: {
+            upsertKeybindingRule: () => Effect.succeed([resolved]),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/cut2kit/ws");
       const response = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverUpsertKeybinding](rule)),
       );

@@ -4,6 +4,7 @@ import { type CxOptions, cx } from "class-variance-authority";
 import { twMerge } from "tailwind-merge";
 import * as Random from "effect/Random";
 import * as Effect from "effect/Effect";
+import { withBasePath } from "../env";
 
 export function cn(...inputs: CxOptions) {
   return twMerge(cx(inputs));
@@ -64,9 +65,9 @@ export const resolveServerUrl = (options?: {
     parsedUrl.protocol = options.protocol;
   }
   if (options?.pathname) {
-    parsedUrl.pathname = options.pathname;
+    parsedUrl.pathname = withBasePath(options.pathname);
   } else {
-    parsedUrl.pathname = "/";
+    parsedUrl.pathname = withBasePath("/");
   }
   if (options?.searchParams) {
     parsedUrl.search = new URLSearchParams(options.searchParams).toString();

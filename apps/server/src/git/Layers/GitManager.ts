@@ -571,39 +571,138 @@ export const makeGitManager = Effect.fn("makeGitManager")(function* () {
     };
   };
 
+  const findExistingPullRequestHeadRemote = Effect.fn("findExistingPullRequestHeadRemote")(
+    function* (cwd: string, pullRequest: ResolvedPullRequest & PullRequestHeadRemoteInfo) {
+      const expectedOwner = normalizeOptionalOwnerLogin(pullRequest.headRepositoryOwnerLogin);
+      const branches = yield* gitCore.listBranches({ cwd });
+      const seenRemoteNames = new Set<string>();
+      const candidateRemoteNames = branches.branches
+        .filter((branch) => branch.isRemote && typeof branch.remoteName === "string")
+        .filter((branch) => {
+          const remoteName = branch.remoteName;
+          if (!remoteName || seenRemoteNames.has(remoteName)) {
+            return false;
+          }
+          const branchName = extractBranchNameFromRemoteRef(branch.name, { remoteName });
+          if (branchName !== pullRequest.headBranch) {
+            return false;
+          }
+          seenRemoteNames.add(remoteName);
+          return true;
+        })
+        .map((branch) => branch.remoteName as string);
+
+      if (candidateRemoteNames.length === 0) {
+        return null;
+      }
+
+      const scoredRemoteNames = yield* Effect.forEach(
+        candidateRemoteNames,
+        (remoteName) =>
+          Effect.gen(function* () {
+            const remoteUrl = yield* gitCore
+              .readConfigValue(cwd, `remote.${remoteName}.url`)
+              .pipe(Effect.catch(() => Effect.succeed(null)));
+            const remoteRepositoryNameWithOwner = normalizeOptionalRepositoryNameWithOwner(
+              parseGitHubRepositoryNameWithOwnerFromRemoteUrl(remoteUrl),
+            );
+            const remoteOwnerLogin =
+              normalizeOptionalOwnerLogin(
+                parseRepositoryOwnerLogin(remoteRepositoryNameWithOwner),
+              ) ?? normalizeOptionalOwnerLogin(remoteName);
+
+            let score = remoteName === "origin" ? 0 : 1;
+            if (pullRequest.isCrossRepository && remoteName === "origin") {
+              score -= 100;
+            }
+            if (!pullRequest.isCrossRepository && remoteName === "origin") {
+              score += 10;
+            }
+            if (expectedOwner && remoteOwnerLogin === expectedOwner) {
+              score += 100;
+            } else if (
+              expectedOwner &&
+              normalizeOptionalOwnerLogin(remoteName)?.startsWith(expectedOwner)
+            ) {
+              score += 50;
+            }
+
+            return { remoteName, score };
+          }),
+        { concurrency: "unbounded" },
+      );
+
+      const bestMatch = scoredRemoteNames.toSorted((left, right) => {
+        if (left.score !== right.score) {
+          return right.score - left.score;
+        }
+        return left.remoteName.localeCompare(right.remoteName);
+      })[0];
+
+      return bestMatch && bestMatch.score >= 0 ? bestMatch.remoteName : null;
+    },
+  );
+
   const configurePullRequestHeadUpstreamBase = Effect.fn("configurePullRequestHeadUpstream")(
     function* (
       cwd: string,
       pullRequest: ResolvedPullRequest & PullRequestHeadRemoteInfo,
       localBranch = pullRequest.headBranch,
     ) {
+      const configureExistingRemoteUpstream = Effect.fn("configureExistingRemoteUpstream")(
+        function* () {
+          const existingRemoteName = yield* findExistingPullRequestHeadRemote(cwd, pullRequest);
+          if (!existingRemoteName) {
+            return false;
+          }
+          yield* gitCore.setBranchUpstream({
+            cwd,
+            branch: localBranch,
+            remoteName: existingRemoteName,
+            remoteBranch: pullRequest.headBranch,
+          });
+          return true;
+        },
+      );
+
       const repositoryNameWithOwner = resolveHeadRepositoryNameWithOwner(pullRequest) ?? "";
       if (repositoryNameWithOwner.length === 0) {
+        if (!(yield* configureExistingRemoteUpstream())) {
+          return;
+        }
         return;
       }
 
-      const cloneUrls = yield* gitHubCli.getRepositoryCloneUrls({
-        cwd,
-        repository: repositoryNameWithOwner,
-      });
-      const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url");
-      const remoteUrl = shouldPreferSshRemote(originRemoteUrl) ? cloneUrls.sshUrl : cloneUrls.url;
-      const preferredRemoteName =
-        pullRequest.headRepositoryOwnerLogin?.trim() ||
-        repositoryNameWithOwner.split("/")[0]?.trim() ||
-        "fork";
-      const remoteName = yield* gitCore.ensureRemote({
-        cwd,
-        preferredName: preferredRemoteName,
-        url: remoteUrl,
-      });
+      yield* Effect.gen(function* () {
+        const cloneUrls = yield* gitHubCli.getRepositoryCloneUrls({
+          cwd,
+          repository: repositoryNameWithOwner,
+        });
+        const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url");
+        const remoteUrl = shouldPreferSshRemote(originRemoteUrl) ? cloneUrls.sshUrl : cloneUrls.url;
+        const preferredRemoteName =
+          pullRequest.headRepositoryOwnerLogin?.trim() ||
+          repositoryNameWithOwner.split("/")[0]?.trim() ||
+          "fork";
+        const remoteName = yield* gitCore.ensureRemote({
+          cwd,
+          preferredName: preferredRemoteName,
+          url: remoteUrl,
+        });
 
-      yield* gitCore.setBranchUpstream({
-        cwd,
-        branch: localBranch,
-        remoteName,
-        remoteBranch: pullRequest.headBranch,
-      });
+        yield* gitCore.setBranchUpstream({
+          cwd,
+          branch: localBranch,
+          remoteName,
+          remoteBranch: pullRequest.headBranch,
+        });
+      }).pipe(
+        Effect.catch((error) =>
+          configureExistingRemoteUpstream().pipe(
+            Effect.flatMap((configured) => (configured ? Effect.void : Effect.fail(error))),
+          ),
+        ),
+      );
     },
   );
 
@@ -626,9 +725,32 @@ export const makeGitManager = Effect.fn("makeGitManager")(function* () {
       pullRequest: ResolvedPullRequest & PullRequestHeadRemoteInfo,
       localBranch = pullRequest.headBranch,
     ) {
+      const materializeExistingRemoteBranch = Effect.fn("materializeExistingRemoteBranch")(
+        function* () {
+          const existingRemoteName = yield* findExistingPullRequestHeadRemote(cwd, pullRequest);
+          if (!existingRemoteName) {
+            return false;
+          }
+          yield* gitCore.fetchRemoteBranch({
+            cwd,
+            remoteName: existingRemoteName,
+            remoteBranch: pullRequest.headBranch,
+            localBranch,
+          });
+          yield* gitCore.setBranchUpstream({
+            cwd,
+            branch: localBranch,
+            remoteName: existingRemoteName,
+            remoteBranch: pullRequest.headBranch,
+          });
+          return true;
+        },
+      );
+
       const repositoryNameWithOwner = resolveHeadRepositoryNameWithOwner(pullRequest) ?? "";
 
       if (repositoryNameWithOwner.length === 0) {
+        if (yield* materializeExistingRemoteBranch()) return;
         yield* gitCore.fetchPullRequestBranch({
           cwd,
           prNumber: pullRequest.number,
@@ -637,34 +759,50 @@ export const makeGitManager = Effect.fn("makeGitManager")(function* () {
         return;
       }
 
-      const cloneUrls = yield* gitHubCli.getRepositoryCloneUrls({
-        cwd,
-        repository: repositoryNameWithOwner,
-      });
-      const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url");
-      const remoteUrl = shouldPreferSshRemote(originRemoteUrl) ? cloneUrls.sshUrl : cloneUrls.url;
-      const preferredRemoteName =
-        pullRequest.headRepositoryOwnerLogin?.trim() ||
-        repositoryNameWithOwner.split("/")[0]?.trim() ||
-        "fork";
-      const remoteName = yield* gitCore.ensureRemote({
-        cwd,
-        preferredName: preferredRemoteName,
-        url: remoteUrl,
-      });
+      yield* Effect.gen(function* () {
+        const cloneUrls = yield* gitHubCli.getRepositoryCloneUrls({
+          cwd,
+          repository: repositoryNameWithOwner,
+        });
+        const originRemoteUrl = yield* gitCore.readConfigValue(cwd, "remote.origin.url");
+        const remoteUrl = shouldPreferSshRemote(originRemoteUrl) ? cloneUrls.sshUrl : cloneUrls.url;
+        const preferredRemoteName =
+          pullRequest.headRepositoryOwnerLogin?.trim() ||
+          repositoryNameWithOwner.split("/")[0]?.trim() ||
+          "fork";
+        const remoteName = yield* gitCore.ensureRemote({
+          cwd,
+          preferredName: preferredRemoteName,
+          url: remoteUrl,
+        });
 
-      yield* gitCore.fetchRemoteBranch({
-        cwd,
-        remoteName,
-        remoteBranch: pullRequest.headBranch,
-        localBranch,
-      });
-      yield* gitCore.setBranchUpstream({
-        cwd,
-        branch: localBranch,
-        remoteName,
-        remoteBranch: pullRequest.headBranch,
-      });
+        yield* gitCore.fetchRemoteBranch({
+          cwd,
+          remoteName,
+          remoteBranch: pullRequest.headBranch,
+          localBranch,
+        });
+        yield* gitCore.setBranchUpstream({
+          cwd,
+          branch: localBranch,
+          remoteName,
+          remoteBranch: pullRequest.headBranch,
+        });
+      }).pipe(
+        Effect.catch(() =>
+          materializeExistingRemoteBranch().pipe(
+            Effect.flatMap((materialized) =>
+              materialized
+                ? Effect.void
+                : gitCore.fetchPullRequestBranch({
+                    cwd,
+                    prNumber: pullRequest.number,
+                    branch: localBranch,
+                  }),
+            ),
+          ),
+        ),
+      );
     },
   );
 

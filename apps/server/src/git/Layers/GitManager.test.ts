@@ -2319,6 +2319,62 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
     }),
   );
 
+  it.effect(
+    "reuses an existing fork remote when preparing a worktree PR thread without nameWithOwner",
+    () =>
+      Effect.gen(function* () {
+        const repoDir = yield* makeTempDir("t3code-git-manager-");
+        yield* initRepo(repoDir);
+        const originDir = yield* createBareRemote();
+        const forkDir = yield* createBareRemote();
+        yield* runGit(repoDir, ["remote", "add", "origin", originDir]);
+        yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
+        yield* runGit(repoDir, ["remote", "add", "binbandit-seed", forkDir]);
+        yield* runGit(repoDir, ["checkout", "-b", "feature/pr-worktree-derived-remote"]);
+        fs.writeFileSync(path.join(repoDir, "derived-worktree.txt"), "derived worktree\n");
+        yield* runGit(repoDir, ["add", "derived-worktree.txt"]);
+        yield* runGit(repoDir, ["commit", "-m", "Derived worktree PR branch"]);
+        yield* runGit(repoDir, [
+          "push",
+          "-u",
+          "binbandit-seed",
+          "feature/pr-worktree-derived-remote",
+        ]);
+        yield* runGit(repoDir, ["checkout", "main"]);
+
+        const { manager } = yield* makeManager({
+          ghScenario: {
+            pullRequest: {
+              number: 643,
+              title: "fix: use commit as the default git action without origin",
+              url: "https://github.com/AAGCNC/Cut2Kit/pull/643",
+              baseRefName: "main",
+              headRefName: "feature/pr-worktree-derived-remote",
+              state: "open",
+              isCrossRepository: true,
+              headRepositoryOwnerLogin: "binbandit",
+            },
+          },
+        });
+
+        const result = yield* preparePullRequestThread(manager, {
+          cwd: repoDir,
+          reference: "643",
+          mode: "worktree",
+        });
+
+        expect(result.branch).toBe("t3code/pr-643/feature/pr-worktree-derived-remote");
+        expect(result.worktreePath).not.toBeNull();
+        expect(
+          (yield* runGit(result.worktreePath as string, [
+            "rev-parse",
+            "--abbrev-ref",
+            "@{upstream}",
+          ])).stdout.trim(),
+        ).toBe("binbandit-seed/feature/pr-worktree-derived-remote");
+      }),
+  );
+
   it.effect("reuses an existing dedicated worktree for the PR head branch", () =>
     Effect.gen(function* () {
       const repoDir = yield* makeTempDir("t3code-git-manager-");

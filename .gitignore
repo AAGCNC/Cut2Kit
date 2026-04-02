@@ -21,6 +21,7 @@ apps/web/src/components/__screenshots__
 .vitest-*
 __screenshots__/
 .tanstack
+.run/
 
 # Local agent/runtime scratch artifacts
 .codex

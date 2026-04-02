@@ -6,6 +6,7 @@ import {
   DEFAULT_PORT,
   deriveServerPaths,
   ensureServerDirectories,
+  normalizeBasePath,
   resolveStaticDir,
   ServerConfig,
   RuntimeMode,
@@ -23,6 +24,7 @@ const BootstrapEnvelopeSchema = Schema.Struct({
   host: Schema.optional(Schema.String),
   t3Home: Schema.optional(Schema.String),
   devUrl: Schema.optional(Schema.URLFromString),
+  basePath: Schema.optional(Schema.String),
   noBrowser: Schema.optional(Schema.Boolean),
   authToken: Schema.optional(Schema.String),
   autoBootstrapProjectFromCwd: Schema.optional(Schema.Boolean),
@@ -49,6 +51,12 @@ const baseDirFlag = Flag.string("base-dir").pipe(
 const devUrlFlag = Flag.string("dev-url").pipe(
   Flag.withSchema(Schema.URLFromString),
   Flag.withDescription("Dev web URL to proxy/redirect to (equivalent to VITE_DEV_SERVER_URL)."),
+  Flag.optional,
+);
+const basePathFlag = Flag.string("base-path").pipe(
+  Flag.withDescription(
+    "Base URL path prefix for HTTP, static, and WebSocket routes (equivalent to T3CODE_BASE_PATH).",
+  ),
   Flag.optional,
 );
 const noBrowserFlag = Flag.boolean("no-browser").pipe(
@@ -89,6 +97,10 @@ const EnvServerConfig = Config.all({
   host: Config.string("T3CODE_HOST").pipe(Config.option, Config.map(Option.getOrUndefined)),
   t3Home: Config.string("T3CODE_HOME").pipe(Config.option, Config.map(Option.getOrUndefined)),
   devUrl: Config.url("VITE_DEV_SERVER_URL").pipe(Config.option, Config.map(Option.getOrUndefined)),
+  basePath: Config.string("T3CODE_BASE_PATH").pipe(
+    Config.option,
+    Config.map(Option.getOrUndefined),
+  ),
   noBrowser: Config.boolean("T3CODE_NO_BROWSER").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
@@ -117,6 +129,7 @@ interface CliServerFlags {
   readonly host: Option.Option<string>;
   readonly baseDir: Option.Option<string>;
   readonly devUrl: Option.Option<URL>;
+  readonly basePath: Option.Option<string>;
   readonly noBrowser: Option.Option<boolean>;
   readonly authToken: Option.Option<string>;
   readonly bootstrapFd: Option.Option<number>;
@@ -176,6 +189,17 @@ export const resolveServerConfig = (
         Option.flatMap(bootstrapEnvelope, (bootstrap) => Option.fromUndefinedOr(bootstrap.devUrl)),
       ),
       () => undefined,
+    );
+    const basePath = normalizeBasePath(
+      Option.getOrUndefined(
+        resolveOptionPrecedence(
+          flags.basePath,
+          Option.fromUndefinedOr(env.basePath),
+          Option.flatMap(bootstrapEnvelope, (bootstrap) =>
+            Option.fromUndefinedOr(bootstrap.basePath),
+          ),
+        ),
+      ),
     );
     const baseDir = yield* resolveBaseDir(
       Option.getOrUndefined(
@@ -256,6 +280,7 @@ export const resolveServerConfig = (
       host,
       staticDir,
       devUrl,
+      basePath,
       noBrowser,
       authToken,
       autoBootstrapProjectFromCwd,
@@ -271,6 +296,7 @@ const commandFlags = {
   host: hostFlag,
   baseDir: baseDirFlag,
   devUrl: devUrlFlag,
+  basePath: basePathFlag,
   noBrowser: noBrowserFlag,
   authToken: authTokenFlag,
   bootstrapFd: bootstrapFdFlag,

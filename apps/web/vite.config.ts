@@ -7,6 +7,12 @@ import pkg from "./package.json" with { type: "json" };
 
 const port = Number(process.env.PORT ?? 5733);
 const sourcemapEnv = process.env.T3CODE_WEB_SOURCEMAP?.trim().toLowerCase();
+const basePathEnv = process.env.VITE_BASE_PATH?.trim();
+
+const basePath =
+  !basePathEnv || basePathEnv === "/"
+    ? "/"
+    : `${basePathEnv.startsWith("/") ? basePathEnv : `/${basePathEnv}`}`.replace(/\/?$/, "/");
 
 const buildSourcemap =
   sourcemapEnv === "0" || sourcemapEnv === "false"
@@ -16,6 +22,7 @@ const buildSourcemap =
       : true;
 
 export default defineConfig({
+  base: basePath,
   plugins: [
     tanstackRouter(),
     react(),
@@ -33,6 +40,7 @@ export default defineConfig({
     include: ["@pierre/diffs", "@pierre/diffs/react", "@pierre/diffs/worker/worker.js"],
   },
   define: {
+    "import.meta.env.VITE_BASE_PATH": JSON.stringify(basePath === "/" ? "" : basePath),
     // In dev mode, tell the web app where the WebSocket server lives
     "import.meta.env.VITE_WS_URL": JSON.stringify(process.env.VITE_WS_URL ?? ""),
     "import.meta.env.APP_VERSION": JSON.stringify(pkg.version),

@@ -19,6 +19,7 @@ import {
   derivePendingApprovals,
   derivePendingUserInputs,
 } from "./session-logic";
+import { withBasePath } from "./env";
 import { type ChatMessage, type Project, type SidebarThreadSummary, type Thread } from "./types";
 
 // ── State ────────────────────────────────────────────────────────────
@@ -528,7 +529,7 @@ function toAttachmentPreviewUrl(rawUrl: string): string {
 }
 
 function attachmentPreviewRoutePath(attachmentId: string): string {
-  return `/attachments/${encodeURIComponent(attachmentId)}`;
+  return withBasePath(`/attachments/${encodeURIComponent(attachmentId)}`);
 }
 
 function updateThreadState(

@@ -1,5 +1,5 @@
 import Mime from "@effect/platform-node/Mime";
-import { Effect, FileSystem, Option, Path } from "effect";
+import { Effect, FileSystem, Layer, Option, Path } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import {
@@ -8,103 +8,123 @@ import {
   resolveAttachmentRelativePath,
 } from "./attachmentPaths";
 import { resolveAttachmentPathById } from "./attachmentStore";
-import { ServerConfig } from "./config";
+import { prefixServerPath, ServerConfig, stripBasePath } from "./config";
 import { ProjectFaviconResolver } from "./project/Services/ProjectFaviconResolver";
 
 const PROJECT_FAVICON_CACHE_CONTROL = "public, max-age=3600";
 const FALLBACK_PROJECT_FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#6b728080" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-fallback="project-favicon"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>`;
 
-export const attachmentsRouteLayer = HttpRouter.add(
-  "GET",
-  `${ATTACHMENTS_ROUTE_PREFIX}/*`,
+export const attachmentsRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    const url = HttpServerRequest.toURL(request);
-    if (Option.isNone(url)) {
-      return HttpServerResponse.text("Bad Request", { status: 400 });
-    }
-
     const config = yield* ServerConfig;
-    const rawRelativePath = url.value.pathname.slice(ATTACHMENTS_ROUTE_PREFIX.length);
-    const normalizedRelativePath = normalizeAttachmentRelativePath(rawRelativePath);
-    if (!normalizedRelativePath) {
-      return HttpServerResponse.text("Invalid attachment path", { status: 400 });
-    }
+    const attachmentsRoutePath =
+      `${prefixServerPath(config.basePath, ATTACHMENTS_ROUTE_PREFIX)}/*` as `/${string}`;
+    return HttpRouter.add(
+      "GET",
+      attachmentsRoutePath,
+      Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        const url = HttpServerRequest.toURL(request);
+        if (Option.isNone(url)) {
+          return HttpServerResponse.text("Bad Request", { status: 400 });
+        }
 
-    const isIdLookup =
-      !normalizedRelativePath.includes("/") && !normalizedRelativePath.includes(".");
-    const filePath = isIdLookup
-      ? resolveAttachmentPathById({
-          attachmentsDir: config.attachmentsDir,
-          attachmentId: normalizedRelativePath,
-        })
-      : resolveAttachmentRelativePath({
-          attachmentsDir: config.attachmentsDir,
-          relativePath: normalizedRelativePath,
-        });
-    if (!filePath) {
-      return HttpServerResponse.text(isIdLookup ? "Not Found" : "Invalid attachment path", {
-        status: isIdLookup ? 404 : 400,
-      });
-    }
+        const requestPath = stripBasePath(url.value.pathname, config.basePath);
+        if (requestPath === null) {
+          return HttpServerResponse.text("Not Found", { status: 404 });
+        }
 
-    const fileSystem = yield* FileSystem.FileSystem;
-    const fileInfo = yield* fileSystem
-      .stat(filePath)
-      .pipe(Effect.catch(() => Effect.succeed(null)));
-    if (!fileInfo || fileInfo.type !== "File") {
-      return HttpServerResponse.text("Not Found", { status: 404 });
-    }
+        const rawRelativePath = requestPath.slice(ATTACHMENTS_ROUTE_PREFIX.length);
+        const normalizedRelativePath = normalizeAttachmentRelativePath(rawRelativePath);
+        if (!normalizedRelativePath) {
+          return HttpServerResponse.text("Invalid attachment path", { status: 400 });
+        }
 
-    return yield* HttpServerResponse.file(filePath, {
-      status: 200,
-      headers: {
-        "Cache-Control": "public, max-age=31536000, immutable",
-      },
-    }).pipe(
-      Effect.catch(() =>
-        Effect.succeed(HttpServerResponse.text("Internal Server Error", { status: 500 })),
-      ),
+        const isIdLookup =
+          !normalizedRelativePath.includes("/") && !normalizedRelativePath.includes(".");
+        const filePath = isIdLookup
+          ? resolveAttachmentPathById({
+              attachmentsDir: config.attachmentsDir,
+              attachmentId: normalizedRelativePath,
+            })
+          : resolveAttachmentRelativePath({
+              attachmentsDir: config.attachmentsDir,
+              relativePath: normalizedRelativePath,
+            });
+        if (!filePath) {
+          return HttpServerResponse.text(isIdLookup ? "Not Found" : "Invalid attachment path", {
+            status: isIdLookup ? 404 : 400,
+          });
+        }
+
+        const fileSystem = yield* FileSystem.FileSystem;
+        const fileInfo = yield* fileSystem
+          .stat(filePath)
+          .pipe(Effect.catch(() => Effect.succeed(null)));
+        if (!fileInfo || fileInfo.type !== "File") {
+          return HttpServerResponse.text("Not Found", { status: 404 });
+        }
+
+        return yield* HttpServerResponse.file(filePath, {
+          status: 200,
+          headers: {
+            "Cache-Control": "public, max-age=31536000, immutable",
+          },
+        }).pipe(
+          Effect.catch(() =>
+            Effect.succeed(HttpServerResponse.text("Internal Server Error", { status: 500 })),
+          ),
+        );
+      }),
     );
   }),
 );
 
-export const projectFaviconRouteLayer = HttpRouter.add(
-  "GET",
-  "/api/project-favicon",
+export const projectFaviconRouteLayer = Layer.unwrap(
   Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    const url = HttpServerRequest.toURL(request);
-    if (Option.isNone(url)) {
-      return HttpServerResponse.text("Bad Request", { status: 400 });
-    }
+    const config = yield* ServerConfig;
+    const projectFaviconRoutePath = prefixServerPath(
+      config.basePath,
+      "/api/project-favicon",
+    ) as `/${string}`;
+    return HttpRouter.add(
+      "GET",
+      projectFaviconRoutePath,
+      Effect.gen(function* () {
+        const request = yield* HttpServerRequest.HttpServerRequest;
+        const url = HttpServerRequest.toURL(request);
+        if (Option.isNone(url)) {
+          return HttpServerResponse.text("Bad Request", { status: 400 });
+        }
 
-    const projectCwd = url.value.searchParams.get("cwd");
-    if (!projectCwd) {
-      return HttpServerResponse.text("Missing cwd parameter", { status: 400 });
-    }
+        const projectCwd = url.value.searchParams.get("cwd");
+        if (!projectCwd) {
+          return HttpServerResponse.text("Missing cwd parameter", { status: 400 });
+        }
 
-    const faviconResolver = yield* ProjectFaviconResolver;
-    const faviconFilePath = yield* faviconResolver.resolvePath(projectCwd);
-    if (!faviconFilePath) {
-      return HttpServerResponse.text(FALLBACK_PROJECT_FAVICON_SVG, {
-        status: 200,
-        contentType: "image/svg+xml",
-        headers: {
-          "Cache-Control": PROJECT_FAVICON_CACHE_CONTROL,
-        },
-      });
-    }
+        const faviconResolver = yield* ProjectFaviconResolver;
+        const faviconFilePath = yield* faviconResolver.resolvePath(projectCwd);
+        if (!faviconFilePath) {
+          return HttpServerResponse.text(FALLBACK_PROJECT_FAVICON_SVG, {
+            status: 200,
+            contentType: "image/svg+xml",
+            headers: {
+              "Cache-Control": PROJECT_FAVICON_CACHE_CONTROL,
+            },
+          });
+        }
 
-    return yield* HttpServerResponse.file(faviconFilePath, {
-      status: 200,
-      headers: {
-        "Cache-Control": PROJECT_FAVICON_CACHE_CONTROL,
-      },
-    }).pipe(
-      Effect.catch(() =>
-        Effect.succeed(HttpServerResponse.text("Internal Server Error", { status: 500 })),
-      ),
+        return yield* HttpServerResponse.file(faviconFilePath, {
+          status: 200,
+          headers: {
+            "Cache-Control": PROJECT_FAVICON_CACHE_CONTROL,
+          },
+        }).pipe(
+          Effect.catch(() =>
+            Effect.succeed(HttpServerResponse.text("Internal Server Error", { status: 500 })),
+          ),
+        );
+      }),
     );
   }),
 );
@@ -120,6 +140,17 @@ export const staticAndDevRouteLayer = HttpRouter.add(
     }
 
     const config = yield* ServerConfig;
+    if (config.basePath && url.value.pathname === "/") {
+      return HttpServerResponse.redirect(prefixServerPath(config.basePath, "/"), {
+        status: 302,
+      });
+    }
+
+    const requestPath = stripBasePath(url.value.pathname, config.basePath);
+    if (requestPath === null) {
+      return HttpServerResponse.text("Not Found", { status: 404 });
+    }
+
     if (config.devUrl) {
       return HttpServerResponse.redirect(config.devUrl.href, { status: 302 });
     }
@@ -133,7 +164,7 @@ export const staticAndDevRouteLayer = HttpRouter.add(
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const staticRoot = path.resolve(config.staticDir);
-    const staticRequestPath = url.value.pathname === "/" ? "/index.html" : url.value.pathname;
+    const staticRequestPath = requestPath === "/" ? "/index.html" : requestPath;
     const rawStaticRelativePath = staticRequestPath.replace(/^[/\\]+/, "");
     const hasRawLeadingParentSegment = rawStaticRelativePath.startsWith("..");
     const staticRelativePath = path.normalize(rawStaticRelativePath).replace(/^[/\\]+/, "");
