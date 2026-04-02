@@ -1,11 +1,11 @@
 {
   "schemaVersion": "0.1.0",
   "project": {
-    "projectId": "triplem-house-001",
-    "jobName": "Triple M Sample House 001",
-    "customer": "Triple M Housing",
-    "site": "pilot",
-    "description": "Sample Cut2Kit project for elevation-driven panelization",
+    "projectId": "demo-prefab-kit-001",
+    "jobName": "Prefab Demo House 001",
+    "customer": "AXYZ Demo Homes",
+    "site": "shop-floor",
+    "description": "Bootstrap sample for Cut2Kit scanning, validation, and placeholder outputs",
     "units": "imperial"
   },
   "production": {
@@ -14,25 +14,25 @@
     "applications": ["siding", "flooring", "roofing"]
   },
   "machineProfile": {
-    "profileId": "AXYZ-ROUTER-PLACEHOLDER",
-    "postProcessorId": "pending-definition",
-    "stockCatalogId": "default-prefab-sheet-stock"
+    "profileId": "AXYZ-DEMO",
+    "postProcessorId": "placeholder-post",
+    "stockCatalogId": "demo-sheet-stock"
   },
   "discovery": {
     "searchRecursively": true,
-    "preferredFolders": ["elevations", "floor", "roof", "references"],
+    "preferredFolders": ["elevations", "floor", "roof"],
     "knownSettingsFileNames": ["cut2kit.settings.json"]
   },
   "dxf": {
     "defaultUnits": "inch",
     "autoClassify": true,
     "layerMappings": {
-      "outline": ["OUTLINE", "WALL_OUTLINE", "PROFILE"],
-      "openings": ["OPENINGS", "WINDOW", "DOOR"],
-      "studs": ["STUD", "STUDS", "FRAMING_STUD"],
-      "joists": ["JOIST", "JOISTS", "FRAMING_JOIST"],
-      "dimensions": ["DIM", "DIMS"],
-      "annotations": ["TEXT", "NOTES", "ANNO"]
+      "outline": ["OUTLINE"],
+      "openings": ["OPENINGS"],
+      "studs": ["STUDS"],
+      "joists": ["JOISTS"],
+      "dimensions": ["DIM"],
+      "annotations": ["NOTES"]
     },
     "fileAssignments": [
       {
@@ -45,18 +45,6 @@
         "pathPattern": "elevations/rear*.dxf",
         "classification": "elevation",
         "side": "rear",
-        "application": "siding"
-      },
-      {
-        "pathPattern": "elevations/left*.dxf",
-        "classification": "elevation",
-        "side": "left",
-        "application": "siding"
-      },
-      {
-        "pathPattern": "elevations/right*.dxf",
-        "classification": "elevation",
-        "side": "right",
         "application": "siding"
       },
       {
@@ -114,12 +102,11 @@
     "minPanelWidth": 8,
     "minPanelHeight": 8,
     "edgeTrimAllowance": 0.125,
-    "kerfAllowance": 0.0,
+    "kerfAllowance": 0,
     "seamPriority": [
       "align_to_structural_members",
       "avoid_openings",
-      "prefer_shipping_friendly_panels",
-      "allow_manual_override"
+      "prefer_shipping_friendly_panels"
     ],
     "perApplication": {
       "siding": {
@@ -138,17 +125,17 @@
   },
   "nesting": {
     "strategy": "deterministic_with_ai_suggestions",
-    "sortPriority": ["application", "material", "thickness", "kitGroup"],
+    "sortPriority": ["application", "kitGroup"],
     "optimizeFor": "yield_then_sequence",
     "allowRotation": true,
     "groupByHouseSide": true,
-    "maxConcurrentNests": 4
+    "maxConcurrentNests": 3
   },
   "queueing": {
     "kitting": {
       "enabled": true,
       "groupBy": "assembly_zone",
-      "sequence": ["front", "left", "right", "rear", "floor", "roof"],
+      "sequence": ["front", "rear", "floor", "roof"],
       "outputPrefix": "KIT"
     },
     "lineSide": {
@@ -163,7 +150,7 @@
     "manifestsDir": "output/manifests",
     "ncDir": "output/nc",
     "reportsDir": "output/reports",
-    "overwritePolicy": "version_if_exists"
+    "overwritePolicy": "overwrite"
   },
   "ai": {
     "enabled": true,
@@ -176,7 +163,6 @@
     "approvalRequiredForQueueGeneration": true,
     "allowedTasks": [
       "explain_project_state",
-      "suggest_layer_mappings",
       "suggest_rule_json",
       "suggest_panelization_strategy",
       "summarize_warnings"

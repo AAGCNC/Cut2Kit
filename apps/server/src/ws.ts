@@ -1,5 +1,6 @@
 import { Effect, Layer, Option, Queue, Ref, Schema, Stream } from "effect";
 import {
+  Cut2KitProjectError,
   type GitActionProgressEvent,
   type GitManagerServiceError,
   OrchestrationDispatchCommandError,
@@ -36,6 +37,7 @@ import { TerminalManager } from "./terminal/Services/Manager";
 import { WorkspaceEntries } from "./workspace/Services/WorkspaceEntries";
 import { WorkspaceFileSystem } from "./workspace/Services/WorkspaceFileSystem";
 import { WorkspacePathOutsideRootError } from "./workspace/Services/WorkspacePaths";
+import { Cut2KitProjects } from "./cut2kit/Services/Cut2KitProjects";
 
 const WsRpcLayer = WsRpcGroup.toLayer(
   Effect.gen(function* () {
@@ -54,6 +56,7 @@ const WsRpcLayer = WsRpcGroup.toLayer(
     const startup = yield* ServerRuntimeStartup;
     const workspaceEntries = yield* WorkspaceEntries;
     const workspaceFileSystem = yield* WorkspaceFileSystem;
+    const cut2kitProjects = yield* Cut2KitProjects;
 
     const loadServerConfig = Effect.gen(function* () {
       const keybindingsConfig = yield* keybindings.loadConfigState;
@@ -219,6 +222,30 @@ const WsRpcLayer = WsRpcGroup.toLayer(
               cause,
             });
           }),
+        ),
+      [WS_METHODS.cut2kitInspectProject]: (input) =>
+        cut2kitProjects.inspectProject(input).pipe(
+          Effect.mapError(
+            (cause) =>
+              new Cut2KitProjectError({
+                cwd: input.cwd,
+                operation: "cut2kit.inspectProject",
+                detail: cause.detail,
+                cause,
+              }),
+          ),
+        ),
+      [WS_METHODS.cut2kitGenerateOutputs]: (input) =>
+        cut2kitProjects.generateOutputs(input).pipe(
+          Effect.mapError(
+            (cause) =>
+              new Cut2KitProjectError({
+                cwd: input.cwd,
+                operation: "cut2kit.generateOutputs",
+                detail: cause.detail,
+                cause,
+              }),
+          ),
         ),
       [WS_METHODS.shellOpenInEditor]: (input) => open.openInEditor(input),
       [WS_METHODS.gitStatus]: (input) => gitManager.status(input),

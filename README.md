@@ -1,52 +1,80 @@
-# T3 Code
+# Cut2Kit
 
-T3 Code is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).
+Cut2Kit is an AI-first CAM foundation for prefab housing, built on the existing Electron + local server + React/Vite shell inherited from T3 Code.
 
-## Installation
+The current first vertical slice is directory-first:
 
-> [!WARNING]
-> T3 Code currently supports Codex and Claude.
-> Install and authenticate at least one provider before use:
->
-> - Codex: install [Codex CLI](https://github.com/openai/codex) and run `codex login`
-> - Claude: install Claude Code and run `claude auth login`
+- open a project directory
+- detect `cut2kit.settings.json` and DXFs
+- validate settings against an explicit schema
+- inspect project health in the app
+- generate deterministic placeholder manifests and `.nc` outputs
+- prepare a supervised Codex-backed Cut to Kit Agent thread from the current project snapshot
 
-### Run without installing
+## Run
 
-```bash
-npx t3
-```
-
-### Desktop app
-
-Install the latest version of the desktop app from [GitHub Releases](https://github.com/pingdotgg/t3code/releases), or from your favorite package registry:
-
-#### Windows (`winget`)
+Install dependencies:
 
 ```bash
-winget install T3Tools.T3Code
+bun install
 ```
 
-#### macOS (Homebrew)
+Start the web/server development flow:
 
 ```bash
-brew install --cask t3-code
+bun run dev
 ```
 
-#### Arch Linux (AUR)
+Start the desktop app:
 
 ```bash
-yay -S t3code-bin
+bun run dev:desktop
 ```
 
-## Some notes
+## Sample project
 
-We are very very early in this project. Expect bugs.
+A sample Cut2Kit project lives at `examples/prefab-demo-project`.
 
-We are not accepting contributions yet.
+It includes:
 
-## If you REALLY want to contribute still.... read this first
+- `cut2kit.settings.json`
+- sample DXF placeholders under `elevations/`, `floor/`, and `roof/`
+- deterministic manifest and NC generation inputs
 
-Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
+A reusable settings example also lives at `examples/cut2kit.settings.example.json`.
 
-Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
+## Current workflow
+
+1. Launch the app.
+2. Open the sample project directory from the left sidebar.
+3. Review the project workspace route for validation, DXF detection, and planned outputs.
+4. Generate placeholder outputs to write:
+   - `output/manifests/panel-manifest.json`
+   - `output/manifests/nest-manifest.json`
+   - `output/manifests/queue-manifest.json`
+   - `output/nc/*.nc`
+5. Use `Open Cut to Kit Agent` to prepare a supervised Codex thread with the current project snapshot.
+
+The deterministic code owns scanning, validation, manifest derivation, queue ordering, and placeholder NC generation. AI suggestions stay review-first and approval-gated.
+
+## Health checks
+
+Required repo checks:
+
+```bash
+bun fmt
+bun lint
+bun typecheck
+```
+
+Tests use Vitest through:
+
+```bash
+bun run test
+```
+
+## Notes
+
+- The repo still preserves the original T3-like architecture on purpose.
+- Codex integration still flows through the existing local app-server and approval plumbing.
+- Geometry, real nesting, and machine-specific post-processors are intentionally not implemented yet in this first slice.

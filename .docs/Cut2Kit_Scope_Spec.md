@@ -9,9 +9,11 @@
 - **Primary goal of this document:** Define the initial product scope, platform choice, architecture direction, build plan, and first implementation slice for an AI-first Cut-to-Kit CAM application
 
 ---
+
 ## 1A. Evidence, Constraints, and Inputs
 
 ### Direct inputs used for this spec
+
 - User requirements from chat
 - Whiteboard image labeled **Cut to Kit**
 - Adjacent AXYZ engineering brief for IMP/SIP vertical processing
@@ -20,16 +22,18 @@
 - OpenAI Codex public documentation/blog material for App Server and login/auth behavior
 
 ### Important constraint
+
 This scope is **not** based on a direct inspection of `/mnt/c/src/Cut2Kit` from this environment, because that path was not mounted here at authoring time. The platform recommendation and Codex execution prompt are therefore grounded in:
+
 1. the stated intent that Cut2Kit is a T3 Code fork or close derivative,
 2. public T3 Code architecture,
 3. the Cut2Kit-specific product requirements supplied by the user.
 
 ### Practical implication
+
 The scope document is decision-oriented enough to start implementation, but the accompanying Codex prompt explicitly instructs the agent to first inspect the actual repo and adapt the work to what is truly present.
 
 ---
-
 
 ## 2. Executive Summary
 
@@ -66,13 +70,13 @@ AI should sit on top of that deterministic engine to:
 
 The first delivery should not attempt perfect nesting or production-grade G-code. The first delivery should prove the architecture and operator flow:
 
-1. open a project directory  
-2. discover and validate files  
-3. load a project settings JSON  
-4. classify DXFs and related inputs  
-5. represent panelization/framing intent in explicit domain models  
-6. generate placeholder panel, nest, and queue manifests  
-7. create NC placeholders ready to be replaced later with real post logic  
+1. open a project directory
+2. discover and validate files
+3. load a project settings JSON
+4. classify DXFs and related inputs
+5. represent panelization/framing intent in explicit domain models
+6. generate placeholder panel, nest, and queue manifests
+7. create NC placeholders ready to be replaced later with real post logic
 8. expose an in-app “Cut to Kit Agent” using Codex to assist the operator and engineer
 
 ---
@@ -389,6 +393,7 @@ The product needs a domain layer that can represent “what the building wants�
 ### Design requirement
 
 Even if full structural automation is not available in phase 1, the data model must exist so later releases can consume:
+
 - DXF-derived features
 - imported structural data
 - AI-proposed but operator-approved rules
@@ -414,6 +419,7 @@ This is the core product differentiator.
 ### Output
 
 Each panelization result should produce a structured output record:
+
 - panel ID
 - source elevation/assembly
 - geometry reference
@@ -445,6 +451,7 @@ The nesting system should eventually optimize stock usage and queue order. In th
 ### AI role in nesting
 
 AI may be used to propose strategy classes:
+
 - group by house
 - group by elevation
 - group by kit sequence
@@ -554,15 +561,19 @@ The product should expose an in-app agent tentatively called **Cut to Kit Agent*
 This section captures the public T3 Code baseline that Cut2Kit should reuse unless the local fork has already diverged materially.
 
 ### Monorepo shape
+
 The public T3 Code layout is a Bun/Turbo monorepo with top-level `apps/*`, `packages/*`, and `scripts/` workspaces. Its root scripts include `dev`, `dev:server`, `dev:web`, `dev:desktop`, `build`, and `build:desktop`.
 
 ### Application split
+
 - `apps/desktop` = Electron shell
 - `apps/web` = React/Vite frontend
 - `apps/server` = local orchestration / CLI / provider runtime
 
 ### Provider integration pattern
+
 The important Cut2Kit-relevant pattern is:
+
 1. desktop app starts locally,
 2. desktop app launches a local backend/server child process,
 3. backend manages provider sessions,
@@ -570,7 +581,9 @@ The important Cut2Kit-relevant pattern is:
 5. UI receives streamed provider events and approval requests.
 
 ### Why this matters for Cut2Kit
+
 That baseline is already a strong fit for:
+
 - local project-folder access
 - large CAD/CAM inputs
 - explicit approval UX
@@ -608,6 +621,7 @@ Use a **T3 Code-derived architecture** as the base platform.
 ## 9.2 Why Not a Browser-Only App First
 
 A browser-only architecture is a poor first fit because this product requires:
+
 - local folder access
 - large file handling
 - trusted machine-side output
@@ -617,6 +631,7 @@ A browser-only architecture is a poor first fit because this product requires:
 ## 9.3 Why Not a Fully Cloud-Native CAM Platform First
 
 A cloud-first implementation would increase complexity too early:
+
 - data transfer overhead for CAD/CAM assets
 - higher latency for local workflows
 - more difficult machine-side deployment
@@ -660,6 +675,7 @@ Keep domain logic out of the React UI. The UI should render state, trigger actio
 ## 11.1 Core Entities
 
 ### Project
+
 - project ID
 - root path
 - customer
@@ -669,6 +685,7 @@ Keep domain logic out of the React UI. The UI should render state, trigger actio
 - validation status
 
 ### SourceDocument
+
 - path
 - type
 - subtype
@@ -676,6 +693,7 @@ Keep domain logic out of the React UI. The UI should render state, trigger actio
 - extracted metadata
 
 ### FramingRuleSet
+
 - stud spacing
 - joist spacing
 - reference origin
@@ -684,11 +702,13 @@ Keep domain logic out of the React UI. The UI should render state, trigger actio
 - allowances
 
 ### ElevationAssembly
+
 - source document references
 - side/type classification
 - normalized geometry references
 
 ### StructuralMember
+
 - member type
 - orientation
 - position
@@ -696,12 +716,14 @@ Keep domain logic out of the React UI. The UI should render state, trigger actio
 - continuity and opening interaction
 
 ### Opening
+
 - type
 - position
 - width/height
 - framing impact policy
 
 ### PanelCandidate
+
 - geometry reference
 - break rationale
 - dimensions
@@ -709,12 +731,14 @@ Keep domain logic out of the React UI. The UI should render state, trigger actio
 - destination mode
 
 ### NestPlan
+
 - stock sheet selection
 - panel placements
 - utilization estimate
 - sequencing metadata
 
 ### NCJob
+
 - target machine profile
 - queue order
 - output file path
@@ -722,6 +746,7 @@ Keep domain logic out of the React UI. The UI should render state, trigger actio
 - status
 
 ### KitGroup
+
 - group ID
 - job membership
 - sequence priority
@@ -756,6 +781,7 @@ cut2kit.settings.json
 ## 12.2 Machine Profiles
 
 Machine-specific behaviors should **not** be embedded directly in every project file. Projects should reference a named machine profile, and the machine profile should define:
+
 - stock constraints
 - spindle/tool placeholders
 - post processor ID
@@ -816,6 +842,7 @@ The production state of the project must be computable from files and approved r
 Align with the T3 Code baseline unless the local fork has already diverged.
 
 Recommended baseline:
+
 - Node.js 24.x
 - Bun 1.3.x
 - Codex CLI installed locally
@@ -824,12 +851,15 @@ Recommended baseline:
 ## 14.3 Build Modes
 
 ### Web development mode
+
 - runs UI and local server for fast iteration
 
 ### Desktop development mode
+
 - runs Electron shell plus local backend and UI dev server
 
 ### Production build mode
+
 - builds web assets
 - builds local server
 - packages desktop app
@@ -841,6 +871,7 @@ Recommended baseline:
 These steps are expressed as **T3-compatible baseline steps**. The Codex implementation pass should verify them against the actual Cut2Kit repo before assuming they are exact.
 
 ### Expected baseline scripts to preserve if present
+
 - `bun run dev`
 - `bun run dev:server`
 - `bun run dev:web`
@@ -850,7 +881,6 @@ These steps are expressed as **T3-compatible baseline steps**. The Codex impleme
 - `bun run typecheck`
 - `bun run lint`
 - `bun run test`
-
 
 ## 15.1 Environment Setup
 
@@ -895,9 +925,11 @@ If a packaging script already exists for Windows distribution, preserve it. If n
 ## 15.7 Codex Authentication Strategy
 
 For interactive desktop use:
+
 - prefer existing `codex login` flow
 
 For CI or unattended automation later:
+
 - use a managed API key or service auth path rather than interactive login
 
 ---
@@ -909,6 +941,7 @@ This is the recommended first implementation target.
 ## 16.1 Scope of Slice 1
 
 ### Project and file intake
+
 - open directory
 - index files
 - detect settings JSON
@@ -916,18 +949,21 @@ This is the recommended first implementation target.
 - show left-side explorer
 
 ### Settings schema and validation
+
 - define TypeScript schema
 - load and validate file
 - expose errors in UI
 - include sample file
 
 ### DXF metadata ingestion
+
 - file presence
 - file summary
 - layer extraction if library support is practical
 - side/type classification
 
 ### Domain contracts
+
 - project
 - source documents
 - framing rules
@@ -936,11 +972,13 @@ This is the recommended first implementation target.
 - NC job placeholder
 
 ### Output generation
+
 - generate placeholder manifests
 - generate placeholder NC files
 - write outputs to `output/` directory
 
 ### AI integration
+
 - add Cut to Kit Agent panel
 - package current project context
 - support explanation and JSON rule suggestions
@@ -979,6 +1017,7 @@ This is the recommended first implementation target.
 ## 18.1 Unit Tests
 
 Focus on:
+
 - settings schema validation
 - rule resolution
 - manifest serialization
@@ -988,6 +1027,7 @@ Focus on:
 ## 18.2 Integration Tests
 
 Focus on:
+
 - project directory scan
 - load settings + DXF inventory
 - generate output artifacts
@@ -996,6 +1036,7 @@ Focus on:
 ## 18.3 Pilot Test Data
 
 Create fixture projects representing:
+
 - siding elevation
 - floor panel set
 - roof panel set
@@ -1054,39 +1095,46 @@ These questions do not block the first vertical slice, but they should be resolv
 ## 21. Implementation Plan
 
 ## Phase 0 - Reconnaissance
+
 - inspect local repository structure
 - identify preserved T3 Code packages/scripts
 - document current build and provider wiring
 - confirm current Codex integration status
 
 ## Phase 1 - Project Model and UI Intake
+
 - project open
 - file tree
 - settings schema
 - validation UI
 
 ## Phase 2 - Domain Packages
+
 - framing
 - panelization contracts
 - queue manifest
 - machine profiles
 
 ## Phase 3 - DXF and Structural Adapters
+
 - metadata extraction
 - layer mapping
 - structural reference ingestion
 
 ## Phase 4 - Placeholder Output and Queueing
+
 - manifests
 - placeholder NC generation
 - output folder writing
 
 ## Phase 5 - Agent Integration
+
 - Cut to Kit Agent panel
 - rule suggestion workflow
 - approvals and audit trail
 
 ## Phase 6 - Real Geometry and CAM
+
 - deterministic panelization math
 - nesting implementation
 - post processors
@@ -1141,6 +1189,7 @@ output/
 ## 24. Sample JSON Strategy
 
 A sample project settings file is provided separately with this scope package. It demonstrates:
+
 - project metadata
 - machine profile references
 - DXF mapping defaults
@@ -1188,6 +1237,7 @@ Use **Codex App Server through the existing local process model** so the app can
 ### Recommended answer to the build-steps question
 
 Keep the T3-style monorepo build if the local fork already has it:
+
 - install dependencies
 - preserve dev scripts
 - preserve desktop build flow
@@ -1200,12 +1250,12 @@ Keep the T3-style monorepo build if the local fork already has it:
 
 A first successful Cut2Kit release will let an engineer or operator:
 
-1. open a real customer project folder  
-2. see all relevant DXFs and settings in one place  
-3. load customer-specific framing rules from JSON  
-4. validate and understand the project state  
-5. generate manifest-driven placeholder queue output  
-6. use an in-app AI agent to accelerate setup and troubleshooting  
+1. open a real customer project folder
+2. see all relevant DXFs and settings in one place
+3. load customer-specific framing rules from JSON
+4. validate and understand the project state
+5. generate manifest-driven placeholder queue output
+6. use an in-app AI agent to accelerate setup and troubleshooting
 7. hand the resulting job structure to the next stage of real panelization, nesting, and post development
 
 That is the right first foundation for an AI-first Cut-to-Kit CAM product.

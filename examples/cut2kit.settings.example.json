@@ -48,18 +48,6 @@
         "application": "siding"
       },
       {
-        "pathPattern": "elevations/left*.dxf",
-        "classification": "elevation",
-        "side": "left",
-        "application": "siding"
-      },
-      {
-        "pathPattern": "elevations/right*.dxf",
-        "classification": "elevation",
-        "side": "right",
-        "application": "siding"
-      },
-      {
         "pathPattern": "floor/*.dxf",
         "classification": "floor",
         "application": "flooring"
@@ -114,7 +102,7 @@
     "minPanelWidth": 8,
     "minPanelHeight": 8,
     "edgeTrimAllowance": 0.125,
-    "kerfAllowance": 0.0,
+    "kerfAllowance": 0,
     "seamPriority": [
       "align_to_structural_members",
       "avoid_openings",

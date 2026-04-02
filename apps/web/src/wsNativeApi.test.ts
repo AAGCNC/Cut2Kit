@@ -49,6 +49,10 @@ const rpcClientMock = {
     searchEntries: vi.fn(),
     writeFile: vi.fn(),
   },
+  cut2kit: {
+    inspectProject: vi.fn(),
+    generateOutputs: vi.fn(),
+  },
   shell: {
     openInEditor: vi.fn(),
   },

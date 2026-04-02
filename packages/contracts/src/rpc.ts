@@ -50,6 +50,13 @@ import {
   ProjectWriteFileResult,
 } from "./project";
 import {
+  Cut2KitGenerateOutputsInput,
+  Cut2KitGenerateOutputsResult,
+  Cut2KitInspectProjectInput,
+  Cut2KitProject,
+  Cut2KitProjectError,
+} from "./cut2kit";
+import {
   TerminalClearInput,
   TerminalCloseInput,
   TerminalError,
@@ -77,6 +84,8 @@ export const WS_METHODS = {
   projectsRemove: "projects.remove",
   projectsSearchEntries: "projects.searchEntries",
   projectsWriteFile: "projects.writeFile",
+  cut2kitInspectProject: "cut2kit.inspectProject",
+  cut2kitGenerateOutputs: "cut2kit.generateOutputs",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -155,6 +164,18 @@ export const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
   payload: ProjectWriteFileInput,
   success: ProjectWriteFileResult,
   error: ProjectWriteFileError,
+});
+
+export const WsCut2KitInspectProjectRpc = Rpc.make(WS_METHODS.cut2kitInspectProject, {
+  payload: Cut2KitInspectProjectInput,
+  success: Cut2KitProject,
+  error: Cut2KitProjectError,
+});
+
+export const WsCut2KitGenerateOutputsRpc = Rpc.make(WS_METHODS.cut2kitGenerateOutputs, {
+  payload: Cut2KitGenerateOutputsInput,
+  success: Cut2KitGenerateOutputsResult,
+  error: Cut2KitProjectError,
 });
 
 export const WsShellOpenInEditorRpc = Rpc.make(WS_METHODS.shellOpenInEditor, {
@@ -329,6 +350,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerUpdateSettingsRpc,
   WsProjectsSearchEntriesRpc,
   WsProjectsWriteFileRpc,
+  WsCut2KitInspectProjectRpc,
+  WsCut2KitGenerateOutputsRpc,
   WsShellOpenInEditorRpc,
   WsGitStatusRpc,
   WsGitPullRpc,

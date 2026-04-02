@@ -45,6 +45,10 @@ export function createWsNativeApi(): NativeApi {
       searchEntries: rpcClient.projects.searchEntries,
       writeFile: rpcClient.projects.writeFile,
     },
+    cut2kit: {
+      inspectProject: rpcClient.cut2kit.inspectProject,
+      generateOutputs: rpcClient.cut2kit.generateOutputs,
+    },
     shell: {
       openInEditor: (cwd, editor) => rpcClient.shell.openInEditor({ cwd, editor }),
       openExternal: async (url) => {

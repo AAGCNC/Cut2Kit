@@ -50,6 +50,10 @@ export interface WsRpcClient {
     readonly searchEntries: RpcUnaryMethod<typeof WS_METHODS.projectsSearchEntries>;
     readonly writeFile: RpcUnaryMethod<typeof WS_METHODS.projectsWriteFile>;
   };
+  readonly cut2kit: {
+    readonly inspectProject: RpcUnaryMethod<typeof WS_METHODS.cut2kitInspectProject>;
+    readonly generateOutputs: RpcUnaryMethod<typeof WS_METHODS.cut2kitGenerateOutputs>;
+  };
   readonly shell: {
     readonly openInEditor: (input: {
       readonly cwd: Parameters<NativeApi["shell"]["openInEditor"]>[0];
@@ -128,6 +132,12 @@ export function createWsRpcClient(transport = new WsTransport()): WsRpcClient {
         transport.request((client) => client[WS_METHODS.projectsSearchEntries](input)),
       writeFile: (input) =>
         transport.request((client) => client[WS_METHODS.projectsWriteFile](input)),
+    },
+    cut2kit: {
+      inspectProject: (input) =>
+        transport.request((client) => client[WS_METHODS.cut2kitInspectProject](input)),
+      generateOutputs: (input) =>
+        transport.request((client) => client[WS_METHODS.cut2kitGenerateOutputs](input)),
     },
     shell: {
       openInEditor: (input) =>

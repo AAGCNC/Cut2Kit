@@ -23,6 +23,12 @@ import type {
   ProjectWriteFileResult,
 } from "./project";
 import type {
+  Cut2KitGenerateOutputsInput,
+  Cut2KitGenerateOutputsResult,
+  Cut2KitInspectProjectInput,
+  Cut2KitProject,
+} from "./cut2kit";
+import type {
   ServerConfig,
   ServerProviderUpdatedPayload,
   ServerUpsertKeybindingResult,
@@ -138,6 +144,10 @@ export interface NativeApi {
   projects: {
     searchEntries: (input: ProjectSearchEntriesInput) => Promise<ProjectSearchEntriesResult>;
     writeFile: (input: ProjectWriteFileInput) => Promise<ProjectWriteFileResult>;
+  };
+  cut2kit: {
+    inspectProject: (input: Cut2KitInspectProjectInput) => Promise<Cut2KitProject>;
+    generateOutputs: (input: Cut2KitGenerateOutputsInput) => Promise<Cut2KitGenerateOutputsResult>;
   };
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;

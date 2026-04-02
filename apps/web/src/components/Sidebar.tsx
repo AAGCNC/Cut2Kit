@@ -49,7 +49,7 @@ import {
   ThreadId,
   type GitStatusResult,
 } from "@t3tools/contracts";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import {
   type SidebarProjectSortOrder,
@@ -130,6 +130,8 @@ import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
 import { useServerKeybindings } from "../rpc/serverState";
 import { useSidebarThreadSummaryById } from "../storeSelectors";
+import { cut2kitProjectQueryOptions } from "../lib/cut2kitReactQuery";
+import { Cut2KitProjectExplorer } from "./sidebar/Cut2KitProjectExplorer";
 import type { Project } from "../types";
 const THREAD_PREVIEW_LIMIT = 6;
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
@@ -690,6 +692,10 @@ export default function Sidebar() {
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
   });
+  const routeProjectId = useParams({
+    strict: false,
+    select: (params) => (params.projectId ? ProjectId.makeUnsafe(params.projectId) : null),
+  });
   const keybindings = useServerKeybindings();
   const [addingProject, setAddingProject] = useState(false);
   const [newCwd, setNewCwd] = useState("");
@@ -741,6 +747,19 @@ export default function Sidebar() {
     () => new Map(projects.map((project) => [project.id, project.cwd] as const)),
     [projects],
   );
+  const activeExplorerProjectId =
+    routeProjectId ?? activeThread?.projectId ?? activeDraftThread?.projectId ?? null;
+  const activeExplorerProject = useMemo(
+    () => projects.find((project) => project.id === activeExplorerProjectId) ?? null,
+    [activeExplorerProjectId, projects],
+  );
+  const activeExplorerProjectSnapshotQuery = useQuery(
+    cut2kitProjectQueryOptions({
+      cwd: activeExplorerProject?.cwd ?? null,
+      enabled: activeExplorerProject !== null && !isOnSettings,
+    }),
+  );
+  const activeExplorerProjectSnapshot = activeExplorerProjectSnapshotQuery.data ?? null;
   const routeTerminalOpen = routeThreadId
     ? selectThreadTerminalState(terminalStateByThreadId, routeThreadId).terminalOpen
     : false;
@@ -839,6 +858,15 @@ export default function Sidebar() {
     [archiveThread],
   );
 
+  const navigateToProjectWorkspace = useCallback(
+    (projectId: ProjectId) =>
+      navigate({
+        to: "/project/$projectId",
+        params: { projectId },
+      }),
+    [navigate],
+  );
+
   const focusMostRecentThreadForProject = useCallback(
     (projectId: ProjectId) => {
       const latestThread = sortThreadsForSidebar(
@@ -848,14 +876,23 @@ export default function Sidebar() {
           .filter((thread) => thread.archivedAt === null),
         appSettings.sidebarThreadSortOrder,
       )[0];
-      if (!latestThread) return;
+      if (!latestThread) {
+        void navigateToProjectWorkspace(projectId);
+        return;
+      }
 
       void navigate({
         to: "/$threadId",
         params: { threadId: latestThread.id },
       });
     },
-    [appSettings.sidebarThreadSortOrder, navigate, sidebarThreadsById, threadIdsByProjectId],
+    [
+      appSettings.sidebarThreadSortOrder,
+      navigate,
+      navigateToProjectWorkspace,
+      sidebarThreadsById,
+      threadIdsByProjectId,
+    ],
   );
 
   const addProjectFromPath = useCallback(
@@ -896,9 +933,7 @@ export default function Sidebar() {
           },
           createdAt,
         });
-        await handleNewThread(projectId, {
-          envMode: appSettings.defaultThreadEnvMode,
-        }).catch(() => undefined);
+        await navigateToProjectWorkspace(projectId);
       } catch (error) {
         const description =
           error instanceof Error ? error.message : "An error occurred while adding the project.";
@@ -918,11 +953,10 @@ export default function Sidebar() {
     },
     [
       focusMostRecentThreadForProject,
-      handleNewThread,
       isAddingProject,
+      navigateToProjectWorkspace,
       projects,
       shouldBrowseForProjectImmediately,
-      appSettings.defaultThreadEnvMode,
     ],
   );
 
@@ -1583,6 +1617,18 @@ export default function Sidebar() {
       shouldShowThreadPanel,
       isThreadListExpanded,
     } = renderedProject;
+    const projectWorkspaceSnapshot =
+      activeExplorerProjectId === project.id ? activeExplorerProjectSnapshot : null;
+    const projectWorkspaceStatusLabel = projectWorkspaceSnapshot
+      ? projectWorkspaceSnapshot.status === "error"
+        ? `${projectWorkspaceSnapshot.summary.errorCount} errors`
+        : projectWorkspaceSnapshot.status === "warning"
+          ? `${projectWorkspaceSnapshot.summary.warningCount} warnings`
+          : `${projectWorkspaceSnapshot.summary.dxfCount} DXFs`
+      : activeExplorerProjectId === project.id && activeExplorerProjectSnapshotQuery.isLoading
+        ? "Scanning..."
+        : "Inspect";
+    const projectWorkspaceSelected = routeProjectId === project.id;
     return (
       <>
         <div className="group/project-header relative">
@@ -1695,6 +1741,34 @@ export default function Sidebar() {
           ref={attachThreadListAutoAnimateRef}
           className="mx-1 my-0 w-full translate-x-0 gap-0.5 overflow-hidden px-1.5 py-0"
         >
+          {project.expanded ? (
+            <SidebarMenuSubItem className="w-full">
+              <SidebarMenuSubButton
+                render={<button type="button" />}
+                size="sm"
+                data-thread-selection-safe
+                className={`h-7 w-full translate-x-0 justify-start px-2 text-left text-[10px] ${
+                  projectWorkspaceSelected
+                    ? "bg-accent text-foreground"
+                    : "text-muted-foreground/75 hover:bg-accent hover:text-foreground"
+                }`}
+                onClick={() => void navigateToProjectWorkspace(project.id)}
+              >
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <FolderIcon className="size-3.5" />
+                  <span className="truncate">Project workspace</span>
+                </span>
+                <span className="truncate text-[10px] text-muted-foreground/70">
+                  {projectWorkspaceStatusLabel}
+                </span>
+              </SidebarMenuSubButton>
+            </SidebarMenuSubItem>
+          ) : null}
+          {project.expanded && projectWorkspaceSnapshot ? (
+            <SidebarMenuSubItem className="w-full" data-thread-selection-safe>
+              <Cut2KitProjectExplorer project={projectWorkspaceSnapshot} />
+            </SidebarMenuSubItem>
+          ) : null}
           {shouldShowThreadPanel && showEmptyThreadState ? (
             <SidebarMenuSubItem className="w-full" data-thread-selection-safe>
               <div
