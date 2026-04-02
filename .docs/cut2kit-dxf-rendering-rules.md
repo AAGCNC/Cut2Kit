@@ -54,6 +54,7 @@ That means Cut2Kit should follow the same design pattern:
 ### Preferred rendering stack
 
 **Primary recommendation:**
+
 - `dxf-viewer` for DXF viewing
 - `three.js` under the hood
 - orthographic camera for 2D CAD behavior
@@ -66,6 +67,7 @@ That means Cut2Kit should follow the same design pattern:
 ### Do not choose for the first milestone
 
 Do **not** start with:
+
 - a custom SVG renderer
 - a custom canvas renderer
 - a main-process Electron renderer
@@ -124,6 +126,7 @@ The chat remains visible, but it should no longer consume the majority of the ce
 ## 2. Viewer placement
 
 The DXF visualization must be a major center-stage pane:
+
 - above chat
 - inside the main working area
 - not hidden in a tab
@@ -134,11 +137,13 @@ The DXF visualization must be a major center-stage pane:
 Within the render section, include a selector for the **base DXF** from the active project.
 
 This selector should:
+
 - show only project DXFs
 - make the current base DXF obvious
 - allow switching base DXFs without changing the active project
 
 Recommended placement:
+
 - top bar of the visualization pane
 - left or center aligned
 - adjacent to fit/reset controls
@@ -155,6 +160,7 @@ The chat is supporting workflow, not the dominant surface.
 Use a split-pane or resizable layout only if it preserves the viewer-first experience.
 
 Default state should still be approximately:
+
 - viewer: 2/3
 - chat: 1/3
 
@@ -193,6 +199,7 @@ These responsibilities should be separate:
 Use an **orthographic camera**, not a perspective camera.
 
 This is essential for architectural/elevation visualization because:
+
 - it preserves scale visually
 - it behaves like a 2D CAD viewport
 - it avoids perspective distortion
@@ -201,6 +208,7 @@ This is essential for architectural/elevation visualization because:
 ## 10. Fit-to-view behavior
 
 When a DXF is first loaded:
+
 - compute extents / bounds
 - center the geometry
 - fit it into the viewport with padding
@@ -216,6 +224,7 @@ Do not mutate the underlying geometry just to fit the viewport.
 Use camera transforms / scene transforms for view fitting.
 
 This matters for future overlays of:
+
 - studs
 - panels
 - dimensions
@@ -226,6 +235,7 @@ This matters for future overlays of:
 Choose one orientation and keep it consistent.
 
 Recommended rule for the first milestone:
+
 - preserve DXF logical 2D orientation
 - do not arbitrarily flip vertically after load unless the chosen DXF library requires normalization
 - if a flip is required, centralize it in one transform layer and document it
@@ -237,6 +247,7 @@ Future overlays must use the same coordinate basis.
 The initial DXF viewport is for visualization only.
 
 Do not allow:
+
 - direct shape editing
 - dragging entities
 - moving lines
@@ -248,6 +259,7 @@ Do not allow:
 The DXF should render with a clear, low-noise style.
 
 Recommended initial style:
+
 - dark neutral background
 - high-contrast linework
 - no heavy grid by default
@@ -259,6 +271,7 @@ The purpose is to let the user clearly read the building elevation.
 ## 15. Layer visibility handling
 
 For the first milestone:
+
 - render all supported visible entities
 - preserve layer organization internally
 - layer toggles are optional
@@ -269,6 +282,7 @@ But the renderer must keep enough metadata that layer toggles can be added later
 ## 16. Text and unsupported entities
 
 If the DXF contains unsupported entities:
+
 - do not crash
 - render what is supported
 - surface a non-blocking warning if useful
@@ -281,6 +295,7 @@ Graceful degradation is required.
 DXF loading should be asynchronous.
 
 The UI must show:
+
 - loading state
 - success state
 - empty state
@@ -297,16 +312,19 @@ If full worker wiring is too large for the first pass, at minimum structure the 
 ## 19. Interaction rules
 
 For first milestone support:
+
 - mouse wheel zoom
 - click-drag pan
 - fit-to-view
 - reset view
 
 Optional:
+
 - double-click fit
 - keyboard shortcuts
 
 Not required yet:
+
 - measurement tools
 - selection
 - snapping
@@ -315,6 +333,7 @@ Not required yet:
 ## 20. Resize rules
 
 The viewport must respond correctly when:
+
 - the window resizes
 - panes resize
 - chat height changes
@@ -375,6 +394,7 @@ Do not bake everything into one flat drawing pass.
 Create a single adapter boundary between Cut2Kit data and the DXF viewer implementation.
 
 Example responsibility:
+
 - Cut2Kit app knows about project files and selected DXF
 - viewport adapter knows how to load and display a DXF document
 - future overlay adapters know how to draw studs/panels on top
@@ -390,6 +410,7 @@ This avoids coupling the whole app to one DXF library API.
 The base DXF selector should source files from the **active project** only.
 
 Do not mix:
+
 - global file library
 - recent files
 - arbitrary filesystem browse
@@ -405,6 +426,7 @@ Show only `.dxf` files in the selector for the first milestone.
 The chosen DXF must be represented as an explicit state value, not just a transient local component choice.
 
 This matters because later:
+
 - studs will use it
 - panels will use it
 - the agent may reference it
@@ -419,6 +441,7 @@ This matters because later:
 The app must prefer responsiveness over feature richness.
 
 That means:
+
 - async load
 - no blocking parse on every render
 - cache parsed/render-prepared result by file path + modified time if practical
@@ -429,6 +452,7 @@ That means:
 The 3D/WebGL/canvas surface should not be recreated on every state change.
 
 The viewport should:
+
 - initialize once per file/session boundary
 - update camera/scene incrementally
 - keep expensive viewer instances stable where possible
@@ -445,12 +469,14 @@ Keep the viewport fast and clean so the base DXF rendering becomes trustworthy f
 ## 31. Empty state
 
 If no DXF is selected:
+
 - show a clear placeholder
 - explain that the user should choose a base DXF from the active project
 
 ## 32. Invalid DXF state
 
 If parsing/rendering fails:
+
 - show a clear error panel in the viewer area
 - keep the rest of the app alive
 - include filename and a concise reason if available
@@ -458,6 +484,7 @@ If parsing/rendering fails:
 ## 33. Unsupported content
 
 If the file partially renders:
+
 - show the rendered content
 - optionally show a small non-blocking warning
 - do not fail hard unless the document is unusable
@@ -469,6 +496,7 @@ If the file partially renders:
 ## 34. Follow T3-like design principles
 
 The implementation should feel native to the existing T3-style app architecture:
+
 - React feature component
 - minimal desktop shell changes
 - clear pane hierarchy
@@ -481,6 +509,7 @@ The implementation should feel native to the existing T3-style app architecture:
 The viewer toolbar should be minimal and functional.
 
 Recommended controls:
+
 - base DXF selector
 - fit
 - reset
@@ -488,6 +517,7 @@ Recommended controls:
 - zoom out
 
 Not required yet:
+
 - extensive CAD menus
 - layer manager drawer
 - measurement toolbar
@@ -506,6 +536,7 @@ Once base DXF rendering is correct, the next phase can add:
 5. cut order / operation overlays
 
 That future work should reuse:
+
 - the same world coordinate system
 - the same viewport
 - separate overlay layers
@@ -516,6 +547,7 @@ That future work should reuse:
 ## Recommendation summary
 
 ### Do this now
+
 - add a large top-of-center DXF viewport
 - let the user choose the base DXF from the active project
 - render the selected DXF using a web-layer viewer
@@ -524,6 +556,7 @@ That future work should reuse:
 - make the rendering code overlay-ready
 
 ### Do not do yet
+
 - stud generation
 - panel generation
 - advanced CAD tooling
