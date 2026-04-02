@@ -1,14 +1,28 @@
-import { buildCut2KitAgentPrompt, summarizeCut2KitProjectHealth } from "@t3tools/shared/cut2kit";
-import type { Cut2KitProject, ProjectId } from "@t3tools/contracts";
+import {
+  buildCut2KitAgentPrompt,
+  buildCut2KitFramingLayoutPrompt,
+  buildFramingLayoutArtifactPaths,
+  buildFramingLayoutThreadTitle,
+  resolveCut2KitAutomationModelSelection,
+  summarizeCut2KitProjectHealth,
+} from "@t3tools/shared/cut2kit";
+import type { Cut2KitProject, ProjectId, ThreadId } from "@t3tools/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { BotIcon, CheckIcon, FolderIcon, HammerIcon, TriangleAlertIcon } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProjectPdfWorkspace } from "../features/cut2kit-pdf/components/ProjectPdfWorkspace";
+import {
+  buildProjectPdfOptions,
+  findProjectPdfOption,
+} from "../features/cut2kit-pdf/lib/projectPdfFiles";
 import { openInPreferredEditor } from "../editorPreferences";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { cut2kitProjectQueryOptions, cut2kitQueryKeys } from "../lib/cut2kitReactQuery";
+import { newCommandId, newMessageId, newThreadId } from "../lib/utils";
 import { readNativeApi } from "../nativeApi";
+import { useStore } from "../store";
 import { useProjectById } from "../storeSelectors";
 import { toastManager } from "./ui/toast";
 import { useComposerDraftStore } from "../composerDraftStore";
@@ -57,12 +71,30 @@ function MetricCard({
   );
 }
 
+function isTerminalGenerationStatus(status: string | null | undefined): boolean {
+  return (
+    status === "ready" || status === "stopped" || status === "error" || status === "interrupted"
+  );
+}
+
 export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   const project = useProjectById(projectId);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { handleNewThread } = useHandleNewThread();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPreparingAgent, setIsPreparingAgent] = useState(false);
+  const [selectedSourcePdfPath, setSelectedSourcePdfPath] = useState<string | null>(null);
+  const [isStartingFramingGeneration, setIsStartingFramingGeneration] = useState(false);
+  const [isRenderingFramingLayout, setIsRenderingFramingLayout] = useState(false);
+  const [activeFramingGeneration, setActiveFramingGeneration] = useState<{
+    threadId: ThreadId;
+    sourcePdfPath: string;
+    jsonPath: string;
+    pdfPath: string;
+  } | null>(null);
+  const renderedGenerationThreadIdsRef = useRef(new Set<ThreadId>());
+  const completedGenerationThreadIdsRef = useRef(new Set<ThreadId>());
 
   const snapshotQuery = useQuery(
     cut2kitProjectQueryOptions({
@@ -85,10 +117,94 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     () => (snapshot ? buildCut2KitAgentPrompt(snapshot) : ""),
     [snapshot],
   );
-  const draftThread = useComposerDraftStore((store) => {
-    const draftThreadId = store.projectDraftThreadIdByProjectId[projectId];
-    return draftThreadId ? (store.draftThreadsByThreadId[draftThreadId] ?? null) : null;
-  });
+  const elevationPdfOptions = useMemo(
+    () =>
+      snapshot
+        ? buildProjectPdfOptions(snapshot).filter(
+            (option) => option.classification === "elevation" || option.classification === null,
+          )
+        : [],
+    [snapshot],
+  );
+  const selectedElevationOption = useMemo(
+    () => findProjectPdfOption(elevationPdfOptions, selectedSourcePdfPath),
+    [elevationPdfOptions, selectedSourcePdfPath],
+  );
+  const framingArtifacts = useMemo(
+    () =>
+      snapshot && selectedSourcePdfPath
+        ? buildFramingLayoutArtifactPaths(snapshot, selectedSourcePdfPath)
+        : null,
+    [snapshot, selectedSourcePdfPath],
+  );
+  const framingPrompt = useMemo(
+    () =>
+      snapshot && selectedSourcePdfPath
+        ? buildCut2KitFramingLayoutPrompt({
+            project: snapshot,
+            sourcePdfPath: selectedSourcePdfPath,
+          })
+        : "",
+    [selectedSourcePdfPath, snapshot],
+  );
+  const framingGenerationThread = useStore((store) =>
+    activeFramingGeneration
+      ? (store.threads.find((thread) => thread.id === activeFramingGeneration.threadId) ?? null)
+      : null,
+  );
+  const framingJsonReady = useMemo(
+    () =>
+      Boolean(
+        framingArtifacts &&
+        snapshot?.files.some(
+          (file) =>
+            file.kind === "file" &&
+            file.relativePath === framingArtifacts.jsonPath &&
+            file.classification === "json",
+        ),
+      ),
+    [framingArtifacts, snapshot],
+  );
+  const framingPdfReady = useMemo(
+    () =>
+      Boolean(
+        framingArtifacts &&
+        snapshot?.files.some(
+          (file) =>
+            file.kind === "file" &&
+            file.relativePath === framingArtifacts.pdfPath &&
+            file.classification === "pdf",
+        ),
+      ),
+    [framingArtifacts, snapshot],
+  );
+  const activeFramingJsonReady = useMemo(
+    () =>
+      Boolean(
+        activeFramingGeneration &&
+        snapshot?.files.some(
+          (file) =>
+            file.kind === "file" &&
+            file.relativePath === activeFramingGeneration.jsonPath &&
+            file.classification === "json",
+        ),
+      ),
+    [activeFramingGeneration, snapshot],
+  );
+  const activeFramingPdfReady = useMemo(
+    () =>
+      Boolean(
+        activeFramingGeneration &&
+        snapshot?.files.some(
+          (file) =>
+            file.kind === "file" &&
+            file.relativePath === activeFramingGeneration.pdfPath &&
+            file.classification === "pdf",
+        ),
+      ),
+    [activeFramingGeneration, snapshot],
+  );
+  const framingThreadStatus = framingGenerationThread?.session?.orchestrationStatus ?? null;
 
   const handleGenerateOutputs = useCallback(async () => {
     if (!project) return;
@@ -164,6 +280,219 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     }
   }, [agentPrompt, handleNewThread, project, snapshot]);
 
+  const handleGenerateFramingLayout = useCallback(async () => {
+    if (!project || !snapshot || !selectedSourcePdfPath || !framingArtifacts) {
+      return;
+    }
+
+    if (selectedElevationOption?.classification !== "elevation") {
+      toastManager.add({
+        type: "error",
+        title: "Select an elevation PDF first",
+        description:
+          "Framing layout generation only runs from a source document classified as an elevation PDF.",
+      });
+      return;
+    }
+
+    const api = readNativeApi();
+    if (!api) return;
+
+    const createdAt = new Date().toISOString();
+    const threadId = newThreadId();
+    const modelSelection = resolveCut2KitAutomationModelSelection(
+      snapshot,
+      project.defaultModelSelection,
+    );
+
+    setIsStartingFramingGeneration(true);
+    try {
+      await api.orchestration.dispatchCommand({
+        type: "thread.create",
+        commandId: newCommandId(),
+        threadId,
+        projectId: project.id,
+        title: buildFramingLayoutThreadTitle(selectedSourcePdfPath),
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      });
+
+      await api.orchestration.dispatchCommand({
+        type: "thread.turn.start",
+        commandId: newCommandId(),
+        threadId,
+        message: {
+          messageId: newMessageId(),
+          role: "user",
+          text: framingPrompt,
+          attachments: [],
+        },
+        modelSelection,
+        titleSeed: buildFramingLayoutThreadTitle(selectedSourcePdfPath),
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdAt,
+      });
+
+      renderedGenerationThreadIdsRef.current.delete(threadId);
+      completedGenerationThreadIdsRef.current.delete(threadId);
+      setActiveFramingGeneration({
+        threadId,
+        sourcePdfPath: selectedSourcePdfPath,
+        jsonPath: framingArtifacts.jsonPath,
+        pdfPath: framingArtifacts.pdfPath,
+      });
+      toastManager.add({
+        type: "success",
+        title: "Framing layout generation started",
+        description: `Codex is generating ${framingArtifacts.jsonPath} from ${selectedSourcePdfPath}.`,
+      });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not start framing layout generation",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+      });
+    } finally {
+      setIsStartingFramingGeneration(false);
+    }
+  }, [
+    framingArtifacts,
+    framingPrompt,
+    project,
+    selectedElevationOption?.classification,
+    selectedSourcePdfPath,
+    snapshot,
+  ]);
+
+  const handleOpenFramingThread = useCallback(async () => {
+    if (!activeFramingGeneration) return;
+    await navigate({
+      to: "/$threadId",
+      params: { threadId: activeFramingGeneration.threadId },
+    });
+  }, [activeFramingGeneration, navigate]);
+
+  useEffect(() => {
+    if (!project || !activeFramingGeneration) {
+      return;
+    }
+    const intervalId = globalThis.setInterval(() => {
+      void queryClient.invalidateQueries({
+        queryKey: cut2kitQueryKeys.project(project.cwd),
+      });
+    }, 3_000);
+    return () => {
+      globalThis.clearInterval(intervalId);
+    };
+  }, [activeFramingGeneration, project, queryClient]);
+
+  useEffect(() => {
+    if (!project || !activeFramingGeneration || isRenderingFramingLayout) {
+      return;
+    }
+    if (!isTerminalGenerationStatus(framingThreadStatus) || !activeFramingJsonReady) {
+      return;
+    }
+    if (renderedGenerationThreadIdsRef.current.has(activeFramingGeneration.threadId)) {
+      return;
+    }
+
+    const api = readNativeApi();
+    if (!api) return;
+
+    renderedGenerationThreadIdsRef.current.add(activeFramingGeneration.threadId);
+    setIsRenderingFramingLayout(true);
+    void api.cut2kit
+      .renderFramingLayout({
+        cwd: project.cwd,
+        relativePath: activeFramingGeneration.jsonPath,
+      })
+      .then((result) => {
+        queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), result.project);
+        toastManager.add({
+          type: "success",
+          title: "Framing layout PDF rendered",
+          description: `Wrote ${result.pdfPath} from ${result.jsonPath}.`,
+        });
+      })
+      .catch((error) => {
+        renderedGenerationThreadIdsRef.current.delete(activeFramingGeneration.threadId);
+        toastManager.add({
+          type: "error",
+          title: "Could not render framing layout PDF",
+          description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        });
+      })
+      .finally(() => {
+        setIsRenderingFramingLayout(false);
+      });
+  }, [
+    activeFramingGeneration,
+    activeFramingJsonReady,
+    framingThreadStatus,
+    isRenderingFramingLayout,
+    project,
+    queryClient,
+  ]);
+
+  useEffect(() => {
+    if (!activeFramingGeneration || !isTerminalGenerationStatus(framingThreadStatus)) {
+      return;
+    }
+    if (completedGenerationThreadIdsRef.current.has(activeFramingGeneration.threadId)) {
+      return;
+    }
+    if (!activeFramingJsonReady && framingThreadStatus === "error") {
+      completedGenerationThreadIdsRef.current.add(activeFramingGeneration.threadId);
+      toastManager.add({
+        type: "error",
+        title: "Framing layout generation failed",
+        description:
+          framingGenerationThread?.session?.lastError ??
+          "Codex finished without producing the framing layout JSON artifact.",
+      });
+      setActiveFramingGeneration(null);
+      return;
+    }
+    if (
+      !activeFramingJsonReady &&
+      (framingThreadStatus === "ready" ||
+        framingThreadStatus === "stopped" ||
+        framingThreadStatus === "interrupted")
+    ) {
+      completedGenerationThreadIdsRef.current.add(activeFramingGeneration.threadId);
+      toastManager.add({
+        type: "error",
+        title: "Framing layout JSON not found",
+        description:
+          "Codex finished the framing-layout thread without writing the expected JSON artifact.",
+      });
+      setActiveFramingGeneration(null);
+      return;
+    }
+    if (
+      isRenderingFramingLayout ||
+      !activeFramingPdfReady ||
+      !renderedGenerationThreadIdsRef.current.has(activeFramingGeneration.threadId)
+    ) {
+      return;
+    }
+    completedGenerationThreadIdsRef.current.add(activeFramingGeneration.threadId);
+    setActiveFramingGeneration(null);
+  }, [
+    activeFramingGeneration,
+    framingGenerationThread?.session?.lastError,
+    activeFramingJsonReady,
+    activeFramingPdfReady,
+    framingThreadStatus,
+    isRenderingFramingLayout,
+  ]);
+
   if (!project) {
     return (
       <div className="flex flex-1 items-center justify-center px-6 text-sm text-muted-foreground">
@@ -215,6 +544,18 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
             </Button>
             <Button
               variant="outline"
+              onClick={() => void handleGenerateFramingLayout()}
+              disabled={
+                isStartingFramingGeneration ||
+                !selectedSourcePdfPath ||
+                selectedElevationOption?.classification !== "elevation"
+              }
+            >
+              <HammerIcon className="size-4" />
+              {isStartingFramingGeneration ? "Starting Framing Run..." : "Generate Framing Layout"}
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => void handlePrepareAgent()}
               disabled={isPreparingAgent}
             >
@@ -235,15 +576,20 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       <div className="mx-auto flex h-full w-full max-w-[1600px] min-h-0 flex-col gap-6 px-6 py-6 xl:flex-row">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
           <div className="flex min-h-0 flex-[2_1_0%]">
-            <ProjectPdfWorkspace project={snapshot} projectId={projectId} />
+            <ProjectPdfWorkspace
+              project={snapshot}
+              selectedSourcePdfPath={selectedSourcePdfPath}
+              onSelectedSourcePdfPathChange={setSelectedSourcePdfPath}
+            />
           </div>
 
           <Card className="flex min-h-0 flex-[1_1_0%] flex-col overflow-hidden">
             <CardHeader className="border-b border-border/70">
-              <CardTitle>Cut to Kit Agent</CardTitle>
+              <CardTitle>Framing Layout Automation</CardTitle>
               <CardDescription>
-                The PDF workspace owns the review surface above, while the supervised agent stays
-                visible below it for approval-driven planning and manufacturing updates.
+                Cut2Kit sends the selected elevation PDF and project settings to Codex, expects a
+                structured framing-layout JSON artifact back, then renders the PDF deterministically
+                from that JSON.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -253,40 +599,98 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 </div>
                 <ScrollArea className="min-h-0 flex-1">
                   <pre className="whitespace-pre-wrap px-3 py-3 text-xs leading-5 text-foreground">
-                    {agentPrompt}
+                    {framingPrompt || "Select an elevation PDF to build the framing-layout prompt."}
                   </pre>
                 </ScrollArea>
               </div>
 
               <div className="space-y-3">
                 <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">Thread status</p>
+                  <p className="text-xs font-medium text-muted-foreground">Selected elevation</p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Badge variant={draftThread ? "success" : "outline"}>
-                      {draftThread ? "Draft ready" : "No draft yet"}
+                    <Badge
+                      variant={
+                        selectedElevationOption?.classification === "elevation"
+                          ? "success"
+                          : "outline"
+                      }
+                    >
+                      {selectedElevationOption?.classification ?? "No elevation selected"}
                     </Badge>
-                    <Badge variant="outline">Approval required</Badge>
+                    {selectedElevationOption?.side ? (
+                      <Badge variant="outline">{selectedElevationOption.side}</Badge>
+                    ) : null}
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {draftThread
-                      ? "A supervised draft thread already exists for this project. Re-opening the agent will refresh the prompt and return to that thread."
-                      : "Preparing the agent opens a supervised Codex draft thread seeded with the current project snapshot."}
+                    {selectedSourcePdfPath
+                      ? `The framing run will use ${selectedSourcePdfPath} as the authoritative wall elevation PDF.`
+                      : "Choose an elevation PDF in the workspace above before starting the framing run."}
                   </p>
                 </div>
 
                 <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">Manufacturing plan</p>
+                  <p className="text-xs font-medium text-muted-foreground">Framing artifacts</p>
                   <p className="mt-2 break-all text-sm text-foreground">
-                    {snapshot.manufacturingPlanFilePath ?? "cut2kit.manufacturing.json not found"}
+                    {framingArtifacts?.jsonPath ??
+                      "Select an elevation PDF to compute output paths"}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {snapshot.manufacturingPlan
-                      ? `${snapshot.manufacturingPlan.jobs.length} manufacturing jobs are ready for deterministic A2MC posting.`
-                      : "The agent should author or repair cut2kit.manufacturing.json before controller output is generated."}
+                    {framingArtifacts?.pdfPath ??
+                      "The rendered PDF path is determined from the selected elevation PDF."}
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Badge variant={framingJsonReady ? "success" : "outline"}>
+                      {framingJsonReady ? "JSON ready" : "JSON pending"}
+                    </Badge>
+                    <Badge variant={framingPdfReady ? "success" : "outline"}>
+                      {framingPdfReady
+                        ? "PDF ready"
+                        : isRenderingFramingLayout
+                          ? "Rendering PDF"
+                          : "PDF pending"}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                  <p className="text-xs font-medium text-muted-foreground">Generation thread</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Badge variant={activeFramingGeneration ? "secondary" : "outline"}>
+                      {activeFramingGeneration ? "Thread active" : "No active run"}
+                    </Badge>
+                    {framingThreadStatus ? (
+                      <Badge variant="outline">{framingThreadStatus}</Badge>
+                    ) : null}
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {activeFramingGeneration
+                      ? `Codex thread ${activeFramingGeneration.threadId} is handling the current framing-layout run.`
+                      : "Starting a framing run creates a dedicated full-access Codex thread for the selected elevation PDF."}
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={() => void handleGenerateFramingLayout()}
+                    disabled={
+                      isStartingFramingGeneration ||
+                      !selectedSourcePdfPath ||
+                      selectedElevationOption?.classification !== "elevation"
+                    }
+                  >
+                    <HammerIcon className="size-4" />
+                    {isStartingFramingGeneration
+                      ? "Starting Framing Run..."
+                      : "Generate Framing Layout"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleOpenFramingThread()}
+                    disabled={!activeFramingGeneration}
+                  >
+                    <BotIcon className="size-4" />
+                    Open Framing Thread
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() => void handlePrepareAgent()}
@@ -349,6 +753,36 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                   }
                 />
               </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Framing Layout Status</CardTitle>
+                  <CardDescription>
+                    Selected elevation, expected artifact paths, and the current Codex-run status
+                    for the framing-layout workflow.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Elevation PDF</p>
+                    <p className="mt-1 break-all text-sm text-foreground">
+                      {selectedSourcePdfPath ?? "No elevation PDF selected"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Structured JSON</p>
+                    <p className="mt-1 break-all text-sm text-foreground">
+                      {framingArtifacts?.jsonPath ?? "Pending source selection"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Rendered PDF</p>
+                    <p className="mt-1 break-all text-sm text-foreground">
+                      {framingArtifacts?.pdfPath ?? "Pending source selection"}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
 
               <Card>
                 <CardHeader>

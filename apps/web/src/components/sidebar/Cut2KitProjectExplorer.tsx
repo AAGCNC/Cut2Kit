@@ -57,8 +57,24 @@ function fileBadge(entry: ProjectFileRecord) {
   }
   if (entry.classification === "pdf") {
     return (
-      <Badge size="sm" variant={entry.role === "source-pdf" ? "success" : "secondary"}>
-        pdf
+      <Badge
+        size="sm"
+        variant={
+          entry.role === "source-pdf"
+            ? "success"
+            : entry.role === "generated-report"
+              ? "warning"
+              : "secondary"
+        }
+      >
+        {entry.role === "generated-report" ? "report" : "pdf"}
+      </Badge>
+    );
+  }
+  if (entry.classification === "json" && entry.role === "generated-report") {
+    return (
+      <Badge size="sm" variant="warning">
+        report
       </Badge>
     );
   }

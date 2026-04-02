@@ -54,7 +54,7 @@
     "studs": {
       "enabled": true,
       "onCenter": 16,
-      "originReference": "east",
+      "originReference": "left",
       "continuityPolicy": "stop_at_openings",
       "openingEdgePolicy": "double_stud_at_openings",
       "allowMidBreakPanelSeam": false,
@@ -159,6 +159,7 @@
       "suggest_rule_json",
       "suggest_panelization_strategy",
       "summarize_warnings",
+      "author_framing_layout_json",
       "author_a2mc_manufacturing_plan",
       "review_a2mc_output"
     ]
