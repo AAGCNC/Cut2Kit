@@ -1,9 +1,9 @@
 /**
  * Cut2KitProjects - Effect service contract for deterministic project intake,
- * validation, and placeholder output generation.
+ * validation, and A2MC output generation.
  *
- * Owns filesystem scanning, settings validation, manifest derivation, and
- * stable placeholder NC output generation for Cut2Kit workspaces.
+ * Owns filesystem scanning, settings/manufacturing-plan validation, manifest
+ * derivation, and stable A2MC NC output generation for Cut2Kit workspaces.
  *
  * @module Cut2KitProjects
  */

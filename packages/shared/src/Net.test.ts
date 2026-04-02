@@ -69,6 +69,16 @@ it.layer(NetService.layer)("NetService", (it) => {
       ),
     );
 
+    it.effect("isPortAvailableOnLoopback reports true for a free loopback port", () =>
+      Effect.gen(function* () {
+        const net = yield* NetService;
+        const port = yield* net.reserveLoopbackPort();
+
+        const available = yield* net.isPortAvailableOnLoopback(port);
+        assert.equal(available, true);
+      }),
+    );
+
     it.effect("findAvailablePort returns preferred when it is free", () =>
       Effect.gen(function* () {
         const net = yield* NetService;

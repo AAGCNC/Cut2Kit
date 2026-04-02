@@ -5,7 +5,7 @@
     "jobName": "Prefab Demo House 001",
     "customer": "AXYZ Demo Homes",
     "site": "shop-floor",
-    "description": "Bootstrap sample for Cut2Kit scanning, validation, and placeholder outputs",
+    "description": "Bootstrap sample for Cut2Kit scanning, validation, and A2MC output generation",
     "units": "imperial"
   },
   "production": {
@@ -15,7 +15,7 @@
   },
   "machineProfile": {
     "profileId": "AXYZ-DEMO",
-    "postProcessorId": "placeholder-post",
+    "postProcessorId": "axyz-a2mc",
     "stockCatalogId": "demo-sheet-stock"
   },
   "discovery": {
@@ -165,7 +165,9 @@
       "explain_project_state",
       "suggest_rule_json",
       "suggest_panelization_strategy",
-      "summarize_warnings"
+      "summarize_warnings",
+      "author_a2mc_manufacturing_plan",
+      "review_a2mc_output"
     ]
   }
 }

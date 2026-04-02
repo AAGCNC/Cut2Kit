@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "0.1.0",
+  "targetController": "axyz-a2mc",
+  "units": "inch",
+  "defaultWorkOffset": "G54",
+  "safeZ": 0.5,
+  "parkPosition": {
+    "x": 0,
+    "y": 0,
+    "z": 0.5
+  },
+  "jobs": [
+    {
+      "jobId": "front-wall-contour",
+      "sourcePath": "elevations/front-wall.dxf",
+      "operations": [
+        { "type": "tool_change", "toolNumber": 1 },
+        { "type": "spindle_on", "direction": "cw", "rpm": 18000 },
+        { "type": "rapid_move", "x": 1, "y": 1 },
+        { "type": "linear_move", "z": -0.25, "feed": 150 },
+        { "type": "linear_move", "x": 143, "y": 1, "feed": 250 },
+        { "type": "linear_move", "x": 143, "y": 95 },
+        { "type": "linear_move", "x": 1, "y": 95 },
+        { "type": "linear_move", "x": 1, "y": 1 },
+        { "type": "spindle_stop" }
+      ]
+    },
+    {
+      "jobId": "rear-wall-contour",
+      "sourcePath": "elevations/rear-wall.dxf",
+      "operations": [
+        { "type": "tool_change", "toolNumber": 1 },
+        { "type": "spindle_on", "direction": "cw", "rpm": 18000 },
+        { "type": "rapid_move", "x": 1, "y": 1 },
+        { "type": "linear_move", "z": -0.25, "feed": 150 },
+        { "type": "linear_move", "x": 143, "y": 1, "feed": 250 },
+        { "type": "linear_move", "x": 143, "y": 95 },
+        { "type": "linear_move", "x": 1, "y": 95 },
+        { "type": "linear_move", "x": 1, "y": 1 },
+        { "type": "spindle_stop" }
+      ]
+    },
+    {
+      "jobId": "main-floor-contour",
+      "sourcePath": "floor/main-floor.dxf",
+      "operations": [
+        { "type": "tool_change", "toolNumber": 2 },
+        { "type": "spindle_on", "direction": "cw", "rpm": 16000 },
+        { "type": "rapid_move", "x": 1, "y": 1 },
+        { "type": "linear_move", "z": -0.25, "feed": 150 },
+        { "type": "linear_move", "x": 191, "y": 1, "feed": 240 },
+        { "type": "linear_move", "x": 191, "y": 143 },
+        { "type": "linear_move", "x": 1, "y": 143 },
+        { "type": "linear_move", "x": 1, "y": 1 },
+        { "type": "spindle_stop" }
+      ]
+    },
+    {
+      "jobId": "main-roof-contour",
+      "sourcePath": "roof/main-roof.dxf",
+      "operations": [
+        { "type": "tool_change", "toolNumber": 3 },
+        { "type": "spindle_on", "direction": "cw", "rpm": 16000 },
+        { "type": "rapid_move", "x": 1, "y": 1 },
+        { "type": "linear_move", "z": -0.25, "feed": 140 },
+        { "type": "linear_move", "x": 191, "y": 1, "feed": 220 },
+        { "type": "linear_move", "x": 191, "y": 95 },
+        { "type": "linear_move", "x": 1, "y": 95 },
+        { "type": "linear_move", "x": 1, "y": 1 },
+        { "type": "spindle_stop" }
+      ]
+    }
+  ]
+}

@@ -17,7 +17,11 @@ function fileIcon(entry: ProjectFileRecord) {
   if (entry.kind === "directory") {
     return <FolderIcon aria-hidden="true" className="size-3 shrink-0 text-muted-foreground/70" />;
   }
-  if (entry.classification === "settings" || entry.classification === "json") {
+  if (
+    entry.classification === "settings" ||
+    entry.classification === "json" ||
+    entry.classification === "manufacturing-plan"
+  ) {
     return <FileJsonIcon aria-hidden="true" className="size-3 shrink-0 text-sky-500/80" />;
   }
   if (entry.classification === "dxf" || entry.classification === "nc") {
@@ -38,6 +42,13 @@ function fileBadge(entry: ProjectFileRecord) {
     return (
       <Badge size="sm" variant="info">
         settings
+      </Badge>
+    );
+  }
+  if (entry.classification === "manufacturing-plan") {
+    return (
+      <Badge size="sm" variant="info">
+        cam
       </Badge>
     );
   }

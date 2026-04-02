@@ -61,6 +61,8 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
 
         expect(project.status).toBe("ready");
         expect(project.settingsFilePath).toBe("cut2kit.settings.json");
+        expect(project.manufacturingPlanFilePath).toBe("cut2kit.manufacturing.json");
+        expect(project.manufacturingPlan?.targetController).toBe("axyz-a2mc");
         expect(project.summary.dxfCount).toBe(4);
         expect(project.panelManifest.panels).toHaveLength(4);
         expect(project.nestManifest.nests.length).toBeGreaterThan(0);
@@ -93,7 +95,7 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
   });
 
   describe("generateOutputs", () => {
-    it.effect("writes placeholder manifests and NC files for the sample project", () =>
+    it.effect("writes A2MC manifests and NC files for the sample project", () =>
       Effect.gen(function* () {
         const cut2kitProjects = yield* Cut2KitProjects;
         const fileSystem = yield* FileSystem.FileSystem;
@@ -116,8 +118,14 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         );
 
         expect(queueManifest).toContain('"primaryMode": "kitting"');
-        expect(ncFile).toContain("; Cut2Kit placeholder NC");
-        expect(ncFile).toContain("M00 (Cut2Kit placeholder - geometry and post-processor pending)");
+        expect(ncFile).toContain("(CUT2KIT -> A2MC)");
+        expect(ncFile).toContain("G90");
+        expect(ncFile).toContain("G20");
+        expect(ncFile).toContain("G54");
+        expect(ncFile).toContain("M6 T1");
+        expect(ncFile).toContain("M3 S18000");
+        expect(ncFile.trimEnd().endsWith("M30")).toBe(true);
+        expect(ncFile).toBe(ncFile.toUpperCase());
       }),
     );
 
@@ -137,6 +145,180 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         const error = yield* cut2kitProjects.generateOutputs({ cwd: projectDir }).pipe(Effect.flip);
 
         expect(error.detail).toContain("validation errors");
+      }),
+    );
+
+    it.effect("blocks generation when the manufacturing plan is missing", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const projectDir = yield* makeTempDir("cut2kit-no-plan-project-");
+
+        yield* fileSystem.writeFileString(
+          path.join(projectDir, "cut2kit.settings.json"),
+          JSON.stringify(
+            {
+              schemaVersion: "0.1.0",
+              project: {
+                projectId: "demo-prefab-kit-001",
+                jobName: "Prefab Demo House 001",
+                customer: "AXYZ Demo Homes",
+                site: "shop-floor",
+                units: "imperial",
+              },
+              production: {
+                primaryMode: "kitting",
+                allowLineSideQueue: true,
+                applications: ["siding"],
+              },
+              machineProfile: {
+                profileId: "AXYZ-DEMO",
+                postProcessorId: "axyz-a2mc",
+                stockCatalogId: "demo-sheet-stock",
+              },
+              discovery: {
+                searchRecursively: true,
+                preferredFolders: ["elevations"],
+                knownSettingsFileNames: ["cut2kit.settings.json"],
+              },
+              dxf: {
+                defaultUnits: "inch",
+                autoClassify: true,
+                layerMappings: {
+                  outline: ["OUTLINE"],
+                  openings: ["OPENINGS"],
+                  studs: ["STUDS"],
+                  joists: ["JOISTS"],
+                  dimensions: ["DIM"],
+                  annotations: ["NOTES"],
+                },
+                fileAssignments: [
+                  {
+                    pathPattern: "elevations/front*.dxf",
+                    classification: "elevation",
+                    side: "front",
+                    application: "siding",
+                  },
+                ],
+              },
+              framing: {
+                studs: {
+                  enabled: true,
+                  onCenter: 16,
+                  originReference: "east",
+                  continuityPolicy: "stop_at_openings",
+                  openingEdgePolicy: "double_stud_at_openings",
+                  allowMidBreakPanelSeam: false,
+                  drywallAlignmentPreference: true,
+                  endCondition: "customer_defined",
+                },
+                joists: {
+                  enabled: true,
+                  direction: "east_west",
+                  onCenter: 16,
+                  originReference: "north",
+                  continuityPolicy: "stop_at_openings",
+                },
+                headersAndTrimmers: {
+                  autoGenerateWhenOpeningsExist: true,
+                  openingEdgeClearance: 0.125,
+                },
+              },
+              openings: {
+                windowPolicy: {
+                  requiresExplicitOpeningGeometry: true,
+                  doubleStudDefault: true,
+                  panelBreakPreference: "avoid_break_through_opening",
+                },
+                doorPolicy: {
+                  requiresExplicitOpeningGeometry: true,
+                  doubleStudDefault: true,
+                  panelBreakPreference: "avoid_break_through_opening",
+                },
+              },
+              panelization: {
+                strategy: "rule_driven",
+                targetPanelWidth: 48,
+                maxPanelWidth: 60,
+                maxPanelHeight: 144,
+                minPanelWidth: 8,
+                minPanelHeight: 8,
+                edgeTrimAllowance: 0.125,
+                kerfAllowance: 0,
+                seamPriority: ["align_to_structural_members"],
+                perApplication: {
+                  siding: {
+                    grainOrOrientation: "vertical",
+                    preferredBreakDirection: "vertical",
+                  },
+                  flooring: {
+                    grainOrOrientation: "customer_defined",
+                    preferredBreakDirection: "joist_aligned",
+                  },
+                  roofing: {
+                    grainOrOrientation: "slope_defined",
+                    preferredBreakDirection: "rafter_or_joist_aligned",
+                  },
+                },
+              },
+              nesting: {
+                strategy: "deterministic",
+                sortPriority: ["application"],
+                optimizeFor: "yield_then_sequence",
+                allowRotation: true,
+                groupByHouseSide: true,
+                maxConcurrentNests: 1,
+              },
+              queueing: {
+                kitting: {
+                  enabled: true,
+                  groupBy: "assembly_zone",
+                  sequence: ["front"],
+                  outputPrefix: "KIT",
+                },
+                lineSide: {
+                  enabled: true,
+                  groupBy: "production_flow",
+                  sequence: ["walls"],
+                  outputPrefix: "LINE",
+                },
+              },
+              output: {
+                root: "output",
+                manifestsDir: "output/manifests",
+                ncDir: "output/nc",
+                reportsDir: "output/reports",
+                overwritePolicy: "overwrite",
+              },
+              ai: {
+                enabled: true,
+                agentName: "Cut to Kit Agent",
+                provider: "codex",
+                model: "gpt-5.4",
+                reasoningEffort: "high",
+                preferFastServiceTierWhenAvailable: true,
+                approvalRequiredForRuleEdits: true,
+                approvalRequiredForQueueGeneration: true,
+                allowedTasks: ["author_a2mc_manufacturing_plan"],
+              },
+            },
+            null,
+            2,
+          ),
+        );
+        yield* fileSystem.makeDirectory(path.join(projectDir, "elevations"), { recursive: true });
+        yield* fileSystem.writeFileString(
+          path.join(projectDir, "elevations", "front.dxf"),
+          "0\nEOF\n",
+        );
+
+        const project = yield* cut2kitProjects.inspectProject({ cwd: projectDir });
+
+        expect(project.status).toBe("error");
+        expect(project.issues.some((issue) => issue.code === "manufacturing_plan.missing")).toBe(
+          true,
+        );
       }),
     );
   });

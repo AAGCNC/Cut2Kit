@@ -103,13 +103,13 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), result.project);
       toastManager.add({
         type: "success",
-        title: "Placeholder outputs generated",
+        title: "A2MC outputs generated",
         description: `${result.writtenPaths.length} files written under ${project.cwd}.`,
       });
     } catch (error) {
       toastManager.add({
         type: "error",
-        title: "Could not generate placeholder outputs",
+        title: "Could not generate A2MC outputs",
         description: error instanceof Error ? error.message : "An unexpected error occurred.",
       });
     } finally {
@@ -153,7 +153,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         type: "success",
         title: "Cut to Kit Agent prepared",
         description:
-          "Opened a supervised Codex thread with the current project snapshot. Review the prompt and send when ready.",
+          "Opened a supervised Codex thread with the current project snapshot and A2MC manufacturing-plan guidance. Review the prompt and send when ready.",
       });
     } catch (error) {
       toastManager.add({
@@ -228,7 +228,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
               disabled={isGenerating || snapshot.summary.errorCount > 0}
             >
               <HammerIcon className="size-4" />
-              {isGenerating ? "Generating..." : "Generate Placeholder Outputs"}
+              {isGenerating ? "Generating..." : "Generate A2MC Outputs"}
             </Button>
           </div>
         </div>
@@ -241,8 +241,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
               <TriangleAlertIcon className="size-4" />
               <AlertTitle>Project validation is blocking output generation</AlertTitle>
               <AlertDescription>
-                Resolve the settings or source-file errors below before writing manifests and NC
-                placeholders.
+                Resolve the settings, manufacturing-plan, or source-file errors below before writing
+                A2MC manifests and NC output files.
               </AlertDescription>
             </Alert>
           ) : null}
@@ -267,7 +267,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
             <MetricCard
               label="Planned NC Jobs"
               value={snapshot.ncJobs.length}
-              description={`${snapshot.outputStatus.generated ? "Output files already exist." : "Placeholder output files have not been written yet."}`}
+              description={`${snapshot.outputStatus.generated ? "A2MC output files already exist." : "A2MC output files have not been written yet."}`}
             />
           </div>
 
@@ -370,8 +370,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
               <CardHeader>
                 <CardTitle>Planned Outputs</CardTitle>
                 <CardDescription>
-                  Deterministic placeholder manifests and NC jobs derived from explicit project
-                  state.
+                  Deterministic A2MC manifests and NC jobs derived from the explicit manufacturing
+                  plan and project state.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -397,6 +397,39 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 </div>
 
                 <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">Manufacturing plan</p>
+                    <Badge variant={snapshot.manufacturingPlan ? "success" : "outline"}>
+                      {snapshot.manufacturingPlan
+                        ? snapshot.manufacturingPlan.targetController
+                        : "Missing"}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 break-all text-sm text-foreground">
+                    {snapshot.manufacturingPlanFilePath ?? "cut2kit.manufacturing.json not found"}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {snapshot.manufacturingPlan
+                      ? `${snapshot.manufacturingPlan.jobs.length} manufacturing jobs are ready for deterministic A2MC posting.`
+                      : "Use the Cut to Kit Agent or manual edits to create cut2kit.manufacturing.json before generating outputs."}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">Generation status</p>
+                    <Badge variant={snapshot.outputStatus.generated ? "success" : "outline"}>
+                      {snapshot.outputStatus.generated ? "Outputs detected" : "Not generated yet"}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-foreground">
+                    {snapshot.outputStatus.generated
+                      ? `${snapshot.outputStatus.ncFilePaths.length} A2MC NC files are present under output/nc.`
+                      : "Run Generate A2MC Outputs to write manifests and controller-safe NC files to disk."}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-background/60 p-3">
                   <p className="text-xs font-medium text-muted-foreground">Manifest paths</p>
                   <div className="mt-2 space-y-1">
                     {snapshot.outputStatus.manifestPaths.map((manifestPath) => (
@@ -408,6 +441,29 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 </div>
 
                 <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                  <p className="text-xs font-medium text-muted-foreground">Generated NC paths</p>
+                  <div className="mt-2 space-y-1">
+                    {snapshot.outputStatus.ncFilePaths.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No A2MC NC files have been written yet.
+                      </p>
+                    ) : (
+                      snapshot.outputStatus.ncFilePaths.slice(0, 6).map((ncPath) => (
+                        <p key={ncPath} className="break-all text-sm text-foreground">
+                          {ncPath}
+                        </p>
+                      ))
+                    )}
+                  </div>
+                  {snapshot.outputStatus.ncFilePaths.length > 6 ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Showing first 6 of {snapshot.outputStatus.ncFilePaths.length} generated NC
+                      files.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-background/60 p-3">
                   <p className="text-xs font-medium text-muted-foreground">NC jobs</p>
                   <div className="mt-2 space-y-2">
                     {snapshot.ncJobs.slice(0, 6).map((job) => (
@@ -415,6 +471,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge variant="secondary">{job.queueMode}</Badge>
                           <Badge variant="outline">{job.queueGroup}</Badge>
+                          <Badge variant="outline">{job.targetController}</Badge>
                           {job.application ? (
                             <Badge variant="outline">{job.application}</Badge>
                           ) : null}
@@ -424,6 +481,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                         </p>
                         <p className="mt-1 break-all text-xs text-muted-foreground">
                           {job.sourcePath}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {job.operationCount} operations from {job.planSourcePath}
                         </p>
                       </div>
                     ))}
@@ -441,7 +501,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
               <CardHeader>
                 <CardTitle>Cut to Kit Agent</CardTitle>
                 <CardDescription>
-                  Supervised Codex workflow seeded with the current project snapshot.
+                  Supervised Codex workflow seeded with the current project snapshot and A2MC
+                  manufacturing-plan path.
                 </CardDescription>
                 <CardAction>
                   <Button
@@ -457,8 +518,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="rounded-xl border border-border/70 bg-background/60 p-3 text-sm text-muted-foreground">
-                  The prepared thread runs in supervised mode. Any settings edits still require
-                  explicit file-change approval before they are applied.
+                  The prepared thread runs in supervised mode. Any settings or manufacturing-plan
+                  edits still require explicit file-change approval before they are applied.
                 </div>
                 <div className="rounded-xl border border-border/70 bg-background/60">
                   <div className="border-b border-border/70 px-3 py-2 text-xs font-medium text-muted-foreground">

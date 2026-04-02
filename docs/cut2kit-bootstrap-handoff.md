@@ -8,7 +8,7 @@ The repo now has:
 
 - shared Cut2Kit schemas/contracts in `packages/contracts/src/cut2kit.ts`
 - shared prompt/summary helpers in `packages/shared/src/cut2kit.ts`
-- deterministic server-side project scan, settings validation, manifest derivation, and placeholder NC generation in `apps/server/src/cut2kit/`
+- deterministic server-side project scan, settings/manufacturing-plan validation, manifest derivation, and A2MC NC generation in `apps/server/src/cut2kit/`
 - WebSocket RPC wiring for `cut2kit.inspectProject` and `cut2kit.generateOutputs`
 - a project workspace route at `apps/web/src/routes/_chat.project.$projectId.tsx`
 - a central project view in `apps/web/src/components/Cut2KitProjectView.tsx`
@@ -40,10 +40,11 @@ The repo now has:
 - Current behavior:
   - recursively scans project folders
   - detects `cut2kit.settings.json`
+  - detects `cut2kit.manufacturing.json`
   - classifies DXFs/settings/manifests/NC/reference files
-  - validates settings JSON via schema
+  - validates settings JSON and manufacturing-plan JSON via schema
   - derives source docs, panel candidates, panel/nest/queue manifests
-  - writes deterministic placeholder outputs under `output/manifests` and `output/nc`
+  - writes deterministic A2MC outputs under `output/manifests` and `output/nc`
   - blocks generation if validation errors exist
 - Registered service in:
   - `apps/server/src/server.ts`
@@ -78,28 +79,27 @@ These commands passed:
 - `bun lint`
 - `HOME=/tmp/cut2kit-home XDG_CONFIG_HOME=/tmp/cut2kit-home/.config ASTRO_TELEMETRY_DISABLED=1 bun run typecheck`
 - `cd apps/server && bun run test src/cut2kit/Layers/Cut2KitProjects.test.ts`
+- `HOME=/tmp/cut2kit-home XDG_CONFIG_HOME=/tmp/cut2kit-home/.config ASTRO_TELEMETRY_DISABLED=1 bun run build`
+- `HOME=/tmp/cut2kit-home XDG_CONFIG_HOME=/tmp/cut2kit-home/.config ASTRO_TELEMETRY_DISABLED=1 bun run build:desktop`
 
 The targeted server test passed:
 
 - `apps/server/src/cut2kit/Layers/Cut2KitProjects.test.ts`
 - Result: 4 tests passed
 
+Additional follow-up validation completed on April 2, 2026:
+
+- `cd packages/shared && bun run test src/Net.test.ts`
+- Result: 5 tests passed
+- `bun run dev:desktop` now gets through dev-port selection, web dev startup, and desktop bundling
+
 ## Validation Still Incomplete
 
-I started `bun run build` from repo root and observed:
+I could not complete an interactive GUI smoke test in Electron in this environment.
 
-- `@t3tools/contracts` built
-- `@t3tools/desktop` built
-- `@t3tools/marketing` built
-- `@t3tools/web` had started its Vite production build
+`bun run dev:desktop` currently stops before a window can open because the host is missing Linux shared library `libnspr4.so`.
 
-I did not stay long enough to record the final root `bun run build` completion.
-
-I have not yet run:
-
-- `bun run build:desktop`
-
-I also did not do an interactive GUI smoke test in Electron, so these still need confirmation in a new session:
+These still need confirmation in an environment with the required desktop runtime libraries available:
 
 - opening a directory through the desktop shell
 - visually confirming the left-side explorer and project workspace render correctly
@@ -112,7 +112,10 @@ I also did not do an interactive GUI smoke test in Electron, so these still need
 - The current agent integration is review-first, but still fairly lightweight:
   - it prepares a supervised Codex thread with explicit project snapshot context
   - the next session should verify the UX is good enough or improve how suggested settings edits are presented before send/apply
-- Placeholder geometry/panelization is intentionally explicit and fake. No real machining logic was added.
+- Real A2MC posting now lives in `apps/server/src/cut2kit/cam/A2mcPost.ts` and is driven by explicit manufacturing intent from `cut2kit.manufacturing.json`.
+- Root `package.json` now includes `"electron"` in `trustedDependencies` so future `bun install` runs download the Electron runtime instead of leaving desktop dev broken.
+- `apps/desktop/scripts/dev-electron.mjs` now fails fast after repeated fatal Electron launch errors instead of restarting forever and flooding the console.
+- `packages/shared/src/Net.ts` now tolerates unsupported or blocked IPv6 loopback probes (`::1`) when checking for an available loopback port, which avoids false "no available dev ports" failures on IPv4-only environments.
 
 ## Files Added Or Changed For Cut2Kit
 
@@ -146,6 +149,10 @@ I also did not do an interactive GUI smoke test in Electron, so these still need
 - `examples/prefab-demo-project/elevations/rear-wall.dxf`
 - `examples/prefab-demo-project/floor/main-floor.dxf`
 - `examples/prefab-demo-project/roof/main-roof.dxf`
+- `package.json`
+- `packages/shared/src/Net.ts`
+- `packages/shared/src/Net.test.ts`
+- `apps/desktop/scripts/dev-electron.mjs`
 
 ## Repo State Caveat
 
@@ -159,13 +166,12 @@ I did not use those as implementation targets and did not reconcile them. Treat 
 
 ## Recommended Next Steps
 
-1. Finish and record `bun run build`.
-2. Run and record `bun run build:desktop`.
-3. Launch `bun run dev:desktop` and manually verify:
+1. Install the missing Linux desktop dependencies required by Electron in the target environment, starting with `libnspr4.so`, then rerun `bun run dev:desktop`.
+2. Manually verify:
    - add/open sample project
    - explorer visibility
    - validation view
    - placeholder generation
    - Cut to Kit Agent preparation path
-4. Tighten the agent UX if needed so proposed settings edits are easier to review before approval.
-5. Decide whether to keep the current project-workspace route as the default post-open landing flow.
+3. Tighten the agent UX further if the interactive pass exposes any remaining review/approval friction.
+4. Decide whether to keep the current project-workspace route as the default post-open landing flow.

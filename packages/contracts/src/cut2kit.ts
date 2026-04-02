@@ -24,6 +24,7 @@ export type Cut2KitFileKind = typeof Cut2KitFileKind.Type;
 export const Cut2KitFileClassification = Schema.Literals([
   "directory",
   "settings",
+  "manufacturing-plan",
   "dxf",
   "manifest",
   "nc",
@@ -37,6 +38,7 @@ export type Cut2KitFileClassification = typeof Cut2KitFileClassification.Type;
 
 export const Cut2KitFileRole = Schema.Literals([
   "settings",
+  "manufacturing-plan",
   "source-dxf",
   "generated-manifest",
   "generated-nc",
@@ -285,6 +287,139 @@ export const Cut2KitAiSettings = Schema.Struct({
 });
 export type Cut2KitAiSettings = typeof Cut2KitAiSettings.Type;
 
+export const Cut2KitControllerTarget = Schema.Literals(["axyz-a2mc"]);
+export type Cut2KitControllerTarget = typeof Cut2KitControllerTarget.Type;
+
+export const Cut2KitNcUnits = Schema.Literals(["inch", "metric"]);
+export type Cut2KitNcUnits = typeof Cut2KitNcUnits.Type;
+
+export const Cut2KitWorkOffset = Schema.Literals(["G54", "G55", "G56", "G57", "G58", "G59"]);
+export type Cut2KitWorkOffset = typeof Cut2KitWorkOffset.Type;
+
+export const Cut2KitSpindleDirection = Schema.Literals(["cw", "ccw"]);
+export type Cut2KitSpindleDirection = typeof Cut2KitSpindleDirection.Type;
+
+export const Cut2KitParkPosition = Schema.Struct({
+  x: Schema.Number,
+  y: Schema.Number,
+  z: Schema.Number,
+});
+export type Cut2KitParkPosition = typeof Cut2KitParkPosition.Type;
+
+export const Cut2KitToolChangeOperation = Schema.Struct({
+  type: Schema.Literal("tool_change"),
+  toolNumber: PositiveInt,
+});
+export type Cut2KitToolChangeOperation = typeof Cut2KitToolChangeOperation.Type;
+
+export const Cut2KitSpindleOnOperation = Schema.Struct({
+  type: Schema.Literal("spindle_on"),
+  direction: Cut2KitSpindleDirection,
+  rpm: PositiveInt,
+});
+export type Cut2KitSpindleOnOperation = typeof Cut2KitSpindleOnOperation.Type;
+
+export const Cut2KitSpindleStopOperation = Schema.Struct({
+  type: Schema.Literal("spindle_stop"),
+});
+export type Cut2KitSpindleStopOperation = typeof Cut2KitSpindleStopOperation.Type;
+
+export const Cut2KitRapidMoveOperation = Schema.Struct({
+  type: Schema.Literal("rapid_move"),
+  x: Schema.optionalKey(Schema.Number),
+  y: Schema.optionalKey(Schema.Number),
+  z: Schema.optionalKey(Schema.Number),
+});
+export type Cut2KitRapidMoveOperation = typeof Cut2KitRapidMoveOperation.Type;
+
+export const Cut2KitLinearMoveOperation = Schema.Struct({
+  type: Schema.Literal("linear_move"),
+  x: Schema.optionalKey(Schema.Number),
+  y: Schema.optionalKey(Schema.Number),
+  z: Schema.optionalKey(Schema.Number),
+  feed: Schema.optionalKey(Schema.Number),
+});
+export type Cut2KitLinearMoveOperation = typeof Cut2KitLinearMoveOperation.Type;
+
+export const Cut2KitArcMoveOperation = Schema.Struct({
+  type: Schema.Literal("arc_move"),
+  direction: Cut2KitSpindleDirection,
+  x: Schema.Number,
+  y: Schema.Number,
+  z: Schema.optionalKey(Schema.Number),
+  i: Schema.Number,
+  j: Schema.Number,
+  feed: Schema.optionalKey(Schema.Number),
+});
+export type Cut2KitArcMoveOperation = typeof Cut2KitArcMoveOperation.Type;
+
+export const Cut2KitDwellOperation = Schema.Struct({
+  type: Schema.Literal("dwell"),
+  seconds: Schema.Number,
+});
+export type Cut2KitDwellOperation = typeof Cut2KitDwellOperation.Type;
+
+export const Cut2KitLabelTemplateOperation = Schema.Struct({
+  type: Schema.Literal("label_template"),
+  toolNumber: PositiveInt,
+  x: Schema.Number,
+  y: Schema.Number,
+  template: TrimmedNonEmptyString,
+  panelName: TrimmedNonEmptyString,
+  panelNumber: TrimmedNonEmptyString,
+  barcode: TrimmedNonEmptyString,
+  header1: TrimmedNonEmptyString,
+  data1: TrimmedNonEmptyString,
+  header2: TrimmedNonEmptyString,
+  data2: TrimmedNonEmptyString,
+  header3: TrimmedNonEmptyString,
+  data3: TrimmedNonEmptyString,
+});
+export type Cut2KitLabelTemplateOperation = typeof Cut2KitLabelTemplateOperation.Type;
+
+export const Cut2KitLabelImageOperation = Schema.Struct({
+  type: Schema.Literal("label_image"),
+  toolNumber: PositiveInt,
+  x: Schema.Number,
+  y: Schema.Number,
+  imageName: TrimmedNonEmptyString,
+});
+export type Cut2KitLabelImageOperation = typeof Cut2KitLabelImageOperation.Type;
+
+export const Cut2KitManufacturingOperation = Schema.Union([
+  Cut2KitToolChangeOperation,
+  Cut2KitSpindleOnOperation,
+  Cut2KitSpindleStopOperation,
+  Cut2KitRapidMoveOperation,
+  Cut2KitLinearMoveOperation,
+  Cut2KitArcMoveOperation,
+  Cut2KitDwellOperation,
+  Cut2KitLabelTemplateOperation,
+  Cut2KitLabelImageOperation,
+]);
+export type Cut2KitManufacturingOperation = typeof Cut2KitManufacturingOperation.Type;
+
+export const Cut2KitManufacturingJob = Schema.Struct({
+  jobId: TrimmedNonEmptyString,
+  sourcePath: TrimmedNonEmptyString,
+  workOffset: Schema.optionalKey(Cut2KitWorkOffset),
+  safeZ: Schema.optionalKey(Schema.Number),
+  parkPosition: Schema.optionalKey(Cut2KitParkPosition),
+  operations: Schema.Array(Cut2KitManufacturingOperation),
+});
+export type Cut2KitManufacturingJob = typeof Cut2KitManufacturingJob.Type;
+
+export const Cut2KitManufacturingPlan = Schema.Struct({
+  schemaVersion: Schema.Literal("0.1.0"),
+  targetController: Cut2KitControllerTarget,
+  units: Cut2KitNcUnits,
+  defaultWorkOffset: Cut2KitWorkOffset,
+  safeZ: Schema.Number,
+  parkPosition: Cut2KitParkPosition,
+  jobs: Schema.Array(Cut2KitManufacturingJob),
+});
+export type Cut2KitManufacturingPlan = typeof Cut2KitManufacturingPlan.Type;
+
 export const Cut2KitSettingsV0_1_0 = Schema.Struct({
   schemaVersion: Schema.Literal("0.1.0"),
   project: Cut2KitProjectMetadata,
@@ -400,12 +535,15 @@ export type QueueManifest = typeof QueueManifest.Type;
 export const NCJobRecord = Schema.Struct({
   jobId: TrimmedNonEmptyString,
   sourcePath: TrimmedNonEmptyString,
+  planSourcePath: TrimmedNonEmptyString,
   relativeOutputPath: TrimmedNonEmptyString,
   queueMode: Cut2KitQueueMode,
   queueGroup: TrimmedNonEmptyString,
   sequenceIndex: NonNegativeInt,
   application: Schema.NullOr(Cut2KitApplication),
-  placeholderProgram: TrimmedNonEmptyString,
+  targetController: Cut2KitControllerTarget,
+  operationCount: NonNegativeInt,
+  program: TrimmedNonEmptyString,
 });
 export type NCJobRecord = typeof NCJobRecord.Type;
 
@@ -435,6 +573,8 @@ export const Cut2KitProject = Schema.Struct({
   status: Cut2KitProjectStatus,
   settingsFilePath: Schema.NullOr(TrimmedNonEmptyString),
   settings: Schema.NullOr(Cut2KitSettings),
+  manufacturingPlanFilePath: Schema.NullOr(TrimmedNonEmptyString),
+  manufacturingPlan: Schema.NullOr(Cut2KitManufacturingPlan),
   files: Schema.Array(ProjectFileRecord),
   issues: Schema.Array(Cut2KitIssue),
   sourceDocuments: Schema.Array(Cut2KitSourceDocument),

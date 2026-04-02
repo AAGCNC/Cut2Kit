@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "0.1.0",
+  "targetController": "axyz-a2mc",
+  "units": "inch",
+  "defaultWorkOffset": "G54",
+  "safeZ": 0.5,
+  "parkPosition": {
+    "x": 0,
+    "y": 0,
+    "z": 0.5
+  },
+  "jobs": [
+    {
+      "jobId": "panel-a-contour",
+      "sourcePath": "elevations/front.dxf",
+      "operations": [
+        { "type": "tool_change", "toolNumber": 1 },
+        { "type": "spindle_on", "direction": "cw", "rpm": 18000 },
+        { "type": "rapid_move", "x": 1, "y": 1 },
+        { "type": "linear_move", "z": -0.25, "feed": 150 },
+        { "type": "linear_move", "x": 47, "y": 1, "feed": 250 },
+        { "type": "linear_move", "x": 47, "y": 95 },
+        { "type": "linear_move", "x": 1, "y": 95 },
+        { "type": "linear_move", "x": 1, "y": 1 },
+        { "type": "spindle_stop" },
+        {
+          "type": "label_template",
+          "toolNumber": 50,
+          "x": 12.7,
+          "y": 25.4,
+          "template": "BASIC",
+          "panelName": "PANEL_A",
+          "panelNumber": "1",
+          "barcode": "BC123",
+          "header1": "LOT",
+          "data1": "42",
+          "header2": "JOB",
+          "data2": "CUT2KIT",
+          "header3": "REV",
+          "data3": "A"
+        }
+      ]
+    }
+  ]
+}

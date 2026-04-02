@@ -18,6 +18,23 @@ function isErrnoExceptionWithCode(cause: unknown): cause is {
   );
 }
 
+function isIgnorableLoopbackHostError(host: string, cause: unknown): boolean {
+  if (!isErrnoExceptionWithCode(cause)) {
+    return false;
+  }
+
+  if (host !== "::1") {
+    return false;
+  }
+
+  return (
+    cause.code === "EADDRNOTAVAIL" ||
+    cause.code === "EAFNOSUPPORT" ||
+    cause.code === "EPROTONOSUPPORT" ||
+    cause.code === "EPERM"
+  );
+}
+
 const closeServer = (server: Net.Server) => {
   try {
     server.close();
@@ -91,8 +108,8 @@ export class NetService extends ServiceMap.Service<NetService, NetServiceShape>(
   static readonly layer = Layer.sync(NetService, () => {
     /**
      * Returns true when a TCP server can bind to {host, port}.
-     * `EADDRNOTAVAIL` is treated as available so IPv6-absent hosts don't fail
-     * loopback availability checks.
+     * Missing or blocked loopback families should not fail combined
+     * loopback availability checks as long as the supported family is free.
      */
     const canListenOnHost = (port: number, host: string): Effect.Effect<boolean> =>
       Effect.callback<boolean>((resume) => {
@@ -108,7 +125,7 @@ export class NetService extends ServiceMap.Service<NetService, NetServiceShape>(
         server.unref();
 
         server.once("error", (cause) => {
-          if (isErrnoExceptionWithCode(cause) && cause.code === "EADDRNOTAVAIL") {
+          if (isIgnorableLoopbackHostError(host, cause)) {
             settle(true);
             return;
           }

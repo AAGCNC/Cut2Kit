@@ -14,8 +14,8 @@
     "applications": ["siding", "flooring", "roofing"]
   },
   "machineProfile": {
-    "profileId": "AXYZ-ROUTER-PLACEHOLDER",
-    "postProcessorId": "pending-definition",
+    "profileId": "AXYZ-A2MC",
+    "postProcessorId": "axyz-a2mc",
     "stockCatalogId": "default-prefab-sheet-stock"
   },
   "discovery": {
@@ -167,7 +167,9 @@
       "suggest_layer_mappings",
       "suggest_rule_json",
       "suggest_panelization_strategy",
-      "summarize_warnings"
+      "summarize_warnings",
+      "author_a2mc_manufacturing_plan",
+      "review_a2mc_output"
     ]
   }
 }

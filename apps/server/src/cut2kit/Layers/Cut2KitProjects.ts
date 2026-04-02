@@ -10,6 +10,7 @@ import {
   type Cut2KitFileRole,
   type Cut2KitGenerateOutputsResult,
   type Cut2KitIssue,
+  type Cut2KitManufacturingPlan,
   type Cut2KitOutputSettings,
   type Cut2KitPanelCandidate,
   type Cut2KitProject,
@@ -17,6 +18,7 @@ import {
   type Cut2KitQueueingSettings,
   type Cut2KitSettings,
   type Cut2KitSourceDocument,
+  Cut2KitManufacturingPlan as Cut2KitManufacturingPlanSchema,
   Cut2KitSettings as Cut2KitSettingsSchema,
   type NCJobRecord,
   type NestManifest,
@@ -31,14 +33,17 @@ import {
   Cut2KitProjectsError,
   type Cut2KitProjectsShape,
 } from "../Services/Cut2KitProjects.ts";
+import { A2mcPostError, getA2mcTargetController, renderA2mcProgram } from "../cam/A2mcPost.ts";
 import { WorkspaceEntries } from "../../workspace/Services/WorkspaceEntries.ts";
 import { WorkspacePaths } from "../../workspace/Services/WorkspacePaths.ts";
 
 const SETTINGS_FILE_NAME = "cut2kit.settings.json";
-const MANIFEST_VERSION = "cut2kit.placeholder.v1";
+const MANUFACTURING_PLAN_FILE_NAME = "cut2kit.manufacturing.json";
+const MANIFEST_VERSION = "cut2kit.planning.v1";
 const DEFAULT_DISCOVERED_AT = "1970-01-01T00:00:00.000Z";
 const IGNORED_DIRECTORY_NAMES = new Set([".git", "node_modules", ".turbo", "dist", "build"]);
 const SettingsJson = fromLenientJson(Cut2KitSettingsSchema);
+const ManufacturingPlanJson = fromLenientJson(Cut2KitManufacturingPlanSchema);
 
 const DEFAULT_OUTPUT_SETTINGS: Cut2KitOutputSettings = {
   root: "output",
@@ -122,6 +127,16 @@ function classifyEntry(input: { relativePath: string; kind: ProjectFileRecord["k
     return {
       classification: "settings",
       role: "settings",
+      extension: "json",
+    };
+  }
+  if (
+    normalizedPath === MANUFACTURING_PLAN_FILE_NAME ||
+    normalizedPath.endsWith(`/${MANUFACTURING_PLAN_FILE_NAME}`)
+  ) {
+    return {
+      classification: "manufacturing-plan",
+      role: "manufacturing-plan",
       extension: "json",
     };
   }
@@ -256,6 +271,18 @@ function chooseSettingsFile(files: ReadonlyArray<ProjectFileRecord>): string | n
   return candidates[0] ?? null;
 }
 
+function chooseManufacturingPlanFile(files: ReadonlyArray<ProjectFileRecord>): string | null {
+  const candidates = files
+    .filter((entry) => entry.kind === "file" && entry.role === "manufacturing-plan")
+    .map((entry) => entry.relativePath)
+    .toSorted((left, right) => {
+      const depthDelta = fileDepth(left) - fileDepth(right);
+      if (depthDelta !== 0) return depthDelta;
+      return left.localeCompare(right);
+    });
+  return candidates[0] ?? null;
+}
+
 function escapeRegExp(input: string): string {
   return input.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
 }
@@ -373,25 +400,6 @@ function projectNameFor(settings: Cut2KitSettings | null, cwd: string): string {
   return settings?.project.jobName ?? nodePath.basename(cwd) ?? cwd;
 }
 
-function sequencePriority(
-  sourceDocument: Cut2KitSourceDocument,
-  mode: Cut2KitQueueMode,
-  queueingSettings: Cut2KitQueueingSettings,
-): number {
-  const sequence =
-    mode === "line-side" ? queueingSettings.lineSide.sequence : queueingSettings.kitting.sequence;
-  const tokens = [
-    sourceDocument.side ?? "",
-    sourceDocument.classification,
-    sourceDocument.application ?? "",
-    sourceDocument.sourcePath,
-  ]
-    .join(" ")
-    .toLowerCase();
-  const matchIndex = sequence.findIndex((candidate) => tokens.includes(candidate.toLowerCase()));
-  return matchIndex >= 0 ? matchIndex : sequence.length;
-}
-
 function queueGroupFor(
   sourceDocument: Cut2KitSourceDocument,
   mode: Cut2KitQueueMode,
@@ -483,65 +491,108 @@ function buildQueueArtifacts(input: {
   queueingSettings: Cut2KitQueueingSettings;
   outputSettings: Cut2KitOutputSettings;
   primaryMode: Cut2KitQueueMode;
+  manufacturingPlanFilePath: string | null;
+  manufacturingPlan: Cut2KitManufacturingPlan | null;
 }): {
   queueManifest: QueueManifest;
   ncJobs: NCJobRecord[];
+  issues: Cut2KitIssue[];
 } {
-  const orderedDocuments = input.sourceDocuments.toSorted((left, right) => {
-    const priorityDelta =
-      sequencePriority(left, input.primaryMode, input.queueingSettings) -
-      sequencePriority(right, input.primaryMode, input.queueingSettings);
-    if (priorityDelta !== 0) {
-      return priorityDelta;
+  const emptyResult = {
+    queueManifest: {
+      manifestVersion: MANIFEST_VERSION,
+      projectId: input.projectId,
+      primaryMode: input.primaryMode,
+      entries: [],
+    },
+    ncJobs: [],
+    issues: [],
+  } satisfies {
+    queueManifest: QueueManifest;
+    ncJobs: NCJobRecord[];
+    issues: Cut2KitIssue[];
+  };
+
+  if (input.manufacturingPlan === null || input.manufacturingPlanFilePath === null) {
+    return emptyResult;
+  }
+
+  const sourceDocumentsByPath = new Map(
+    input.sourceDocuments.map((sourceDocument) => [sourceDocument.sourcePath, sourceDocument]),
+  );
+  const entries: Array<QueueManifest["entries"][number]> = [];
+  const ncJobs: NCJobRecord[] = [];
+  const issues: Cut2KitIssue[] = [];
+
+  for (const [index, job] of input.manufacturingPlan.jobs.entries()) {
+    const sourceDocument = sourceDocumentsByPath.get(job.sourcePath);
+    if (!sourceDocument) {
+      issues.push(
+        makeIssue(
+          "error",
+          "manufacturing_plan.unknown_source",
+          `Manufacturing job '${job.jobId}' references '${job.sourcePath}', which is not a discovered DXF source document.`,
+          input.manufacturingPlanFilePath,
+        ),
+      );
+      continue;
     }
 
-    const groupDelta = queueGroupFor(left, input.primaryMode, input.queueingSettings).localeCompare(
-      queueGroupFor(right, input.primaryMode, input.queueingSettings),
-    );
-    if (groupDelta !== 0) {
-      return groupDelta;
-    }
-
-    return left.sourcePath.localeCompare(right.sourcePath);
-  });
-
-  const entries = orderedDocuments.map((sourceDocument, index) => {
     const queueGroup = queueGroupFor(sourceDocument, input.primaryMode, input.queueingSettings);
-    const jobId = `job-${String(index + 1).padStart(3, "0")}-${slugify(sourceDocument.sourcePath)}`;
-    return {
-      queueId: `queue-${slugify(queueGroup)}`,
-      mode: input.primaryMode,
-      jobId,
-      sourcePath: sourceDocument.sourcePath,
-      groupKey: queueGroup,
-      sequenceIndex: index,
-      application: sourceDocument.application,
-    };
-  });
+    const sequenceIndex = index;
+    const relativeOutputPath = `${input.outputSettings.ncDir}/${String(sequenceIndex + 1).padStart(3, "0")}-${slugify(queueGroup)}-${slugify(job.jobId)}.nc`;
 
-  const ncJobs = entries.map((entry) => {
-    const relativeOutputPath = `${input.outputSettings.ncDir}/${String(entry.sequenceIndex + 1).padStart(3, "0")}-${slugify(entry.groupKey)}-${slugify(nodePath.basename(entry.sourcePath, nodePath.extname(entry.sourcePath)))}.nc`;
-    const placeholderProgram = [
-      "; Cut2Kit placeholder NC",
-      `; Project: ${input.projectName}`,
-      `; Job: ${entry.jobId}`,
-      `; Source: ${entry.sourcePath}`,
-      `; Queue Mode: ${entry.mode}`,
-      `; Queue Group: ${entry.groupKey}`,
-      "; Status: placeholder-only",
-      "M00 (Cut2Kit placeholder - geometry and post-processor pending)",
-    ].join("\n");
+    try {
+      const program = renderA2mcProgram({
+        projectName: input.projectName,
+        planSourcePath: input.manufacturingPlanFilePath,
+        plan: input.manufacturingPlan,
+        job,
+      });
+
+      entries.push({
+        queueId: `queue-${slugify(queueGroup)}`,
+        mode: input.primaryMode,
+        jobId: job.jobId,
+        sourcePath: job.sourcePath,
+        groupKey: queueGroup,
+        sequenceIndex,
+        application: sourceDocument.application,
+      });
+
+      ncJobs.push({
+        jobId: job.jobId,
+        sourcePath: job.sourcePath,
+        planSourcePath: input.manufacturingPlanFilePath,
+        relativeOutputPath,
+        queueMode: input.primaryMode,
+        queueGroup,
+        sequenceIndex,
+        application: sourceDocument.application,
+        targetController: getA2mcTargetController(),
+        operationCount: job.operations.length,
+        program,
+      });
+    } catch (error) {
+      const detail =
+        error instanceof A2mcPostError || error instanceof Error ? error.message : String(error);
+      issues.push(
+        makeIssue(
+          "error",
+          "manufacturing_plan.job_invalid",
+          `Manufacturing job '${job.jobId}' cannot be posted for A2MC: ${detail}`,
+          input.manufacturingPlanFilePath,
+        ),
+      );
+    }
+  }
+
+  if (issues.length > 0) {
     return {
-      jobId: entry.jobId,
-      sourcePath: entry.sourcePath,
-      relativeOutputPath,
-      queueMode: entry.mode,
-      queueGroup: entry.groupKey,
-      sequenceIndex: entry.sequenceIndex,
-      application: entry.application,
-      placeholderProgram,
+      ...emptyResult,
+      issues,
     };
-  });
+  }
 
   return {
     queueManifest: {
@@ -551,6 +602,7 @@ function buildQueueArtifacts(input: {
       entries,
     },
     ncJobs,
+    issues,
   };
 }
 
@@ -599,15 +651,57 @@ async function readSettingsFile(
   }
 }
 
+async function readManufacturingPlanFile(
+  cwd: string,
+  relativePath: string,
+): Promise<{ manufacturingPlan: Cut2KitManufacturingPlan | null; issues: Cut2KitIssue[] }> {
+  try {
+    const raw = await fsPromises.readFile(nodePath.join(cwd, relativePath), "utf8");
+    const decoded = Schema.decodeUnknownExit(ManufacturingPlanJson)(raw);
+    if (decoded._tag === "Failure") {
+      return {
+        manufacturingPlan: null,
+        issues: [
+          makeIssue(
+            "error",
+            "manufacturing_plan.invalid",
+            formatSchemaError(decoded.cause),
+            relativePath,
+          ),
+        ],
+      };
+    }
+    return {
+      manufacturingPlan: decoded.value,
+      issues: [],
+    };
+  } catch (error) {
+    return {
+      manufacturingPlan: null,
+      issues: [
+        makeIssue(
+          "error",
+          "manufacturing_plan.read_failed",
+          error instanceof Error ? error.message : String(error),
+          relativePath,
+        ),
+      ],
+    };
+  }
+}
+
 function deriveProject(input: {
   cwd: string;
   files: ReadonlyArray<ProjectFileRecord>;
   settings: Cut2KitSettings | null;
   settingsFilePath: string | null;
+  manufacturingPlan: Cut2KitManufacturingPlan | null;
+  manufacturingPlanFilePath: string | null;
   discoveredAt: string;
   settingsIssues: ReadonlyArray<Cut2KitIssue>;
+  manufacturingPlanIssues: ReadonlyArray<Cut2KitIssue>;
 }): Cut2KitProject {
-  const issues = [...input.settingsIssues];
+  const issues = [...input.settingsIssues, ...input.manufacturingPlanIssues];
 
   const settingsFiles = input.files.filter(
     (entry) => entry.kind === "file" && entry.role === "settings",
@@ -627,6 +721,28 @@ function deriveProject(input: {
         "warning",
         "settings.multiple",
         "Multiple Cut2Kit settings files were found. The shallowest file was used.",
+      ),
+    );
+  }
+
+  const manufacturingPlanFiles = input.files.filter(
+    (entry) => entry.kind === "file" && entry.role === "manufacturing-plan",
+  );
+  if (manufacturingPlanFiles.length === 0) {
+    issues.push(
+      makeIssue(
+        "error",
+        "manufacturing_plan.missing",
+        `Expected ${MANUFACTURING_PLAN_FILE_NAME} somewhere inside the project directory before A2MC outputs can be generated.`,
+      ),
+    );
+  }
+  if (manufacturingPlanFiles.length > 1) {
+    issues.push(
+      makeIssue(
+        "warning",
+        "manufacturing_plan.multiple",
+        "Multiple Cut2Kit manufacturing plan files were found. The shallowest file was used.",
       ),
     );
   }
@@ -681,7 +797,51 @@ function deriveProject(input: {
     queueingSettings,
     outputSettings,
     primaryMode,
+    manufacturingPlanFilePath: input.manufacturingPlanFilePath,
+    manufacturingPlan: input.manufacturingPlan,
   });
+  issues.push(...queueArtifacts.issues);
+
+  if (input.manufacturingPlan !== null && input.manufacturingPlan.jobs.length === 0) {
+    issues.push(
+      makeIssue(
+        "error",
+        "manufacturing_plan.empty",
+        "Manufacturing plan must contain at least one job before A2MC outputs can be generated.",
+        input.manufacturingPlanFilePath ?? undefined,
+      ),
+    );
+  }
+
+  if (
+    input.settings !== null &&
+    input.manufacturingPlan !== null &&
+    ((input.settings.project.units === "imperial" && input.manufacturingPlan.units !== "inch") ||
+      (input.settings.project.units === "metric" && input.manufacturingPlan.units !== "metric"))
+  ) {
+    issues.push(
+      makeIssue(
+        "warning",
+        "manufacturing_plan.units_mismatch",
+        "Manufacturing plan units do not match the project settings units.",
+        input.manufacturingPlanFilePath ?? undefined,
+      ),
+    );
+  }
+
+  if (
+    input.settings !== null &&
+    !input.settings.machineProfile.postProcessorId.toLowerCase().includes("a2mc")
+  ) {
+    issues.push(
+      makeIssue(
+        "warning",
+        "machine_profile.post_processor_mismatch",
+        "Machine profile postProcessorId does not reference A2MC, but Cut2Kit currently emits A2MC NC only.",
+        input.settingsFilePath ?? undefined,
+      ),
+    );
+  }
 
   const expectedManifestPaths = [
     `${outputSettings.manifestsDir}/panel-manifest.json`,
@@ -706,6 +866,8 @@ function deriveProject(input: {
     status: errorCount > 0 ? "error" : warningCount > 0 ? "warning" : "ready",
     settingsFilePath: input.settingsFilePath,
     settings: input.settings,
+    manufacturingPlanFilePath: input.manufacturingPlanFilePath,
+    manufacturingPlan: input.manufacturingPlan,
     files: input.files.toSorted(compareProjectFiles),
     issues,
     sourceDocuments,
@@ -774,6 +936,7 @@ export const makeCut2KitProjects = Effect.gen(function* () {
     });
 
     const settingsFilePath = chooseSettingsFile(files);
+    const manufacturingPlanFilePath = chooseManufacturingPlanFile(files);
     const settingsResult = settingsFilePath
       ? yield* Effect.tryPromise({
           try: () => readSettingsFile(normalizedCwd, settingsFilePath),
@@ -785,14 +948,28 @@ export const makeCut2KitProjects = Effect.gen(function* () {
             }),
         })
       : { settings: null, issues: [] };
+    const manufacturingPlanResult = manufacturingPlanFilePath
+      ? yield* Effect.tryPromise({
+          try: () => readManufacturingPlanFile(normalizedCwd, manufacturingPlanFilePath),
+          catch: (error) =>
+            new Cut2KitProjectsError({
+              cwd: normalizedCwd,
+              operation: "inspectProject.readManufacturingPlanFile",
+              detail: error instanceof Error ? error.message : String(error),
+            }),
+        })
+      : { manufacturingPlan: null, issues: [] };
 
     return deriveProject({
       cwd: normalizedCwd,
       files,
       settings: settingsResult.settings,
       settingsFilePath,
+      manufacturingPlan: manufacturingPlanResult.manufacturingPlan,
+      manufacturingPlanFilePath,
       discoveredAt: DEFAULT_DISCOVERED_AT,
       settingsIssues: settingsResult.issues,
+      manufacturingPlanIssues: manufacturingPlanResult.issues,
     });
   });
 
@@ -845,6 +1022,14 @@ export const makeCut2KitProjects = Effect.gen(function* () {
         detail: "Project has validation errors. Resolve them before generating outputs.",
       });
     }
+    if (project.ncJobs.length === 0) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "generateOutputs.validateProject",
+        detail:
+          "Project does not contain any valid A2MC manufacturing jobs. Add or fix cut2kit.manufacturing.json before generating outputs.",
+      });
+    }
 
     const outputSettings = resolveOutputSettings(project.settings);
     const writtenPaths: string[] = [];
@@ -873,11 +1058,7 @@ export const makeCut2KitProjects = Effect.gen(function* () {
 
     for (const job of project.ncJobs) {
       writtenPaths.push(
-        yield* writeWorkspaceFile(
-          project.cwd,
-          job.relativeOutputPath,
-          `${job.placeholderProgram}\n`,
-        ),
+        yield* writeWorkspaceFile(project.cwd, job.relativeOutputPath, job.program),
       );
     }
 

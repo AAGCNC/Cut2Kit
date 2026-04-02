@@ -19,6 +19,8 @@ const watchedDirectories = [
 const forcedShutdownTimeoutMs = 1_500;
 const restartDebounceMs = 120;
 const childTreeGracePeriodMs = 1_200;
+const restartFailureWindowMs = 5_000;
+const maxAbnormalLaunchesPerWindow = 3;
 
 await waitForResources({
   baseDir: desktopDir,
@@ -35,6 +37,21 @@ let currentApp = null;
 let restartQueue = Promise.resolve();
 const expectedExits = new WeakSet();
 const watchers = [];
+const recentAbnormalExitTimestamps = [];
+
+function recordAbnormalExit() {
+  const now = Date.now();
+  recentAbnormalExitTimestamps.push(now);
+
+  while (
+    recentAbnormalExitTimestamps.length > 0 &&
+    now - recentAbnormalExitTimestamps[0] > restartFailureWindowMs
+  ) {
+    recentAbnormalExitTimestamps.shift();
+  }
+
+  return recentAbnormalExitTimestamps.length >= maxAbnormalLaunchesPerWindow;
+}
 
 function killChildTreeByPid(pid, signal) {
   if (process.platform === "win32" || typeof pid !== "number") {
@@ -89,6 +106,14 @@ function startApp() {
 
     const exitedAbnormally = signal !== null || code !== 0;
     if (!shuttingDown && !expectedExits.has(app) && exitedAbnormally) {
+      if (recordAbnormalExit()) {
+        console.error(
+          `[desktop dev] Electron failed ${recentAbnormalExitTimestamps.length} times within ${restartFailureWindowMs}ms. Stopping restart loop. Check the Electron runtime installation and any missing OS shared libraries.`,
+        );
+        void shutdown(1);
+        return;
+      }
+
       scheduleRestart();
     }
   });
