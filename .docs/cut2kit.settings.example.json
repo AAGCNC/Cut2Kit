@@ -1,0 +1,235 @@
+{
+  "schemaVersion": "0.1.0",
+  "project": {
+    "projectId": "triplem-house-001",
+    "jobName": "Triple M Sample House 001",
+    "customer": "Triple M Housing",
+    "site": "pilot",
+    "description": "Sample Cut2Kit project for elevation-driven panelization",
+    "units": "imperial"
+  },
+  "production": {
+    "primaryMode": "kitting",
+    "allowLineSideQueue": true,
+    "applications": [
+      "siding",
+      "flooring",
+      "roofing"
+    ]
+  },
+  "machineProfile": {
+    "profileId": "AXYZ-ROUTER-PLACEHOLDER",
+    "postProcessorId": "pending-definition",
+    "stockCatalogId": "default-prefab-sheet-stock"
+  },
+  "discovery": {
+    "searchRecursively": true,
+    "preferredFolders": [
+      "elevations",
+      "floor",
+      "roof",
+      "references"
+    ],
+    "knownSettingsFileNames": [
+      "cut2kit.settings.json"
+    ]
+  },
+  "dxf": {
+    "defaultUnits": "inch",
+    "autoClassify": true,
+    "layerMappings": {
+      "outline": [
+        "OUTLINE",
+        "WALL_OUTLINE",
+        "PROFILE"
+      ],
+      "openings": [
+        "OPENINGS",
+        "WINDOW",
+        "DOOR"
+      ],
+      "studs": [
+        "STUD",
+        "STUDS",
+        "FRAMING_STUD"
+      ],
+      "joists": [
+        "JOIST",
+        "JOISTS",
+        "FRAMING_JOIST"
+      ],
+      "dimensions": [
+        "DIM",
+        "DIMS"
+      ],
+      "annotations": [
+        "TEXT",
+        "NOTES",
+        "ANNO"
+      ]
+    },
+    "fileAssignments": [
+      {
+        "pathPattern": "elevations/front*.dxf",
+        "classification": "elevation",
+        "side": "front",
+        "application": "siding"
+      },
+      {
+        "pathPattern": "elevations/rear*.dxf",
+        "classification": "elevation",
+        "side": "rear",
+        "application": "siding"
+      },
+      {
+        "pathPattern": "elevations/left*.dxf",
+        "classification": "elevation",
+        "side": "left",
+        "application": "siding"
+      },
+      {
+        "pathPattern": "elevations/right*.dxf",
+        "classification": "elevation",
+        "side": "right",
+        "application": "siding"
+      },
+      {
+        "pathPattern": "floor/*.dxf",
+        "classification": "floor",
+        "application": "flooring"
+      },
+      {
+        "pathPattern": "roof/*.dxf",
+        "classification": "roof",
+        "application": "roofing"
+      }
+    ]
+  },
+  "framing": {
+    "studs": {
+      "enabled": true,
+      "onCenter": 16,
+      "originReference": "east",
+      "continuityPolicy": "stop_at_openings",
+      "openingEdgePolicy": "double_stud_at_openings",
+      "allowMidBreakPanelSeam": false,
+      "drywallAlignmentPreference": true,
+      "endCondition": "customer_defined"
+    },
+    "joists": {
+      "enabled": true,
+      "direction": "east_west",
+      "onCenter": 16,
+      "originReference": "north",
+      "continuityPolicy": "stop_at_openings"
+    },
+    "headersAndTrimmers": {
+      "autoGenerateWhenOpeningsExist": true,
+      "openingEdgeClearance": 0.125
+    }
+  },
+  "openings": {
+    "windowPolicy": {
+      "requiresExplicitOpeningGeometry": true,
+      "doubleStudDefault": true,
+      "panelBreakPreference": "avoid_break_through_opening"
+    },
+    "doorPolicy": {
+      "requiresExplicitOpeningGeometry": true,
+      "doubleStudDefault": true,
+      "panelBreakPreference": "avoid_break_through_opening"
+    }
+  },
+  "panelization": {
+    "strategy": "rule_driven",
+    "targetPanelWidth": 48,
+    "maxPanelWidth": 60,
+    "maxPanelHeight": 144,
+    "minPanelWidth": 8,
+    "minPanelHeight": 8,
+    "edgeTrimAllowance": 0.125,
+    "kerfAllowance": 0.0,
+    "seamPriority": [
+      "align_to_structural_members",
+      "avoid_openings",
+      "prefer_shipping_friendly_panels",
+      "allow_manual_override"
+    ],
+    "perApplication": {
+      "siding": {
+        "grainOrOrientation": "vertical",
+        "preferredBreakDirection": "vertical"
+      },
+      "flooring": {
+        "grainOrOrientation": "customer_defined",
+        "preferredBreakDirection": "joist_aligned"
+      },
+      "roofing": {
+        "grainOrOrientation": "slope_defined",
+        "preferredBreakDirection": "rafter_or_joist_aligned"
+      }
+    }
+  },
+  "nesting": {
+    "strategy": "deterministic_with_ai_suggestions",
+    "sortPriority": [
+      "application",
+      "material",
+      "thickness",
+      "kitGroup"
+    ],
+    "optimizeFor": "yield_then_sequence",
+    "allowRotation": true,
+    "groupByHouseSide": true,
+    "maxConcurrentNests": 4
+  },
+  "queueing": {
+    "kitting": {
+      "enabled": true,
+      "groupBy": "assembly_zone",
+      "sequence": [
+        "front",
+        "left",
+        "right",
+        "rear",
+        "floor",
+        "roof"
+      ],
+      "outputPrefix": "KIT"
+    },
+    "lineSide": {
+      "enabled": true,
+      "groupBy": "production_flow",
+      "sequence": [
+        "floor",
+        "walls",
+        "roof"
+      ],
+      "outputPrefix": "LINE"
+    }
+  },
+  "output": {
+    "root": "output",
+    "manifestsDir": "output/manifests",
+    "ncDir": "output/nc",
+    "reportsDir": "output/reports",
+    "overwritePolicy": "version_if_exists"
+  },
+  "ai": {
+    "enabled": true,
+    "agentName": "Cut to Kit Agent",
+    "provider": "codex",
+    "model": "gpt-5.4",
+    "reasoningEffort": "high",
+    "preferFastServiceTierWhenAvailable": true,
+    "approvalRequiredForRuleEdits": true,
+    "approvalRequiredForQueueGeneration": true,
+    "allowedTasks": [
+      "explain_project_state",
+      "suggest_layer_mappings",
+      "suggest_rule_json",
+      "suggest_panelization_strategy",
+      "summarize_warnings"
+    ]
+  }
+}
