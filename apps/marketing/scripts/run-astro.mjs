@@ -4,9 +4,14 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const configHome = path.resolve(scriptDir, "../.config");
+const astroCommand = process.platform === "win32" ? "astro.cmd" : "astro";
+const astroArgs = process.argv.slice(2);
 
-const command = process.platform === "win32" ? "astro.cmd" : "astro";
-const result = spawnSync(command, ["check"], {
+if (astroArgs.length === 0) {
+  throw new Error("Expected an Astro command, for example: build, preview, dev, or check.");
+}
+
+const result = spawnSync(astroCommand, astroArgs, {
   stdio: "inherit",
   env: {
     ...process.env,

@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "typecheck": "node scripts/run-astro-check.mjs"
+    "dev": "node scripts/run-astro.mjs dev",
+    "build": "node scripts/run-astro.mjs build",
+    "preview": "node scripts/run-astro.mjs preview",
+    "typecheck": "node scripts/run-astro.mjs check"
   },
   "dependencies": {
     "astro": "^6.0.4"
