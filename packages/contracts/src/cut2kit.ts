@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { IsoDateTime, NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas";
 
-export const CUT2KIT_SETTINGS_SCHEMA_VERSIONS = ["0.1.0", "0.2.0"] as const;
+export const CUT2KIT_SETTINGS_SCHEMA_VERSIONS = ["0.3.0"] as const;
 
 export const Cut2KitSettingsSchemaVersion = Schema.Literals(CUT2KIT_SETTINGS_SCHEMA_VERSIONS);
 export type Cut2KitSettingsSchemaVersion = typeof Cut2KitSettingsSchemaVersion.Type;
@@ -160,12 +160,6 @@ export const Cut2KitPdfFileAssignment = Schema.Struct({
 });
 export type Cut2KitPdfFileAssignment = typeof Cut2KitPdfFileAssignment.Type;
 
-export const Cut2KitPdfSettings = Schema.Struct({
-  autoClassify: Schema.Boolean,
-  fileAssignments: Schema.Array(Cut2KitPdfFileAssignment),
-});
-export type Cut2KitPdfSettings = typeof Cut2KitPdfSettings.Type;
-
 const Cut2KitElevationGeometrySource = Schema.Literals(["dimension_text", "drawn_geometry"]);
 const Cut2KitElevationHorizontalDimensionMode = Schema.Literal("cumulative_from_left_edge");
 const Cut2KitElevationOpeningPairingStrategy = Schema.Literal("consecutive_pairs");
@@ -194,6 +188,7 @@ const Cut2KitMargins = Schema.Struct({
 
 export const Cut2KitElevationIntakeSettings = Schema.Struct({
   enabled: Schema.Boolean,
+  explicitDimensionsAreAuthoritative: Schema.Boolean,
   geometrySourcePriority: Schema.Array(Cut2KitElevationGeometrySource),
   horizontalDimensionMode: Cut2KitElevationHorizontalDimensionMode,
   openingPairingStrategy: Cut2KitElevationOpeningPairingStrategy,
@@ -201,15 +196,28 @@ export const Cut2KitElevationIntakeSettings = Schema.Struct({
   requireCommonHeadHeight: Schema.Boolean,
   requireCommonWindowSillHeight: Schema.Boolean,
   units: Cut2KitNcUnits,
+  ambiguityHandling: Schema.Struct({
+    stopOnMissingDimensions: Schema.Boolean,
+    stopOnConflictingDimensions: Schema.Boolean,
+    stopOnIncompleteOpeningGeometry: Schema.Boolean,
+    requireUserConfirmationToContinue: Schema.Boolean,
+  }),
 });
 export type Cut2KitElevationIntakeSettings = typeof Cut2KitElevationIntakeSettings.Type;
 
-export const Cut2KitPdfWorkflowSettings = Schema.Struct({
+export const Cut2KitInputSettings = Schema.Struct({
   autoClassify: Schema.Boolean,
   fileAssignments: Schema.Array(Cut2KitPdfFileAssignment),
   elevationIntake: Cut2KitElevationIntakeSettings,
 });
-export type Cut2KitPdfWorkflowSettings = typeof Cut2KitPdfWorkflowSettings.Type;
+export type Cut2KitInputSettings = typeof Cut2KitInputSettings.Type;
+
+export const Cut2KitArtifactsSettings = Schema.Struct({
+  wallLayoutsDir: TrimmedNonEmptyString,
+  framingLayoutsDir: TrimmedNonEmptyString,
+  sheathingLayoutsDir: TrimmedNonEmptyString,
+});
+export type Cut2KitArtifactsSettings = typeof Cut2KitArtifactsSettings.Type;
 
 export const Cut2KitFramingMaterialSettings = Schema.Struct({
   label: TrimmedNonEmptyString,
@@ -287,10 +295,9 @@ export const Cut2KitSheathingSettings = Schema.Struct({
     allowTerminalRip: Schema.Boolean,
   }),
   openingsRemainUncovered: Schema.Boolean,
-  output: Schema.Struct({
+  pages: Schema.Struct({
     includeOverallLayoutPage: Schema.Boolean,
     includePerSheetCutoutPages: Schema.Boolean,
-    includeFasteningPage: Schema.Boolean,
   }),
   notes: Schema.Struct({
     includeDisclaimer: Schema.Boolean,
@@ -302,6 +309,7 @@ export type Cut2KitSheathingSettings = typeof Cut2KitSheathingSettings.Type;
 
 export const Cut2KitFasteningSettings = Schema.Struct({
   enabled: Schema.Boolean,
+  includePage: Schema.Boolean,
   typicalReferenceOnly: Schema.Boolean,
   supportedEdgeSpacing: PositiveInt,
   fieldSpacing: PositiveInt,
@@ -443,25 +451,26 @@ const Cut2KitAiGenerationStep = Schema.Literals([
   "validate_and_package",
 ]);
 
-const Cut2KitPromptReferencePaths = Schema.Struct({
-  reusableSummaryPdf: TrimmedNonEmptyString,
-  framingExamplePdf: TrimmedNonEmptyString,
-  sheathingExamplePdf: TrimmedNonEmptyString,
+const Cut2KitPromptTemplatePaths = Schema.Struct({
+  geometrySystem: TrimmedNonEmptyString,
+  geometryUser: TrimmedNonEmptyString,
+  framingSystem: TrimmedNonEmptyString,
+  framingUser: TrimmedNonEmptyString,
+  sheathingSystem: TrimmedNonEmptyString,
+  sheathingUser: TrimmedNonEmptyString,
+  validationChecklist: TrimmedNonEmptyString,
 });
+export type Cut2KitPromptTemplatePaths = typeof Cut2KitPromptTemplatePaths.Type;
 
 export const Cut2KitAiSettings = Schema.Struct({
   enabled: Schema.Boolean,
   agentName: TrimmedNonEmptyString,
-  provider: TrimmedNonEmptyString,
-  model: TrimmedNonEmptyString,
-  reasoningEffort: TrimmedNonEmptyString,
-  preferFastServiceTierWhenAvailable: Schema.Boolean,
-  approvalRequiredForRuleEdits: Schema.Boolean,
-  approvalRequiredForQueueGeneration: Schema.Boolean,
-  primaryWorkflow: Schema.optional(Schema.Literal("ai-first-wall-layout")),
-  runtimeGenerationOrder: Schema.optional(Schema.Array(Cut2KitAiGenerationStep)),
-  promptReferencePaths: Schema.optional(Cut2KitPromptReferencePaths),
-  allowedTasks: Schema.Array(TrimmedNonEmptyString),
+  provider: Schema.Literal("codex"),
+  model: Schema.Literal("gpt-5.4"),
+  reasoningEffort: Schema.Literal("xhigh"),
+  primaryWorkflow: Schema.Literal("ai-first-wall-layout"),
+  runtimeGenerationOrder: Schema.Array(Cut2KitAiGenerationStep),
+  promptTemplatePaths: Cut2KitPromptTemplatePaths,
 });
 export type Cut2KitAiSettings = typeof Cut2KitAiSettings.Type;
 
@@ -595,44 +604,19 @@ export const Cut2KitManufacturingPlan = Schema.Struct({
 });
 export type Cut2KitManufacturingPlan = typeof Cut2KitManufacturingPlan.Type;
 
-export const Cut2KitSettingsV0_1_0 = Schema.Struct({
-  schemaVersion: Schema.Literal("0.1.0"),
+export const Cut2KitSettings = Schema.Struct({
+  schemaVersion: Schema.Literal("0.3.0"),
   project: Cut2KitProjectMetadata,
-  production: Cut2KitProductionSettings,
-  machineProfile: Cut2KitMachineProfile,
   discovery: Cut2KitDiscoverySettings,
-  pdf: Cut2KitPdfSettings,
-  framing: FramingRuleSet,
-  openings: Cut2KitOpeningSettings,
-  panelization: Cut2KitPanelizationSettings,
-  nesting: Cut2KitNestingSettings,
-  queueing: Cut2KitQueueingSettings,
-  output: Cut2KitOutputSettings,
+  input: Cut2KitInputSettings,
+  artifacts: Cut2KitArtifactsSettings,
   ai: Cut2KitAiSettings,
-});
-
-export const Cut2KitSettingsV0_2_0 = Schema.Struct({
-  schemaVersion: Schema.Literal("0.2.0"),
-  project: Cut2KitProjectMetadata,
-  production: Cut2KitProductionSettings,
-  machineProfile: Cut2KitMachineProfile,
-  discovery: Cut2KitDiscoverySettings,
-  pdf: Cut2KitPdfSettings,
-  framingRules: FramingRuleSet,
-  openings: Cut2KitOpeningSettings,
-  panelization: Cut2KitPanelizationSettings,
-  nesting: Cut2KitNestingSettings,
-  queueing: Cut2KitQueueingSettings,
-  output: Cut2KitOutputSettings,
-  ai: Cut2KitAiSettings,
-  pdfWorkflow: Cut2KitPdfWorkflowSettings,
   framing: Cut2KitFramingSettings,
   sheathing: Cut2KitSheathingSettings,
   fastening: Cut2KitFasteningSettings,
   rendering: Cut2KitRenderingSettings,
+  output: Cut2KitOutputSettings,
 });
-
-export const Cut2KitSettings = Schema.Union([Cut2KitSettingsV0_1_0, Cut2KitSettingsV0_2_0]);
 export type Cut2KitSettings = typeof Cut2KitSettings.Type;
 
 export const Cut2KitIssue = Schema.Struct({
@@ -730,11 +714,16 @@ export type Cut2KitFramingLayoutValidation = typeof Cut2KitFramingLayoutValidati
 
 export const Cut2KitWallGeometryValidation = Schema.Struct({
   dimensionTextFound: Schema.Boolean,
+  wallDimensionsResolved: Schema.Boolean,
+  openingDimensionsResolved: Schema.Boolean,
   wallBoundsFit: Schema.Boolean,
   openingPairsResolved: Schema.Boolean,
   openingTypesResolved: Schema.Boolean,
   headHeightResolved: Schema.Boolean,
   sillHeightResolved: Schema.Boolean,
+  conflictsDetected: Schema.Boolean,
+  ambiguityDetected: Schema.Boolean,
+  requiresUserConfirmation: Schema.Boolean,
   notes: Schema.Array(TrimmedNonEmptyString),
 });
 export type Cut2KitWallGeometryValidation = typeof Cut2KitWallGeometryValidation.Type;
@@ -1018,7 +1007,6 @@ export const Cut2KitProject = Schema.Struct({
   files: Schema.Array(ProjectFileRecord),
   issues: Schema.Array(Cut2KitIssue),
   sourceDocuments: Schema.Array(Cut2KitSourceDocument),
-  framingRules: Schema.NullOr(FramingRuleSet),
   panelCandidates: Schema.Array(Cut2KitPanelCandidate),
   panelManifest: PanelManifest,
   nestManifest: NestManifest,
@@ -1047,6 +1035,7 @@ export type Cut2KitGenerateOutputsResult = typeof Cut2KitGenerateOutputsResult.T
 
 export const Cut2KitWallArtifactPaths = Schema.Struct({
   geometryJsonPath: TrimmedNonEmptyString,
+  validationReportJsonPath: TrimmedNonEmptyString,
   framingJsonPath: TrimmedNonEmptyString,
   framingPdfPath: TrimmedNonEmptyString,
   sheathingJsonPath: TrimmedNonEmptyString,
@@ -1054,19 +1043,87 @@ export const Cut2KitWallArtifactPaths = Schema.Struct({
 });
 export type Cut2KitWallArtifactPaths = typeof Cut2KitWallArtifactPaths.Type;
 
+export const Cut2KitValidationStage = Schema.Literals([
+  "geometry",
+  "framing",
+  "sheathing",
+  "packaging",
+]);
+export type Cut2KitValidationStage = typeof Cut2KitValidationStage.Type;
+
+export const Cut2KitValidationStageStatus = Schema.Literals([
+  "pass",
+  "needs_confirmation",
+  "blocked",
+  "not_run",
+]);
+export type Cut2KitValidationStageStatus = typeof Cut2KitValidationStageStatus.Type;
+
+export const Cut2KitWallGenerationStatus = Schema.Literals([
+  "completed",
+  "needs_confirmation",
+  "validation_blocked",
+]);
+export type Cut2KitWallGenerationStatus = typeof Cut2KitWallGenerationStatus.Type;
+
+export const Cut2KitValidationReportIssue = Schema.Struct({
+  stage: Cut2KitValidationStage,
+  severity: Cut2KitIssueSeverity,
+  code: TrimmedNonEmptyString,
+  message: TrimmedNonEmptyString,
+});
+export type Cut2KitValidationReportIssue = typeof Cut2KitValidationReportIssue.Type;
+
+export const Cut2KitWallValidationReport = Schema.Struct({
+  schemaVersion: Schema.Literal("0.2.0"),
+  sourcePdfPath: TrimmedNonEmptyString,
+  settingsFilePath: TrimmedNonEmptyString,
+  checklistPath: TrimmedNonEmptyString,
+  ambiguity: Schema.Struct({
+    detected: Schema.Boolean,
+    requiresConfirmation: Schema.Boolean,
+    notes: Schema.Array(TrimmedNonEmptyString),
+  }),
+  geometry: Schema.Struct({
+    status: Cut2KitValidationStageStatus,
+    checks: Cut2KitWallGeometryValidation,
+  }),
+  framing: Schema.NullOr(
+    Schema.Struct({
+      status: Cut2KitValidationStageStatus,
+      checks: Cut2KitFramingLayoutValidation,
+    }),
+  ),
+  sheathing: Schema.NullOr(
+    Schema.Struct({
+      status: Cut2KitValidationStageStatus,
+      checks: Cut2KitSheathingLayoutValidation,
+    }),
+  ),
+  issues: Schema.Array(Cut2KitValidationReportIssue),
+  readyForFraming: Schema.Boolean,
+  readyForSheathing: Schema.Boolean,
+  readyForPackaging: Schema.Boolean,
+});
+export type Cut2KitWallValidationReport = typeof Cut2KitWallValidationReport.Type;
+
 export const Cut2KitGenerateWallLayoutInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   sourcePdfPath: TrimmedNonEmptyString,
+  confirmedAmbiguityProceeding: Schema.optionalKey(Schema.Boolean),
 });
 export type Cut2KitGenerateWallLayoutInput = typeof Cut2KitGenerateWallLayoutInput.Type;
 
 export const Cut2KitGenerateWallLayoutResult = Schema.Struct({
+  status: Cut2KitWallGenerationStatus,
+  statusMessage: Schema.NullOr(TrimmedNonEmptyString),
   project: Cut2KitProject,
   sourcePdfPath: TrimmedNonEmptyString,
   artifacts: Cut2KitWallArtifactPaths,
   geometry: Cut2KitWallGeometry,
-  framingLayout: Cut2KitFramingLayoutV0_2_0,
-  sheathingLayout: Cut2KitSheathingLayout,
+  framingLayout: Schema.NullOr(Cut2KitFramingLayoutV0_2_0),
+  sheathingLayout: Schema.NullOr(Cut2KitSheathingLayout),
+  validationReport: Cut2KitWallValidationReport,
   writtenPaths: Schema.Array(TrimmedNonEmptyString),
 });
 export type Cut2KitGenerateWallLayoutResult = typeof Cut2KitGenerateWallLayoutResult.Type;

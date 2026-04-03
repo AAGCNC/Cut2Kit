@@ -1,29 +1,49 @@
 {
-  "schemaVersion": "0.1.0",
+  "schemaVersion": "0.3.0",
   "project": {
     "projectId": "demo-prefab-kit-001",
     "jobName": "Prefab Demo House 001",
     "customer": "AXYZ Demo Homes",
     "site": "shop-floor",
-    "description": "Bootstrap sample for Cut2Kit PDF scanning, validation, and A2MC output generation",
+    "description": "Sample Cut2Kit project for PDF discovery, staged wall-layout generation, and optional A2MC output generation.",
     "units": "imperial"
   },
-  "production": {
-    "primaryMode": "kitting",
-    "allowLineSideQueue": true,
-    "applications": ["siding", "flooring", "roofing"]
-  },
-  "machineProfile": {
-    "profileId": "AXYZ-DEMO",
-    "postProcessorId": "axyz-a2mc",
-    "stockCatalogId": "demo-sheet-stock"
+  "ai": {
+    "enabled": true,
+    "agentName": "Cut2Kit Agent",
+    "provider": "codex",
+    "model": "gpt-5.4",
+    "reasoningEffort": "xhigh",
+    "primaryWorkflow": "ai-first-wall-layout",
+    "runtimeGenerationOrder": [
+      "extract_wall_geometry",
+      "generate_framing_layout",
+      "generate_sheathing_layout",
+      "validate_and_package"
+    ],
+    "promptTemplatePaths": {
+      "geometrySystem": ".docs/system-geometry.md",
+      "geometryUser": ".docs/user-geometry.md",
+      "framingSystem": ".docs/system-framing.md",
+      "framingUser": ".docs/user-framing.md",
+      "sheathingSystem": ".docs/system-sheathing.md",
+      "sheathingUser": ".docs/user-sheathing.md",
+      "validationChecklist": ".docs/validation-checklist.md"
+    }
   },
   "discovery": {
     "searchRecursively": true,
-    "preferredFolders": ["elevations", "floor", "roof"],
-    "knownSettingsFileNames": ["cut2kit.settings.json"]
+    "preferredFolders": [
+      "elevations",
+      "floor",
+      "roof",
+      ".docs"
+    ],
+    "knownSettingsFileNames": [
+      "cut2kit.settings.json"
+    ]
   },
-  "pdf": {
+  "input": {
     "autoClassify": true,
     "fileAssignments": [
       {
@@ -48,92 +68,161 @@
         "classification": "roof",
         "application": "roofing"
       }
-    ]
-  },
-  "framing": {
-    "studs": {
-      "enabled": true,
-      "onCenter": 16,
-      "originReference": "left",
-      "continuityPolicy": "stop_at_openings",
-      "openingEdgePolicy": "double_stud_at_openings",
-      "allowMidBreakPanelSeam": false,
-      "drywallAlignmentPreference": true,
-      "endCondition": "customer_defined"
-    },
-    "joists": {
-      "enabled": true,
-      "direction": "east_west",
-      "onCenter": 16,
-      "originReference": "north",
-      "continuityPolicy": "stop_at_openings"
-    },
-    "headersAndTrimmers": {
-      "autoGenerateWhenOpeningsExist": true,
-      "openingEdgeClearance": 0.125
-    }
-  },
-  "openings": {
-    "windowPolicy": {
-      "requiresExplicitOpeningGeometry": true,
-      "doubleStudDefault": true,
-      "panelBreakPreference": "avoid_break_through_opening"
-    },
-    "doorPolicy": {
-      "requiresExplicitOpeningGeometry": true,
-      "doubleStudDefault": true,
-      "panelBreakPreference": "avoid_break_through_opening"
-    }
-  },
-  "panelization": {
-    "strategy": "rule_driven",
-    "targetPanelWidth": 48,
-    "maxPanelWidth": 60,
-    "maxPanelHeight": 144,
-    "minPanelWidth": 8,
-    "minPanelHeight": 8,
-    "edgeTrimAllowance": 0.125,
-    "kerfAllowance": 0,
-    "seamPriority": [
-      "align_to_structural_members",
-      "avoid_openings",
-      "prefer_shipping_friendly_panels"
     ],
-    "perApplication": {
-      "siding": {
-        "grainOrOrientation": "vertical",
-        "preferredBreakDirection": "vertical"
-      },
-      "flooring": {
-        "grainOrOrientation": "customer_defined",
-        "preferredBreakDirection": "joist_aligned"
-      },
-      "roofing": {
-        "grainOrOrientation": "slope_defined",
-        "preferredBreakDirection": "rafter_or_joist_aligned"
+    "elevationIntake": {
+      "enabled": true,
+      "explicitDimensionsAreAuthoritative": true,
+      "geometrySourcePriority": [
+        "dimension_text",
+        "drawn_geometry"
+      ],
+      "horizontalDimensionMode": "cumulative_from_left_edge",
+      "openingPairingStrategy": "consecutive_pairs",
+      "openingTypeInference": "sill_line_detection",
+      "requireCommonHeadHeight": true,
+      "requireCommonWindowSillHeight": true,
+      "units": "inch",
+      "ambiguityHandling": {
+        "stopOnMissingDimensions": true,
+        "stopOnConflictingDimensions": true,
+        "stopOnIncompleteOpeningGeometry": true,
+        "requireUserConfirmationToContinue": true
       }
     }
   },
-  "nesting": {
-    "strategy": "deterministic_with_ai_suggestions",
-    "sortPriority": ["application", "kitGroup"],
-    "optimizeFor": "yield_then_sequence",
-    "allowRotation": true,
-    "groupByHouseSide": true,
-    "maxConcurrentNests": 3
+  "artifacts": {
+    "wallLayoutsDir": "wall-layouts",
+    "framingLayoutsDir": "framing-layouts",
+    "sheathingLayoutsDir": "sheathing-layouts"
   },
-  "queueing": {
-    "kitting": {
-      "enabled": true,
-      "groupBy": "assembly_zone",
-      "sequence": ["front", "rear", "floor", "roof"],
-      "outputPrefix": "KIT"
+  "framing": {
+    "enabled": true,
+    "material": {
+      "label": "SPF",
+      "nominalSize": "2x6",
+      "thickness": 1.5,
+      "depth": 5.5
     },
-    "lineSide": {
+    "plates": {
+      "top": {
+        "enabled": true,
+        "continuity": "continuous",
+        "orientationInElevation": "flat"
+      },
+      "bottom": {
+        "enabled": true,
+        "continuity": "continuous",
+        "orientationInElevation": "flat"
+      }
+    },
+    "horizontalMembers": {
+      "orientationInElevation": "flat"
+    },
+    "endStuds": {
+      "leftCount": 2,
+      "rightCount": 2
+    },
+    "jambStuds": {
+      "countPerSide": 1,
+      "leftOffsetMode": "shift_left",
+      "leftOffset": 1.5,
+      "preserveClearOpenings": true
+    },
+    "studLayout": {
       "enabled": true,
-      "groupBy": "production_flow",
-      "sequence": ["floor", "walls", "roof"],
-      "outputPrefix": "LINE"
+      "spacing": 16,
+      "originSide": "left",
+      "direction": "left_to_right",
+      "stopBeforeNextBearingStudWithinOrEqual": 1
+    },
+    "openings": {
+      "clearArchitecturalOpenings": true,
+      "headMember": {
+        "windows": true,
+        "doors": true
+      },
+      "sillMember": {
+        "windows": true,
+        "doors": false
+      }
+    },
+    "crippleStuds": {
+      "aboveHeads": true,
+      "belowWindowSills": true,
+      "splitGridStudsInsideOpenings": true
+    },
+    "labeling": {
+      "includeMemberSchedule": true,
+      "includeStudCenterSchedule": true
+    }
+  },
+  "sheathing": {
+    "enabled": true,
+    "materialLabel": "7/16 in OSB",
+    "panelThickness": 0.4375,
+    "sheet": {
+      "nominalWidth": 48,
+      "nominalHeight": 96,
+      "installedOrientation": "vertical",
+      "runDirection": "left_to_right",
+      "allowTerminalRip": true
+    },
+    "openingsRemainUncovered": true,
+    "pages": {
+      "includeOverallLayoutPage": true,
+      "includePerSheetCutoutPages": true
+    },
+    "notes": {
+      "includeDisclaimer": true,
+      "panelEdgeGap": 0.125,
+      "supportedEdgeBehavior": "edges_over_framing_or_blocking"
+    }
+  },
+  "fastening": {
+    "enabled": false,
+    "includePage": false,
+    "typicalReferenceOnly": true,
+    "supportedEdgeSpacing": 6,
+    "fieldSpacing": 12,
+    "edgeDistance": 0.375,
+    "includeOverdrivingWarning": true,
+    "disclaimerText": "Confirm final fastening schedule and edge support requirements with code, engineering, and manufacturer instructions.",
+    "noteLines": [
+      "Use the stud framing layout for support lines.",
+      "Keep panel edges over framing members or provide blocking where required.",
+      "Keep fasteners approximately 3/8 in back from panel edges and do not overdrive fasteners."
+    ]
+  },
+  "rendering": {
+    "units": "inch",
+    "dimensionFormat": "feet-and-inches",
+    "framing": {
+      "pageSize": "letter",
+      "pageOrientation": "landscape",
+      "margins": {
+        "left": 48,
+        "right": 48,
+        "top": 54,
+        "bottom": 72
+      },
+      "includeMemberSchedule": true,
+      "titleTemplate": "Framing Layout · {source}",
+      "subtitleTemplate": "{material} framing · members shown in elevation"
+    },
+    "sheathing": {
+      "pageSize": "letter",
+      "pageOrientation": "landscape",
+      "margins": {
+        "left": 36,
+        "right": 36,
+        "top": 42,
+        "bottom": 54
+      },
+      "scaleToFitFirstPage": true,
+      "cutoutDetailsPerPage": 4,
+      "titleTemplate": "OSB Layout · {source}",
+      "subtitleTemplate": "{material} sheathing layout",
+      "fasteningTitleTemplate": "Fastening Notes · {source}"
     }
   },
   "output": {
@@ -142,24 +231,5 @@
     "ncDir": "output/nc",
     "reportsDir": "output/reports",
     "overwritePolicy": "overwrite"
-  },
-  "ai": {
-    "enabled": true,
-    "agentName": "Cut to Kit Agent",
-    "provider": "codex",
-    "model": "gpt-5.4",
-    "reasoningEffort": "high",
-    "preferFastServiceTierWhenAvailable": true,
-    "approvalRequiredForRuleEdits": true,
-    "approvalRequiredForQueueGeneration": true,
-    "allowedTasks": [
-      "explain_project_state",
-      "suggest_rule_json",
-      "suggest_panelization_strategy",
-      "summarize_warnings",
-      "author_framing_layout_json",
-      "author_a2mc_manufacturing_plan",
-      "review_a2mc_output"
-    ]
   }
 }

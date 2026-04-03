@@ -299,10 +299,63 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         sourcePdfPath: selectedSourcePdfPath,
       });
       queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), result.project);
+
+      if (result.status === "needs_confirmation") {
+        const confirmed = await api.dialogs.confirm(
+          `${result.statusMessage ?? "The extracted elevation geometry is ambiguous."}\n\nReview the extracted-elevation and validation-report artifacts, then choose OK to continue anyway or Cancel to stop.`,
+        );
+        if (!confirmed) {
+          toastManager.add({
+            type: "warning",
+            title: "Wall layout is waiting for confirmation",
+            description:
+              result.statusMessage ??
+              "Cut2Kit saved the extracted geometry and validation report and stopped before framing/sheathing generation.",
+          });
+          return;
+        }
+
+        const confirmedResult = await api.cut2kit.generateWallLayout({
+          cwd: project.cwd,
+          sourcePdfPath: selectedSourcePdfPath,
+          confirmedAmbiguityProceeding: true,
+        });
+        queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), confirmedResult.project);
+
+        if (confirmedResult.status === "completed") {
+          toastManager.add({
+            type: "success",
+            title: "Wall layout package generated",
+            description: `${confirmedResult.writtenPaths.length} wall-layout artifacts written for ${selectedSourcePdfPath}.`,
+          });
+          return;
+        }
+
+        toastManager.add({
+          type: "error",
+          title: "Wall layout validation blocked packaging",
+          description:
+            confirmedResult.statusMessage ??
+            "Cut2Kit saved the staged JSON artifacts and validation report, but did not render the final PDFs.",
+        });
+        return;
+      }
+
+      if (result.status === "validation_blocked") {
+        toastManager.add({
+          type: "error",
+          title: "Wall layout validation blocked packaging",
+          description:
+            result.statusMessage ??
+            "Cut2Kit saved the staged JSON artifacts and validation report, but did not render the final PDFs.",
+        });
+        return;
+      }
+
       toastManager.add({
         type: "success",
         title: "Wall layout package generated",
-        description: `${result.writtenPaths.length} framing/sheathing artifacts written for ${selectedSourcePdfPath}.`,
+        description: `${result.writtenPaths.length} wall-layout artifacts written for ${selectedSourcePdfPath}.`,
       });
     } catch (error) {
       toastManager.add({

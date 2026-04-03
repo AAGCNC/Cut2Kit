@@ -2,7 +2,7 @@
 
 Cut2Kit now has a real deterministic path for AXYZ A2MC output:
 
-1. `cut2kit.settings.json` defines project, queueing, and machine-profile context.
+1. `cut2kit.settings.json` defines project, input/discovery, artifact, and output context.
 2. `cut2kit.manufacturing.json` defines explicit manufacturing intent for each NC job.
 3. `apps/server/src/cut2kit/Layers/Cut2KitProjects.ts` scans and validates both files.
 4. `apps/server/src/cut2kit/cam/A2mcPost.ts` converts manufacturing intent into controller-safe A2MC NC text.

@@ -5,7 +5,7 @@
     "jobName": "Cut2Kit Wall Layout Example",
     "customer": "Example Customer",
     "site": "example-site",
-    "description": "AI-first workflow for dimensioned elevation PDF to framing and OSB sheathing PDFs.",
+    "description": "Canonical AI-first example for a single-wall dimensioned elevation workflow.",
     "units": "imperial"
   },
   "ai": {
@@ -14,76 +14,84 @@
     "provider": "codex",
     "model": "gpt-5.4",
     "reasoningEffort": "xhigh",
-    "preferFastServiceTierWhenAvailable": true,
     "primaryWorkflow": "ai-first-wall-layout",
     "runtimeGenerationOrder": [
       "extract_wall_geometry",
       "generate_framing_layout",
       "generate_sheathing_layout",
-      "validate_and_render"
+      "validate_and_package"
     ],
-    "promptReferencePaths": {
-      "reusableSummaryPdf": ".docs/reusable_prompt_summary_framing_osb.pdf",
-      "framingSystemPrompt": ".docs/system-framing.md",
-      "framingInitialPrompt": ".docs/user-framing.md",
-      "sheathingSystemPrompt": ".docs/system-sheathing.md",
-      "sheathingInitialPrompt": ".docs/user-sheathing.md",
+    "promptTemplatePaths": {
+      "geometrySystem": ".docs/system-geometry.md",
+      "geometryUser": ".docs/user-geometry.md",
+      "framingSystem": ".docs/system-framing.md",
+      "framingUser": ".docs/user-framing.md",
+      "sheathingSystem": ".docs/system-sheathing.md",
+      "sheathingUser": ".docs/user-sheathing.md",
       "validationChecklist": ".docs/validation-checklist.md"
-    },
-    "allowedTasks": [
-      "interpret_elevation_pdf",
-      "generate_framing_layout",
-      "generate_sheathing_layout",
-      "validate_results",
-      "render_pdfs"
-    ]
+    }
   },
   "discovery": {
     "searchRecursively": true,
-    "preferredFolders": [".docs", "examples", "elevations", "references"],
-    "knownSettingsFileNames": ["cut2kit.settings.json"]
+    "preferredFolders": [
+      ".docs",
+      "examples",
+      "elevations",
+      "references"
+    ],
+    "knownSettingsFileNames": [
+      "cut2kit.settings.json"
+    ]
   },
   "input": {
-    "dimensionPriority": "explicit_first",
-    "ambiguityPolicy": {
-      "onMissingOrConflictingDimensions": "ask_for_confirmation_and_stop"
-    },
-    "scope": {
-      "supportedWallTypes": ["single_wall"],
-      "supportedUnitModes": ["single_unit"],
-      "supportedOpeningShapes": ["rectangular"],
-      "plannedFutureSupport": [
-        "non_rectangular_openings",
-        "varying_head_heights",
-        "sloped_tops",
-        "gables"
-      ]
-    },
+    "autoClassify": true,
+    "fileAssignments": [
+      {
+        "pathPattern": "examples/elevation*.pdf",
+        "classification": "elevation",
+        "side": "front",
+        "application": "siding"
+      },
+      {
+        "pathPattern": "elevations/*.pdf",
+        "classification": "elevation",
+        "side": "front",
+        "application": "siding"
+      }
+    ],
     "elevationIntake": {
-      "geometrySourcePriority": ["dimension_text", "drawn_geometry"],
+      "enabled": true,
+      "explicitDimensionsAreAuthoritative": true,
+      "geometrySourcePriority": [
+        "dimension_text",
+        "drawn_geometry"
+      ],
       "horizontalDimensionMode": "cumulative_from_left_edge",
-      "units": "inch"
+      "openingPairingStrategy": "consecutive_pairs",
+      "openingTypeInference": "sill_line_detection",
+      "requireCommonHeadHeight": true,
+      "requireCommonWindowSillHeight": true,
+      "units": "inch",
+      "ambiguityHandling": {
+        "stopOnMissingDimensions": true,
+        "stopOnConflictingDimensions": true,
+        "stopOnIncompleteOpeningGeometry": true,
+        "requireUserConfirmationToContinue": true
+      }
     }
   },
   "artifacts": {
-    "saveExtractedGeometryJson": true,
-    "saveFramingLayoutJson": true,
-    "saveSheathingLayoutJson": true,
-    "saveValidationReportJson": true,
-    "paths": {
-      "extractedGeometry": "output/artifacts/extracted-elevation.json",
-      "framingLayout": "output/artifacts/framing-layout.json",
-      "sheathingLayout": "output/artifacts/sheathing-layout.json",
-      "validationReport": "output/artifacts/validation-report.json"
-    }
+    "wallLayoutsDir": "wall-layouts",
+    "framingLayoutsDir": "framing-layouts",
+    "sheathingLayoutsDir": "sheathing-layouts"
   },
   "framing": {
     "enabled": true,
     "material": {
       "label": "SPF",
       "nominalSize": "2x6",
-      "thicknessIn": 1.5,
-      "depthIn": 5.5
+      "thickness": 1.5,
+      "depth": 5.5
     },
     "plates": {
       "top": {
@@ -97,26 +105,25 @@
         "orientationInElevation": "flat"
       }
     },
+    "horizontalMembers": {
+      "orientationInElevation": "flat"
+    },
     "endStuds": {
       "leftCount": 2,
       "rightCount": 2
     },
-    "openingSideStuds": {
-      "enabled": true,
+    "jambStuds": {
       "countPerSide": 1,
       "leftOffsetMode": "shift_left",
-      "leftOffsetIn": 1.5,
-      "rightOffsetIn": 0.0,
+      "leftOffset": 1.5,
       "preserveClearOpenings": true
     },
     "studLayout": {
       "enabled": true,
-      "spacingMode": "on_center",
-      "spacingIn": 16.0,
+      "spacing": 16,
       "originSide": "left",
       "direction": "left_to_right",
-      "gridRestartAfterOpening": false,
-      "stopBeforeNextBearingStudWithinOrEqualIn": 16.0
+      "stopBeforeNextBearingStudWithinOrEqual": 1
     },
     "openings": {
       "clearArchitecturalOpenings": true,
@@ -132,8 +139,7 @@
     "crippleStuds": {
       "aboveHeads": true,
       "belowWindowSills": true,
-      "splitGridStudsInsideOpenings": true,
-      "allowStudsThroughOpenings": false
+      "splitGridStudsInsideOpenings": true
     },
     "labeling": {
       "includeMemberSchedule": true,
@@ -143,47 +149,39 @@
   "sheathing": {
     "enabled": true,
     "materialLabel": "7/16 in OSB",
-    "panelThicknessIn": 0.4375,
+    "panelThickness": 0.4375,
     "sheet": {
-      "nominalWidthIn": 48.0,
-      "nominalHeightIn": 96.0,
+      "nominalWidth": 48,
+      "nominalHeight": 96,
       "installedOrientation": "vertical",
       "runDirection": "left_to_right",
       "allowTerminalRip": true
     },
-    "layoutGoal": "installation_layout",
     "openingsRemainUncovered": true,
-    "output": {
+    "pages": {
       "includeOverallLayoutPage": true,
-      "includePerSheetCutoutPages": true,
-      "includeFasteningPage": false
+      "includePerSheetCutoutPages": true
     },
     "notes": {
       "includeDisclaimer": true,
-      "panelEdgeGapIn": 0.125,
+      "panelEdgeGap": 0.125,
       "supportedEdgeBehavior": "edges_over_framing_or_blocking"
     }
   },
   "fastening": {
     "enabled": false,
+    "includePage": false,
     "typicalReferenceOnly": true,
-    "edgeSpacingIn": 6.0,
-    "fieldSpacingIn": 12.0,
-    "edgeDistanceIn": 0.375,
+    "supportedEdgeSpacing": 6,
+    "fieldSpacing": 12,
+    "edgeDistance": 0.375,
     "includeOverdrivingWarning": true,
-    "disclaimerText": "Confirm final fastening schedule, blocking, and edge support requirements with the governing code, engineering, and the panel manufacturer.",
+    "disclaimerText": "Confirm final fastening schedule and edge support requirements with code, engineering, and manufacturer instructions.",
     "noteLines": [
       "Use the stud framing layout for support lines.",
-      "Place panel edges over framing members or provide blocking where required.",
+      "Keep panel edges over framing members or provide blocking where required.",
       "Keep fasteners approximately 3/8 in back from panel edges and do not overdrive fasteners."
     ]
-  },
-  "prompts": {
-    "framingSystemPath": ".docs/system-framing.md",
-    "framingUserPath": ".docs/user-framing.md",
-    "sheathingSystemPath": ".docs/system-sheathing.md",
-    "sheathingUserPath": ".docs/user-sheathing.md",
-    "validationChecklistPath": ".docs/validation-checklist.md"
   },
   "rendering": {
     "units": "inch",
@@ -191,25 +189,37 @@
     "framing": {
       "pageSize": "letter",
       "pageOrientation": "landscape",
+      "margins": {
+        "left": 48,
+        "right": 48,
+        "top": 54,
+        "bottom": 72
+      },
       "includeMemberSchedule": true,
-      "titleTemplate": "{source} - Stud Framing Layout",
-      "subtitleTemplate": "{material} framing. Plates shown flat."
+      "titleTemplate": "Framing Layout · {source}",
+      "subtitleTemplate": "{material} framing · members shown in elevation"
     },
     "sheathing": {
       "pageSize": "letter",
       "pageOrientation": "landscape",
+      "margins": {
+        "left": 36,
+        "right": 36,
+        "top": 42,
+        "bottom": 54
+      },
       "scaleToFitFirstPage": true,
       "cutoutDetailsPerPage": 4,
-      "titleTemplate": "{source} - OSB Sheathing Layout",
-      "subtitleTemplate": "{material}, nominal {sheet} sheets. Openings remain uncovered.",
-      "fasteningTitleTemplate": "{source} - Fastening Pattern and Panel Edge Notes"
+      "titleTemplate": "OSB Layout · {source}",
+      "subtitleTemplate": "{material} sheathing layout",
+      "fasteningTitleTemplate": "Fastening Notes · {source}"
     }
   },
   "output": {
     "root": "output",
-    "artifactsDir": "output/artifacts",
+    "manifestsDir": "output/manifests",
+    "ncDir": "output/nc",
     "reportsDir": "output/reports",
-    "pdfDir": "output/pdfs",
     "overwritePolicy": "overwrite"
   }
 }

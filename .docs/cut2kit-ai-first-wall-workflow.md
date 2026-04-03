@@ -36,7 +36,7 @@ Use these as the workflow references:
 - `examples/elevation3.pdf`
 - `examples/elevation3_framing_layout.pdf`
 - `examples/elevation3_osb_sheet_layout_with_fastening.pdf`
-- `.docs/cut2kit.settings.example.json`
+- `docs/cut2kit.settings.example.json`
 
 ## Implementation Rules
 
@@ -51,11 +51,13 @@ Use these as the workflow references:
 
 For one elevation PDF, Cut2Kit should write:
 
-- wall geometry JSON
+- extracted elevation JSON
+- validation report JSON
 - framing layout JSON
 - framing layout PDF
 - sheathing layout JSON
 - sheathing layout PDF
+- optional fastening notes/pages when enabled by settings
 
 The framing and sheathing PDFs should follow the style and structure of the example outputs, including:
 
@@ -63,6 +65,16 @@ The framing and sheathing PDFs should follow the style and structure of the exam
 - overall OSB layout page
 - sheet-by-sheet cutout pages
 - fastening and panel-edge notes page
+
+The runtime prompt content should be loaded from:
+
+- `.docs/system-geometry.md`
+- `.docs/user-geometry.md`
+- `.docs/system-framing.md`
+- `.docs/user-framing.md`
+- `.docs/system-sheathing.md`
+- `.docs/user-sheathing.md`
+- `.docs/validation-checklist.md`
 
 ## Current Harness
 

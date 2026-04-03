@@ -41,7 +41,7 @@ const TestLayer = Layer.empty.pipe(
 );
 
 const sampleProjectPath = new URL("../../../../../examples/prefab-demo-project", import.meta.url);
-const exampleSettingsPath = new URL("../../../../../.docs/cut2kit.settings.example.json", import.meta.url);
+const exampleSettingsPath = new URL("../../../../../docs/cut2kit.settings.example.json", import.meta.url);
 const exampleElevationPath = new URL("../../../../../examples/elevation3.pdf", import.meta.url);
 
 class FixtureCopyError extends Schema.TaggedErrorClass<FixtureCopyError>()("FixtureCopyError", {
@@ -173,11 +173,16 @@ function makeGeometryDraft() {
     ],
     validation: {
       dimensionTextFound: true,
+      wallDimensionsResolved: true,
+      openingDimensionsResolved: true,
       wallBoundsFit: true,
       openingPairsResolved: true,
       openingTypesResolved: true,
       headHeightResolved: true,
       sillHeightResolved: true,
+      conflictsDetected: false,
+      ambiguityDetected: false,
+      requiresUserConfirmation: false,
       notes: [],
     },
     notes: [],
@@ -498,11 +503,11 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         expect(project.settingsFilePath).toBe("cut2kit.settings.json");
         expect(project.manufacturingPlanFilePath).toBe("cut2kit.manufacturing.json");
         expect(project.manufacturingPlan?.targetController).toBe("axyz-a2mc");
-        expect(project.summary.pdfCount).toBe(4);
-        expect(project.panelManifest.panels).toHaveLength(4);
+        expect(project.summary.pdfCount).toBe(1);
+        expect(project.panelManifest.panels).toHaveLength(1);
         expect(project.nestManifest.nests.length).toBeGreaterThan(0);
-        expect(project.queueManifest.entries).toHaveLength(4);
-        expect(project.ncJobs).toHaveLength(4);
+        expect(project.queueManifest.entries).toHaveLength(1);
+        expect(project.ncJobs).toHaveLength(1);
         expect(project.outputStatus.generated).toBe(false);
         expect(
           project.files.some(
@@ -555,7 +560,7 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
       }),
     );
 
-    it.effect("maps 0.2.0 framingRules into the project snapshot", () =>
+    it.effect("loads the canonical 0.3.0 wall-workflow settings into the project snapshot", () =>
       Effect.gen(function* () {
         const cut2kitProjects = yield* Cut2KitProjects;
         const projectDir = yield* makeTempDir("cut2kit-ai-settings-project-");
@@ -564,8 +569,13 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
 
         const project = yield* cut2kitProjects.inspectProject({ cwd: projectDir });
 
-        expect(project.settings?.schemaVersion).toBe("0.2.0");
-        expect(project.framingRules?.studs.onCenter).toBe(16);
+        expect(project.settings?.schemaVersion).toBe("0.3.0");
+        expect(project.settings?.ai.model).toBe("gpt-5.4");
+        expect(project.settings?.ai.reasoningEffort).toBe("xhigh");
+        expect(project.settings?.input.elevationIntake.explicitDimensionsAreAuthoritative).toBe(
+          true,
+        );
+        expect(project.settings?.framing.crippleStuds.splitGridStudsInsideOpenings).toBe(true);
       }),
     );
   });
@@ -627,165 +637,13 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
     it.effect("blocks generation when the manufacturing plan is missing", () =>
       Effect.gen(function* () {
         const cut2kitProjects = yield* Cut2KitProjects;
-        const fileSystem = yield* FileSystem.FileSystem;
-        const path = yield* Path.Path;
         const projectDir = yield* makeTempDir("cut2kit-no-plan-project-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
 
-        yield* fileSystem.writeFileString(
-          path.join(projectDir, "cut2kit.settings.json"),
-          JSON.stringify(
-            {
-              schemaVersion: "0.1.0",
-              project: {
-                projectId: "demo-prefab-kit-001",
-                jobName: "Prefab Demo House 001",
-                customer: "AXYZ Demo Homes",
-                site: "shop-floor",
-                units: "imperial",
-              },
-              production: {
-                primaryMode: "kitting",
-                allowLineSideQueue: true,
-                applications: ["siding"],
-              },
-              machineProfile: {
-                profileId: "AXYZ-DEMO",
-                postProcessorId: "axyz-a2mc",
-                stockCatalogId: "demo-sheet-stock",
-              },
-              discovery: {
-                searchRecursively: true,
-                preferredFolders: ["elevations"],
-                knownSettingsFileNames: ["cut2kit.settings.json"],
-              },
-              pdf: {
-                autoClassify: true,
-                fileAssignments: [
-                  {
-                    pathPattern: "elevations/front*.pdf",
-                    classification: "elevation",
-                    side: "front",
-                    application: "siding",
-                  },
-                ],
-              },
-              framing: {
-                studs: {
-                  enabled: true,
-                  onCenter: 16,
-                  originReference: "east",
-                  continuityPolicy: "stop_at_openings",
-                  openingEdgePolicy: "double_stud_at_openings",
-                  allowMidBreakPanelSeam: false,
-                  drywallAlignmentPreference: true,
-                  endCondition: "customer_defined",
-                },
-                joists: {
-                  enabled: true,
-                  direction: "east_west",
-                  onCenter: 16,
-                  originReference: "north",
-                  continuityPolicy: "stop_at_openings",
-                },
-                headersAndTrimmers: {
-                  autoGenerateWhenOpeningsExist: true,
-                  openingEdgeClearance: 0.125,
-                },
-              },
-              openings: {
-                windowPolicy: {
-                  requiresExplicitOpeningGeometry: true,
-                  doubleStudDefault: true,
-                  panelBreakPreference: "avoid_break_through_opening",
-                },
-                doorPolicy: {
-                  requiresExplicitOpeningGeometry: true,
-                  doubleStudDefault: true,
-                  panelBreakPreference: "avoid_break_through_opening",
-                },
-              },
-              panelization: {
-                strategy: "rule_driven",
-                targetPanelWidth: 48,
-                maxPanelWidth: 60,
-                maxPanelHeight: 144,
-                minPanelWidth: 8,
-                minPanelHeight: 8,
-                edgeTrimAllowance: 0.125,
-                kerfAllowance: 0,
-                seamPriority: ["align_to_structural_members"],
-                perApplication: {
-                  siding: {
-                    grainOrOrientation: "vertical",
-                    preferredBreakDirection: "vertical",
-                  },
-                  flooring: {
-                    grainOrOrientation: "customer_defined",
-                    preferredBreakDirection: "joist_aligned",
-                  },
-                  roofing: {
-                    grainOrOrientation: "slope_defined",
-                    preferredBreakDirection: "rafter_or_joist_aligned",
-                  },
-                },
-              },
-              nesting: {
-                strategy: "deterministic",
-                sortPriority: ["application"],
-                optimizeFor: "yield_then_sequence",
-                allowRotation: true,
-                groupByHouseSide: true,
-                maxConcurrentNests: 1,
-              },
-              queueing: {
-                kitting: {
-                  enabled: true,
-                  groupBy: "assembly_zone",
-                  sequence: ["front"],
-                  outputPrefix: "KIT",
-                },
-                lineSide: {
-                  enabled: true,
-                  groupBy: "production_flow",
-                  sequence: ["walls"],
-                  outputPrefix: "LINE",
-                },
-              },
-              output: {
-                root: "output",
-                manifestsDir: "output/manifests",
-                ncDir: "output/nc",
-                reportsDir: "output/reports",
-                overwritePolicy: "overwrite",
-              },
-              ai: {
-                enabled: true,
-                agentName: "Cut to Kit Agent",
-                provider: "codex",
-                model: "gpt-5.4",
-                reasoningEffort: "high",
-                preferFastServiceTierWhenAvailable: true,
-                approvalRequiredForRuleEdits: true,
-                approvalRequiredForQueueGeneration: true,
-                allowedTasks: ["author_a2mc_manufacturing_plan"],
-              },
-            },
-            null,
-            2,
-          ),
-        );
-        yield* fileSystem.makeDirectory(path.join(projectDir, "elevations"), { recursive: true });
-        yield* fileSystem.writeFileString(
-          path.join(projectDir, "elevations", "front.pdf"),
-          "%PDF-1.7\n",
-        );
+        const error = yield* cut2kitProjects.generateOutputs({ cwd: projectDir }).pipe(Effect.flip);
 
-        const project = yield* cut2kitProjects.inspectProject({ cwd: projectDir });
-
-        expect(project.status).toBe("error");
-        expect(project.issues.some((issue) => issue.code === "manufacturing_plan.missing")).toBe(
-          true,
-        );
+        expect(error.detail).toContain("manufacturing jobs");
       }),
     );
   });
@@ -850,17 +708,21 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
 
         expect(runCut2KitCodexJsonMock).toHaveBeenCalledTimes(3);
         expect(runCut2KitCodexJsonMock.mock.calls[0]?.[0]?.prompt).toContain(
-          "AI-first: interpret the elevation PDF and emit structured wall geometry",
+          "You are the elevation-intake agent for Cut2Kit.",
         );
         expect(runCut2KitCodexJsonMock.mock.calls[1]?.[0]?.prompt).toContain(
-          "This is the framing phase of the reusable summary workflow",
+          "You are the framing-planning agent for Cut2Kit.",
         );
         expect(runCut2KitCodexJsonMock.mock.calls[2]?.[0]?.prompt).toContain(
-          "This is the second AI-first conversion phase",
+          "You are the sheathing-planning agent for Cut2Kit.",
         );
 
+        expect(result.status).toBe("completed");
         expect(result.artifacts.geometryJsonPath).toBe(
-          "output/reports/wall-layouts/examples-elevation3.wall-geometry.json",
+          "output/reports/wall-layouts/examples-elevation3.extracted-elevation.json",
+        );
+        expect(result.artifacts.validationReportJsonPath).toBe(
+          "output/reports/wall-layouts/examples-elevation3.validation-report.json",
         );
         expect(result.artifacts.framingPdfPath).toBe(
           "output/reports/framing-layouts/examples-elevation3.framing-layout.pdf",
@@ -868,10 +730,11 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         expect(result.artifacts.sheathingPdfPath).toBe(
           "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.pdf",
         );
-        expect(result.framingLayout.validation.endStudsDoubled).toBe(true);
-        expect(result.sheathingLayout.summary.sheetCount).toBe(8);
-        expect(result.sheathingLayout.validation.firstPageFitsMargins).toBe(true);
-        expect(result.writtenPaths).toHaveLength(5);
+        expect(result.validationReport.readyForPackaging).toBe(true);
+        expect(result.framingLayout?.validation.endStudsDoubled).toBe(true);
+        expect(result.sheathingLayout?.summary.sheetCount).toBe(8);
+        expect(result.sheathingLayout?.validation.firstPageFitsMargins).toBe(true);
+        expect(result.writtenPaths).toHaveLength(6);
 
         const framingPdf = yield* fileSystem.readFile(
           path.join(projectDir, result.artifacts.framingPdfPath),
@@ -879,8 +742,103 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         const sheathingPdf = yield* fileSystem.readFile(
           path.join(projectDir, result.artifacts.sheathingPdfPath),
         );
+        const validationReport = yield* fileSystem.readFileString(
+          path.join(projectDir, result.artifacts.validationReportJsonPath),
+        );
         expect(framingPdf.byteLength).toBeGreaterThan(1000);
         expect(sheathingPdf.byteLength).toBeGreaterThan(1000);
+        expect(validationReport).toContain('"readyForPackaging": true');
+      }),
+    );
+
+    it.effect("stops after extracted geometry when ambiguity requires confirmation", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const projectDir = yield* makeTempDir("cut2kit-ai-ambiguity-project-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
+
+        const ambiguousGeometryDraft = {
+          ...makeGeometryDraft(),
+          wall: {
+            ...makeGeometryDraft().wall,
+            width: 0,
+          },
+        };
+
+        runCut2KitCodexJsonMock.mockReturnValueOnce(Effect.succeed(ambiguousGeometryDraft));
+
+        const result = yield* cut2kitProjects.generateWallLayout({
+          cwd: projectDir,
+          sourcePdfPath: "examples/elevation3.pdf",
+        });
+
+        expect(result.status).toBe("needs_confirmation");
+        expect(result.framingLayout).toBeNull();
+        expect(result.sheathingLayout).toBeNull();
+        expect(result.writtenPaths).toContain(
+          "output/reports/wall-layouts/examples-elevation3.extracted-elevation.json",
+        );
+        expect(result.writtenPaths).toContain(
+          "output/reports/wall-layouts/examples-elevation3.validation-report.json",
+        );
+
+        const validationReport = yield* fileSystem.readFileString(
+          path.join(projectDir, result.artifacts.validationReportJsonPath),
+        );
+        expect(validationReport).toContain('"requiresConfirmation": true');
+      }),
+    );
+
+    it.effect("returns validation_blocked when staged layouts fail deterministic checks", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const projectDir = yield* makeTempDir("cut2kit-ai-validation-project-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
+
+        const geometryDraft = makeGeometryDraft();
+        const framingDraft = makeFramingDraft(geometryDraft);
+        const sheathingDraft = {
+          ...makeSheathingDraft(geometryDraft),
+          sheets: makeSheathingDraft(geometryDraft).sheets.map((sheet, index) =>
+            index === 0
+              ? {
+                  ...sheet,
+                  cutouts: [
+                    {
+                      ...sheet.cutouts[0]!,
+                      right: 60,
+                    },
+                  ],
+                }
+              : sheet,
+          ),
+        };
+
+        runCut2KitCodexJsonMock
+          .mockReturnValueOnce(Effect.succeed(geometryDraft))
+          .mockReturnValueOnce(Effect.succeed(framingDraft))
+          .mockReturnValueOnce(Effect.succeed(sheathingDraft));
+
+        const result = yield* cut2kitProjects.generateWallLayout({
+          cwd: projectDir,
+          sourcePdfPath: "examples/elevation3.pdf",
+        });
+
+        expect(result.status).toBe("validation_blocked");
+        expect(result.writtenPaths).toContain(result.artifacts.validationReportJsonPath);
+        expect(result.writtenPaths).not.toContain(result.artifacts.framingPdfPath);
+        expect(result.writtenPaths).not.toContain(result.artifacts.sheathingPdfPath);
+
+        const validationReport = yield* fileSystem.readFileString(
+          path.join(projectDir, result.artifacts.validationReportJsonPath),
+        );
+        expect(validationReport).toContain('"readyForPackaging": false');
       }),
     );
   });

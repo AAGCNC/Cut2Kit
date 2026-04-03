@@ -3,7 +3,6 @@ import type {
   Cut2KitProject,
   Cut2KitSheathingLayout,
   Cut2KitWallGeometry,
-  FramingRuleSet,
   ModelSelection,
 } from "@t3tools/contracts";
 import { DEFAULT_MODEL_BY_PROVIDER } from "@t3tools/contracts";
@@ -16,6 +15,15 @@ const DEFAULT_PROMPT_REFERENCE_PATHS = {
   reusableSummaryPdf: ".docs/reusable_prompt_summary_framing_osb.pdf",
   framingExamplePdf: "examples/elevation3_framing_layout.pdf",
   sheathingExamplePdf: "examples/elevation3_osb_sheet_layout_with_fastening.pdf",
+} as const;
+const DEFAULT_PROMPT_TEMPLATE_PATHS = {
+  geometrySystem: ".docs/system-geometry.md",
+  geometryUser: ".docs/user-geometry.md",
+  framingSystem: ".docs/system-framing.md",
+  framingUser: ".docs/user-framing.md",
+  sheathingSystem: ".docs/system-sheathing.md",
+  sheathingUser: ".docs/user-sheathing.md",
+  validationChecklist: ".docs/validation-checklist.md",
 } as const;
 
 function slugify(input: string): string {
@@ -37,37 +45,60 @@ function normalizeReportsDir(project: Pick<Cut2KitProject, "settings">): string 
   return project.settings?.output.reportsDir ?? DEFAULT_REPORTS_DIR;
 }
 
+function normalizeArtifactDir(
+  project: Pick<Cut2KitProject, "settings">,
+  key: "wallLayoutsDir" | "framingLayoutsDir" | "sheathingLayoutsDir",
+  fallback: string,
+): string {
+  return project.settings?.artifacts[key] ?? fallback;
+}
+
 function jsonBlock(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-function buildReferenceSummarySection(referenceSummaryText: string | null | undefined): string[] {
-  if (!referenceSummaryText || referenceSummaryText.trim().length === 0) {
-    return [];
+function buildPromptTemplateSections(input: {
+  systemPromptPath: string;
+  userPromptPath: string;
+  validationChecklistPath: string;
+  promptTemplates: {
+    systemPrompt?: string | null | undefined;
+    userPrompt?: string | null | undefined;
+    validationChecklist?: string | null | undefined;
+  } | undefined;
+}): string[] {
+  const promptTemplates = input.promptTemplates;
+  if (
+    promptTemplates?.systemPrompt &&
+    promptTemplates?.userPrompt &&
+    promptTemplates?.validationChecklist
+  ) {
+    return [
+      "System prompt:",
+      promptTemplates.systemPrompt.trim(),
+      "Initial user prompt:",
+      promptTemplates.userPrompt.trim(),
+      "Validation checklist:",
+      promptTemplates.validationChecklist.trim(),
+    ];
   }
+
   return [
-    "Reusable workflow summary extracted from the canonical PDF:",
-    referenceSummaryText.trim(),
+    "Load and follow these prompt files before solving the wall layout:",
+    `- system prompt: ${input.systemPromptPath}`,
+    `- initial user prompt: ${input.userPromptPath}`,
+    `- validation checklist: ${input.validationChecklistPath}`,
   ];
 }
 
-export function resolveCut2KitFramingRules(
-  project: Pick<Cut2KitProject, "settings">,
-): FramingRuleSet | null {
-  const settings = project.settings;
-  if (!settings) {
-    return null;
-  }
-  if (settings.schemaVersion === "0.2.0") {
-    return settings.framingRules;
-  }
-  return settings.framing;
+export function resolveCut2KitPromptReferencePaths(_project: Pick<Cut2KitProject, "settings">) {
+  return DEFAULT_PROMPT_REFERENCE_PATHS;
 }
 
-export function resolveCut2KitPromptReferencePaths(project: Pick<Cut2KitProject, "settings">) {
+export function resolveCut2KitPromptTemplatePaths(project: Pick<Cut2KitProject, "settings">) {
   return {
-    ...DEFAULT_PROMPT_REFERENCE_PATHS,
-    ...project.settings?.ai?.promptReferencePaths,
+    ...DEFAULT_PROMPT_TEMPLATE_PATHS,
+    ...project.settings?.ai?.promptTemplatePaths,
   };
 }
 
@@ -80,17 +111,29 @@ export function buildWallLayoutArtifactPaths(
   sourcePdfPath: string,
 ) {
   const reportsDir = normalizeReportsDir(project);
+  const wallLayoutsDir = normalizeArtifactDir(project, "wallLayoutsDir", WALL_LAYOUT_OUTPUT_DIR);
+  const framingLayoutsDir = normalizeArtifactDir(
+    project,
+    "framingLayoutsDir",
+    FRAMING_LAYOUT_OUTPUT_DIR,
+  );
+  const sheathingLayoutsDir = normalizeArtifactDir(
+    project,
+    "sheathingLayoutsDir",
+    SHEATHING_LAYOUT_OUTPUT_DIR,
+  );
   const stem = buildFramingLayoutArtifactStem(sourcePdfPath);
   return {
     stem,
-    geometryRelativeDir: `${reportsDir}/${WALL_LAYOUT_OUTPUT_DIR}`,
-    framingRelativeDir: `${reportsDir}/${FRAMING_LAYOUT_OUTPUT_DIR}`,
-    sheathingRelativeDir: `${reportsDir}/${SHEATHING_LAYOUT_OUTPUT_DIR}`,
-    geometryJsonPath: `${reportsDir}/${WALL_LAYOUT_OUTPUT_DIR}/${stem}.wall-geometry.json`,
-    framingJsonPath: `${reportsDir}/${FRAMING_LAYOUT_OUTPUT_DIR}/${stem}.framing-layout.json`,
-    framingPdfPath: `${reportsDir}/${FRAMING_LAYOUT_OUTPUT_DIR}/${stem}.framing-layout.pdf`,
-    sheathingJsonPath: `${reportsDir}/${SHEATHING_LAYOUT_OUTPUT_DIR}/${stem}.sheathing-layout.json`,
-    sheathingPdfPath: `${reportsDir}/${SHEATHING_LAYOUT_OUTPUT_DIR}/${stem}.sheathing-layout.pdf`,
+    geometryRelativeDir: `${reportsDir}/${wallLayoutsDir}`,
+    framingRelativeDir: `${reportsDir}/${framingLayoutsDir}`,
+    sheathingRelativeDir: `${reportsDir}/${sheathingLayoutsDir}`,
+    geometryJsonPath: `${reportsDir}/${wallLayoutsDir}/${stem}.extracted-elevation.json`,
+    validationReportJsonPath: `${reportsDir}/${wallLayoutsDir}/${stem}.validation-report.json`,
+    framingJsonPath: `${reportsDir}/${framingLayoutsDir}/${stem}.framing-layout.json`,
+    framingPdfPath: `${reportsDir}/${framingLayoutsDir}/${stem}.framing-layout.pdf`,
+    sheathingJsonPath: `${reportsDir}/${sheathingLayoutsDir}/${stem}.sheathing-layout.json`,
+    sheathingPdfPath: `${reportsDir}/${sheathingLayoutsDir}/${stem}.sheathing-layout.pdf`,
   };
 }
 
@@ -116,31 +159,13 @@ export function resolveCut2KitAutomationModelSelection(
   fallbackModelSelection: ModelSelection | null | undefined,
 ): ModelSelection {
   const ai = project.settings?.ai ?? null;
-  const provider = ai?.provider === "claudeAgent" ? "claudeAgent" : "codex";
+  const provider = "codex";
   const model = ai?.model ?? fallbackModelSelection?.model ?? DEFAULT_MODEL_BY_PROVIDER[provider];
 
-  if (provider === "claudeAgent") {
-    const options =
-      ai?.reasoningEffort || ai?.preferFastServiceTierWhenAvailable
-        ? {
-            ...(ai?.reasoningEffort ? { effort: ai.reasoningEffort as never } : {}),
-            ...(ai?.preferFastServiceTierWhenAvailable ? { fastMode: true } : {}),
-          }
-        : fallbackModelSelection?.provider === "claudeAgent"
-          ? fallbackModelSelection.options
-          : undefined;
-    return {
-      provider,
-      model,
-      ...(options ? { options } : {}),
-    };
-  }
-
   const options =
-    ai?.reasoningEffort || ai?.preferFastServiceTierWhenAvailable
+    ai?.reasoningEffort
       ? {
-          ...(ai?.reasoningEffort ? { reasoningEffort: ai.reasoningEffort as never } : {}),
-          ...(ai?.preferFastServiceTierWhenAvailable ? { fastMode: true } : {}),
+          reasoningEffort: ai.reasoningEffort as never,
         }
       : fallbackModelSelection?.provider === "codex"
         ? fallbackModelSelection.options
@@ -172,7 +197,6 @@ export function buildCut2KitAgentPrompt(project: Cut2KitProject): string {
     summary: project.summary,
     issues: project.issues,
     sourceDocuments: project.sourceDocuments,
-    framingRules: project.framingRules,
     panelManifest: project.panelManifest,
     nestManifest: project.nestManifest,
     queueManifest: project.queueManifest,
@@ -226,11 +250,16 @@ export function buildCut2KitWallGeometryPrompt(input: {
   project: Cut2KitProject;
   sourcePdfPath: string;
   extractedText: string;
-  referenceSummaryText?: string | null | undefined;
+  promptTemplates?: {
+    systemPrompt?: string | null | undefined;
+    userPrompt?: string | null | undefined;
+    validationChecklist?: string | null | undefined;
+  };
 }): string {
   const artifactPaths = buildWallLayoutArtifactPaths(input.project, input.sourcePdfPath);
   const settingsFilePath = input.project.settingsFilePath ?? "cut2kit.settings.json";
   const promptReferencePaths = resolveCut2KitPromptReferencePaths(input.project);
+  const promptTemplatePaths = resolveCut2KitPromptTemplatePaths(input.project);
 
   const jsonTemplate: Cut2KitWallGeometry = {
     schemaVersion: "0.2.0",
@@ -270,37 +299,37 @@ export function buildCut2KitWallGeometryPrompt(input: {
     ],
     validation: {
       dimensionTextFound: true,
+      wallDimensionsResolved: true,
+      openingDimensionsResolved: true,
       wallBoundsFit: true,
       openingPairsResolved: true,
       openingTypesResolved: true,
       headHeightResolved: true,
       sillHeightResolved: true,
+      conflictsDetected: false,
+      ambiguityDetected: false,
+      requiresUserConfirmation: false,
       notes: [],
     },
     notes: [],
   };
 
   return [
-    "You are the Cut2Kit wall-intake runtime. This workflow is AI-first: interpret the elevation PDF and emit structured wall geometry that downstream deterministic validation and rendering can trust.",
+    ...buildPromptTemplateSections({
+      systemPromptPath: promptTemplatePaths.geometrySystem,
+      userPromptPath: promptTemplatePaths.geometryUser,
+      validationChecklistPath: promptTemplatePaths.validationChecklist,
+      promptTemplates: input.promptTemplates,
+    }),
     `Selected elevation PDF: ${input.sourcePdfPath}`,
     `Cut2Kit settings JSON: ${settingsFilePath}`,
-    `Write the structured wall-geometry JSON to: ${artifactPaths.geometryJsonPath}`,
-    `Canonical reusable process reference: ${promptReferencePaths.reusableSummaryPdf}`,
+    `Write the structured extracted-elevation JSON to: ${artifactPaths.geometryJsonPath}`,
     `Canonical framing example: ${promptReferencePaths.framingExamplePdf}`,
     `Canonical sheathing example: ${promptReferencePaths.sheathingExamplePdf}`,
-    "Follow the reusable process exactly: read the elevation, extract geometry from visible dimensioning, preserve the architectural opening widths, and prepare the geometry for a framing prompt first and an OSB prompt second.",
     "Use the elevation image as the visual source of truth and use the extracted text below as supporting OCR/dimension context. Do not estimate dimensions from pixel scale when dimension text is available.",
     "Output only valid JSON matching the provided schema template. Do not include markdown fences.",
-    ...buildReferenceSummarySection(input.referenceSummaryText),
     "Dimension/OCR text extracted from the elevation PDF:",
     input.extractedText.trim().length > 0 ? input.extractedText.trim() : "(no text extracted)",
-    "Required behaviors:",
-    "- preserve the full wall width and wall height",
-    "- resolve each opening as either a window or a door",
-    "- preserve clear opening width and height",
-    "- resolve a common head height when the drawing supports it",
-    "- resolve a common window sill height when the drawing supports it",
-    "- record any ambiguity in notes instead of inventing extra geometry",
     "Emit JSON with this exact shape:",
     jsonBlock(jsonTemplate),
   ].join("\n\n");
@@ -310,11 +339,16 @@ export function buildCut2KitFramingLayoutPrompt(input: {
   project: Cut2KitProject;
   sourcePdfPath: string;
   geometry?: Cut2KitWallGeometry | undefined;
-  referenceSummaryText?: string | null | undefined;
+  promptTemplates?: {
+    systemPrompt?: string | null | undefined;
+    userPrompt?: string | null | undefined;
+    validationChecklist?: string | null | undefined;
+  };
 }): string {
   const artifactPaths = buildWallLayoutArtifactPaths(input.project, input.sourcePdfPath);
   const settingsFilePath = input.project.settingsFilePath ?? "cut2kit.settings.json";
   const promptReferencePaths = resolveCut2KitPromptReferencePaths(input.project);
+  const promptTemplatePaths = resolveCut2KitPromptTemplatePaths(input.project);
   const geometry = input.geometry ?? {
     schemaVersion: "0.2.0" as const,
     sourcePdfPath: input.sourcePdfPath,
@@ -341,11 +375,16 @@ export function buildCut2KitFramingLayoutPrompt(input: {
     openings: [],
     validation: {
       dimensionTextFound: false,
+      wallDimensionsResolved: false,
+      openingDimensionsResolved: false,
       wallBoundsFit: true,
       openingPairsResolved: true,
       openingTypesResolved: true,
       headHeightResolved: true,
       sillHeightResolved: true,
+      conflictsDetected: false,
+      ambiguityDetected: true,
+      requiresUserConfirmation: true,
       notes: [],
     },
     notes: [],
@@ -408,16 +447,17 @@ export function buildCut2KitFramingLayoutPrompt(input: {
   };
 
   return [
-    "You are the Cut2Kit framing-generation runtime. This step is AI-first and must use the supplied wall geometry plus project settings to author the framing layout output.",
+    ...buildPromptTemplateSections({
+      systemPromptPath: promptTemplatePaths.framingSystem,
+      userPromptPath: promptTemplatePaths.framingUser,
+      validationChecklistPath: promptTemplatePaths.validationChecklist,
+      promptTemplates: input.promptTemplates,
+    }),
     `Selected elevation PDF: ${input.sourcePdfPath}`,
     `Cut2Kit settings JSON: ${settingsFilePath}`,
     `Write the structured framing-layout JSON to: ${artifactPaths.framingJsonPath}`,
     `Cut2Kit will deterministically render the framing-layout PDF to: ${artifactPaths.framingPdfPath}`,
     `Canonical framing example: ${promptReferencePaths.framingExamplePdf}`,
-    "This is the framing phase of the reusable summary workflow: geometry already exists, now apply the framing prompt pattern before any sheathing work happens.",
-    "Obey the settings file exactly when it defines member size, spacing, jamb behavior, plate orientation, output preferences, and labeling. When settings are silent, preserve the established example behavior: 2x6 SPF, top and bottom members shown flat, doubled end studs, one load-bearing stud at each side of each opening, left-side jamb shifted 1.5 in left to preserve the clear opening width, 16 in on-center infill from the left wall edge, and cripple studs above heads and below window sills as needed.",
-    "Do not replace the framing prompt with a simplified deterministic assumption set. The layout must reflect interpretation of the wall geometry and framing conventions together.",
-    ...buildReferenceSummarySection(input.referenceSummaryText),
     "Wall geometry JSON:",
     jsonBlock(geometry),
     "Output only valid JSON matching this schema template:",
@@ -430,11 +470,16 @@ export function buildCut2KitSheathingLayoutPrompt(input: {
   sourcePdfPath: string;
   geometry: Cut2KitWallGeometry;
   framingLayout: Cut2KitFramingLayoutV0_2_0;
-  referenceSummaryText?: string | null | undefined;
+  promptTemplates?: {
+    systemPrompt?: string | null | undefined;
+    userPrompt?: string | null | undefined;
+    validationChecklist?: string | null | undefined;
+  };
 }): string {
   const artifactPaths = buildWallLayoutArtifactPaths(input.project, input.sourcePdfPath);
   const settingsFilePath = input.project.settingsFilePath ?? "cut2kit.settings.json";
   const promptReferencePaths = resolveCut2KitPromptReferencePaths(input.project);
+  const promptTemplatePaths = resolveCut2KitPromptTemplatePaths(input.project);
 
   const jsonTemplate: Cut2KitSheathingLayout = {
     schemaVersion: "0.2.0",
@@ -496,16 +541,17 @@ export function buildCut2KitSheathingLayoutPrompt(input: {
   };
 
   return [
-    "You are the Cut2Kit sheathing-generation runtime. This is the second AI-first conversion phase and must happen after framing generation, not instead of it.",
+    ...buildPromptTemplateSections({
+      systemPromptPath: promptTemplatePaths.sheathingSystem,
+      userPromptPath: promptTemplatePaths.sheathingUser,
+      validationChecklistPath: promptTemplatePaths.validationChecklist,
+      promptTemplates: input.promptTemplates,
+    }),
     `Selected elevation PDF: ${input.sourcePdfPath}`,
     `Cut2Kit settings JSON: ${settingsFilePath}`,
     `Write the structured sheathing-layout JSON to: ${artifactPaths.sheathingJsonPath}`,
     `Cut2Kit will deterministically render the sheathing-layout PDF to: ${artifactPaths.sheathingPdfPath}`,
     `Canonical sheathing example: ${promptReferencePaths.sheathingExamplePdf}`,
-    "Follow the reusable workflow: use the same wall geometry/framing context, generate the overall OSB panel layout, generate sheet-by-sheet cutout definitions, then leave deterministic page-fit validation and rendering to Cut2Kit.",
-    "Preserve the established example behavior unless settings override it: 7/16 in OSB, nominal 4 ft x 8 ft sheets, openings remain uncovered, overall panel layout page, sheet-by-sheet cutout pages, a ripped final sheet when needed, and a fastening/panel-edge notes page.",
-    "Do not cover windows or doors with finished panels. Every opening void must be removed by sheet cutouts or edge boundaries.",
-    ...buildReferenceSummarySection(input.referenceSummaryText),
     "Wall geometry JSON:",
     jsonBlock(input.geometry),
     "Framing layout JSON:",

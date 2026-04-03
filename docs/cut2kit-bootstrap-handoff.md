@@ -1,5 +1,19 @@
 # Cut2Kit Bootstrap Handoff
 
+## Superseding Note
+
+The current wall-layout direction is now explicitly AI-first at runtime:
+
+- GPT-5.4 through the existing Codex/T3Code harness performs geometry extraction, framing generation,
+  and sheathing generation
+- deterministic code validates, renders, and packages outputs
+- prompt content is loaded from `.docs/system-*.md`, `.docs/user-*.md`, and
+  `.docs/validation-checklist.md`
+- the canonical settings example is `docs/cut2kit.settings.example.json`
+
+Any older interpretation in this handoff that implies a deterministic replacement for the wall
+conversion layer should be considered obsolete.
+
 ## Status
 
 The first Cut2Kit vertical slice is mostly implemented.
@@ -64,6 +78,7 @@ The repo now has:
 ### Fixtures/docs
 
 - Added:
+  - `docs/cut2kit.settings.example.json`
   - `examples/cut2kit.settings.example.json`
   - `examples/prefab-demo-project/cut2kit.settings.json`
   - source PDFs under `examples/prefab-demo-project/`
@@ -103,7 +118,7 @@ These still need confirmation in an environment with the required desktop runtim
 
 - opening a directory through the desktop shell
 - visually confirming the left-side explorer and project workspace render correctly
-- running placeholder generation end-to-end from the UI
+- running wall layout generation end-to-end from the UI
 - preparing and sending the Cut to Kit Agent thread from the UI
 
 ## Important Notes
@@ -144,6 +159,7 @@ These still need confirmation in an environment with the required desktop runtim
 - `apps/web/src/wsNativeApi.test.ts`
 - `apps/web/src/routeTree.gen.ts`
 - `examples/cut2kit.settings.example.json`
+- `docs/cut2kit.settings.example.json`
 - `examples/prefab-demo-project/cut2kit.settings.json`
 - `examples/prefab-demo-project/elevations/front-wall.pdf`
 - `examples/prefab-demo-project/elevations/rear-wall.pdf`
@@ -160,7 +176,7 @@ These still need confirmation in an environment with the required desktop runtim
 
 - `.docs/Cut2Kit_Scope_Spec.md`
 - `.docs/a2mc-nc-processing-spec.md`
-- `.docs/cut2kit.settings.example.json`
+- `docs/cut2kit.settings.example.json`
 
 I did not use those as implementation targets and did not reconcile them. Treat them as user-side context or concurrent edits.
 

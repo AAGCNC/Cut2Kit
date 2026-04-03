@@ -1,6 +1,10 @@
 import PDFDocument from "pdfkit";
 
-import type { Cut2KitRenderingSettings, Cut2KitSheathingLayout } from "@t3tools/contracts";
+import type {
+  Cut2KitFasteningSettings,
+  Cut2KitRenderingSettings,
+  Cut2KitSheathingLayout,
+} from "@t3tools/contracts";
 
 import { computeFitScale, formatDistance, resolvePageDimensions } from "./pageGeometry.ts";
 
@@ -323,11 +327,11 @@ function drawFasteningPage(
 export async function renderSheathingLayoutPdf(input: {
   layout: Cut2KitSheathingLayout;
   rendering: Cut2KitRenderingSettings;
-  output: {
+  pages: {
     includeOverallLayoutPage: boolean;
     includePerSheetCutoutPages: boolean;
-    includeFasteningPage: boolean;
   };
+  fastening: Cut2KitFasteningSettings;
 }): Promise<Uint8Array> {
   const page = resolvePageDimensions(
     input.rendering.sheathing.pageSize,
@@ -341,7 +345,7 @@ export async function renderSheathingLayoutPdf(input: {
 
   const completed = collectPdf(doc);
 
-  if (input.output.includeOverallLayoutPage) {
+  if (input.pages.includeOverallLayoutPage) {
     drawOverallLayoutPage(doc, input.layout, input.rendering);
   }
 
@@ -351,13 +355,13 @@ export async function renderSheathingLayoutPdf(input: {
     cutoutPages.push(input.layout.sheets.slice(index, index + cutoutDetailsPerPage));
   }
 
-  if (input.output.includePerSheetCutoutPages) {
+  if (input.pages.includePerSheetCutoutPages) {
     cutoutPages.forEach((sheets, index) => {
       drawCutoutPage(doc, input.layout, input.rendering, sheets, index + 1, cutoutPages.length);
     });
   }
 
-  if (input.output.includeFasteningPage) {
+  if (input.fastening.enabled && input.fastening.includePage) {
     drawFasteningPage(doc, input.layout, input.rendering);
   }
 

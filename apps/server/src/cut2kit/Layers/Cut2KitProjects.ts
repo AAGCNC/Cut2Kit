@@ -26,12 +26,13 @@ import {
   type Cut2KitSheathingLayout,
   type Cut2KitSettings,
   type Cut2KitSourceDocument,
+  type Cut2KitValidationReportIssue,
   type Cut2KitWallGeometry,
+  type Cut2KitWallValidationReport,
   Cut2KitFramingLayout as Cut2KitFramingLayoutSchema,
   Cut2KitFramingLayoutV0_2_0 as Cut2KitFramingLayoutV0_2_0Schema,
   Cut2KitManufacturingPlan as Cut2KitManufacturingPlanSchema,
   Cut2KitSettings as Cut2KitSettingsSchema,
-  Cut2KitSettingsV0_2_0 as Cut2KitSettingsV0_2_0Schema,
   Cut2KitSheathingLayout as Cut2KitSheathingLayoutSchema,
   Cut2KitWallGeometry as Cut2KitWallGeometrySchema,
   type NCJobRecord,
@@ -46,8 +47,7 @@ import {
   buildCut2KitWallGeometryPrompt,
   buildWallLayoutArtifactPaths,
   resolveCut2KitAutomationModelSelection,
-  resolveCut2KitFramingRules,
-  resolveCut2KitPromptReferencePaths,
+  resolveCut2KitPromptTemplatePaths,
 } from "@t3tools/shared/cut2kit";
 import { formatSchemaError, fromLenientJson } from "@t3tools/shared/schemaJson";
 
@@ -59,6 +59,9 @@ import {
 import {
   runCut2KitCodexJson,
 } from "../ai/codexStructuredGeneration.ts";
+import {
+  loadCut2KitPromptTemplateBundle,
+} from "../ai/promptTemplates.ts";
 import { A2mcPostError, getA2mcTargetController, renderA2mcProgram } from "../cam/A2mcPost.ts";
 import { renderFramingLayoutPdf } from "../framing/renderFramingLayoutPdf.ts";
 import { computeFitScale, resolvePageDimensions } from "../rendering/pageGeometry.ts";
@@ -76,7 +79,7 @@ const ManufacturingPlanJson = fromLenientJson(Cut2KitManufacturingPlanSchema);
 const FramingLayoutJson = fromLenientJson(Cut2KitFramingLayoutSchema);
 const execFileAsync = promisify(execFile);
 
-type Cut2KitWallWorkflowSettings = typeof Cut2KitSettingsV0_2_0Schema.Type;
+type Cut2KitWallWorkflowSettings = typeof Cut2KitSettingsSchema.Type;
 
 const DEFAULT_OUTPUT_SETTINGS: Cut2KitOutputSettings = {
   root: "output",
@@ -212,14 +215,22 @@ function classifyEntry(input: { relativePath: string; kind: ProjectFileRecord["k
       extension: "json",
     };
   }
-  if (normalizedPath.startsWith("output/reports/") && normalizedPath.endsWith(".pdf")) {
+  if (
+    normalizedPath.endsWith(".framing-layout.pdf") ||
+    normalizedPath.endsWith(".sheathing-layout.pdf")
+  ) {
     return {
       classification: "pdf",
       role: "generated-report",
       extension: "pdf",
     };
   }
-  if (normalizedPath.startsWith("output/reports/") && normalizedPath.endsWith(".json")) {
+  if (
+    normalizedPath.endsWith(".framing-layout.json") ||
+    normalizedPath.endsWith(".sheathing-layout.json") ||
+    normalizedPath.endsWith(".extracted-elevation.json") ||
+    normalizedPath.endsWith(".validation-report.json")
+  ) {
     return {
       classification: "json",
       role: "generated-report",
@@ -386,7 +397,7 @@ function inferSourceDocument(
   settings: Cut2KitSettings | null,
 ): Cut2KitSourceDocument {
   const fileName = nodePath.basename(relativePath);
-  const assignment = settings?.pdf.fileAssignments.find((candidate) =>
+  const assignment = settings?.input.fileAssignments.find((candidate) =>
     matchAssignmentPattern(relativePath, candidate),
   );
   if (assignment) {
@@ -451,22 +462,22 @@ function inferSourceDocument(
 
 function hasPdfAssignmentMatch(relativePath: string, settings: Cut2KitSettings | null): boolean {
   return (
-    settings?.pdf.fileAssignments.some((candidate) =>
+    settings?.input.fileAssignments.some((candidate) =>
       matchAssignmentPattern(relativePath, candidate),
     ) ?? false
   );
 }
 
-function getPrimaryQueueMode(settings: Cut2KitSettings | null): Cut2KitQueueMode {
-  return settings?.production.primaryMode === "line-side" ? "line-side" : "kitting";
+function getPrimaryQueueMode(_settings: Cut2KitSettings | null): Cut2KitQueueMode {
+  return "kitting";
 }
 
 function resolveOutputSettings(settings: Cut2KitSettings | null): Cut2KitOutputSettings {
   return settings?.output ?? DEFAULT_OUTPUT_SETTINGS;
 }
 
-function resolveQueueingSettings(settings: Cut2KitSettings | null): Cut2KitQueueingSettings {
-  return settings?.queueing ?? DEFAULT_QUEUEING_SETTINGS;
+function resolveQueueingSettings(_settings: Cut2KitSettings | null): Cut2KitQueueingSettings {
+  return DEFAULT_QUEUEING_SETTINGS;
 }
 
 function projectIdFor(settings: Cut2KitSettings | null, cwd: string): string {
@@ -813,7 +824,7 @@ function roundToQuarterInch(value: number): number {
 function isWallWorkflowSettings(
   settings: Cut2KitSettings | null,
 ): settings is Cut2KitWallWorkflowSettings {
-  return settings?.schemaVersion === "0.2.0";
+  return settings !== null;
 }
 
 function normalizeOpening<T extends Cut2KitWallGeometry["openings"][number]>(opening: T): T {
@@ -837,14 +848,23 @@ function withinTolerance(left: number, right: number, tolerance = 0.25): boolean
 }
 
 function buildGeometryValidation(
-  geometry: Cut2KitWallGeometry,
-  extractedText: string,
+  input: {
+    geometry: Cut2KitWallGeometry;
+    extractedText: string;
+    settings: Cut2KitWallWorkflowSettings;
+  },
 ): Cut2KitWallGeometry["validation"] {
+  const geometry = input.geometry;
   const windows = geometry.openings.filter((opening) => opening.kind === "window");
   const notes: string[] = [];
+  const dimensionTextFound = /\d+'\-\d+"|\d+/.test(input.extractedText);
+  const wallDimensionsResolved =
+    dimensionTextFound && geometry.wall.width > 0 && geometry.wall.height > 0;
   const openingPairsResolved = geometry.openings.every(
     (opening) => opening.width > 0 && opening.height > 0,
   );
+  const openingDimensionsResolved =
+    geometry.openings.length === 0 || (dimensionTextFound && openingPairsResolved);
   const wallBoundsFit = geometry.openings.every(
     (opening) =>
       opening.left >= geometry.wall.pageLeft &&
@@ -858,14 +878,39 @@ function buildGeometryValidation(
   const sillHeightResolved =
     windows.length === 0 ||
     windows.every((opening) => withinTolerance(opening.bottom, geometry.commonHeights.windowSill));
+  const conflictsDetected = false;
+  const ambiguityDetected =
+    !dimensionTextFound ||
+    !wallDimensionsResolved ||
+    !openingDimensionsResolved ||
+    !openingPairsResolved ||
+    !headHeightResolved ||
+    !sillHeightResolved;
+  const requiresUserConfirmation =
+    ambiguityDetected &&
+    input.settings.input.elevationIntake.ambiguityHandling.requireUserConfirmationToContinue;
 
+  if (!dimensionTextFound) {
+    notes.push("Explicit dimension text was not detected reliably in the elevation PDF.");
+  }
+  if (!wallDimensionsResolved) {
+    notes.push("Overall wall width and height are not fully resolved from explicit dimensions.");
+  }
+  if (!openingDimensionsResolved) {
+    notes.push("Opening widths/heights are incomplete or not tied back to explicit dimensions.");
+  }
   if (!wallBoundsFit) notes.push("One or more openings extend beyond the detected wall bounds.");
   if (!openingPairsResolved) notes.push("At least one opening has invalid paired dimensions.");
   if (!headHeightResolved) notes.push("Opening head heights do not resolve to a common value.");
   if (!sillHeightResolved) notes.push("Window sill heights do not resolve to a common value.");
+  if (requiresUserConfirmation) {
+    notes.push("User confirmation is required before continuing with ambiguous wall geometry.");
+  }
 
   return {
-    dimensionTextFound: /\d+'\-\d+"|\d+/.test(extractedText),
+    dimensionTextFound,
+    wallDimensionsResolved,
+    openingDimensionsResolved,
     wallBoundsFit,
     openingPairsResolved,
     openingTypesResolved: geometry.openings.every(
@@ -873,6 +918,9 @@ function buildGeometryValidation(
     ),
     headHeightResolved,
     sillHeightResolved,
+    conflictsDetected,
+    ambiguityDetected,
+    requiresUserConfirmation,
     notes,
   };
 }
@@ -882,6 +930,7 @@ function normalizeWallGeometry(input: {
   sourcePdfPath: string;
   settingsFilePath: string;
   extractedText: string;
+  settings: Cut2KitWallWorkflowSettings;
 }): Cut2KitWallGeometry {
   const openings = input.geometry.openings
     .map((opening) => normalizeOpening(opening))
@@ -918,7 +967,11 @@ function normalizeWallGeometry(input: {
     openings,
   };
 
-  const validation = buildGeometryValidation(geometry, input.extractedText);
+  const validation = buildGeometryValidation({
+    geometry,
+    extractedText: input.extractedText,
+    settings: input.settings,
+  });
   return {
     ...geometry,
     validation,
@@ -1244,6 +1297,157 @@ function normalizeSheathingLayout(input: {
   };
 }
 
+function geometryNeedsConfirmation(
+  geometry: Cut2KitWallGeometry,
+  settings: Cut2KitWallWorkflowSettings,
+): boolean {
+  const ambiguityHandling = settings.input.elevationIntake.ambiguityHandling;
+  const missingDimensions =
+    !geometry.validation.dimensionTextFound || !geometry.validation.wallDimensionsResolved;
+  const conflictingDimensions = geometry.validation.conflictsDetected;
+  const incompleteOpenings =
+    !geometry.validation.openingDimensionsResolved || !geometry.validation.openingPairsResolved;
+
+  return (
+    (ambiguityHandling.stopOnMissingDimensions && missingDimensions) ||
+    (ambiguityHandling.stopOnConflictingDimensions && conflictingDimensions) ||
+    (ambiguityHandling.stopOnIncompleteOpeningGeometry && incompleteOpenings) ||
+    geometry.validation.ambiguityDetected
+  );
+}
+
+function geometryCanContinue(geometry: Cut2KitWallGeometry): boolean {
+  return geometry.validation.wallBoundsFit && geometry.validation.openingTypesResolved;
+}
+
+function framingValidationPassed(validation: Cut2KitFramingLayoutV0_2_0["validation"]): boolean {
+  return (
+    validation.wallWidthMatchesElevation &&
+    validation.wallHeightMatchesElevation &&
+    validation.openingSizesMatchElevation &&
+    validation.headHeightMatchesElevation &&
+    validation.sillHeightMatchesElevation &&
+    validation.endStudsDoubled &&
+    validation.jambStudsPresent &&
+    validation.commonStudSpacingApplied &&
+    validation.noCommonStudThroughVoid &&
+    validation.plateOrientationMatchesExpectation
+  );
+}
+
+function sheathingValidationPassed(validation: Cut2KitSheathingLayout["validation"]): boolean {
+  return (
+    validation.openingCoverageRemoved &&
+    validation.sheetCountMatchesLayout &&
+    validation.terminalRipComputed &&
+    validation.cutoutsWithinSheets &&
+    validation.firstPageFitsMargins
+  );
+}
+
+function buildWallValidationReport(input: {
+  sourcePdfPath: string;
+  settingsFilePath: string;
+  checklistPath: string;
+  settings: Cut2KitWallWorkflowSettings;
+  geometry: Cut2KitWallGeometry;
+  framingLayout: Cut2KitFramingLayoutV0_2_0 | null;
+  sheathingLayout: Cut2KitSheathingLayout | null;
+  confirmedAmbiguityProceeding: boolean;
+}): Cut2KitWallValidationReport {
+  const issues: Cut2KitValidationReportIssue[] = [];
+  const requiresConfirmation =
+    geometryNeedsConfirmation(input.geometry, input.settings) &&
+    !input.confirmedAmbiguityProceeding;
+  const geometryStatus =
+    requiresConfirmation
+      ? "needs_confirmation"
+      : geometryCanContinue(input.geometry)
+        ? "pass"
+        : "blocked";
+  const readyForFraming = geometryStatus === "pass";
+
+  input.geometry.validation.notes.forEach((message) => {
+    issues.push({
+      stage: "geometry",
+      severity: geometryStatus === "pass" ? "warning" : "error",
+      code: geometryStatus === "pass" ? "geometry.warning" : "geometry.blocking",
+      message,
+    });
+  });
+
+  const framingStatus =
+    input.framingLayout === null
+      ? "not_run"
+      : framingValidationPassed(input.framingLayout.validation)
+        ? "pass"
+        : "blocked";
+  if (input.framingLayout) {
+    input.framingLayout.validation.notes.forEach((message) => {
+      issues.push({
+        stage: "framing",
+        severity: framingStatus === "pass" ? "warning" : "error",
+        code: framingStatus === "pass" ? "framing.warning" : "framing.blocking",
+        message,
+      });
+    });
+  }
+
+  const readyForSheathing = readyForFraming && framingStatus === "pass";
+  const sheathingStatus =
+    input.sheathingLayout === null
+      ? "not_run"
+      : sheathingValidationPassed(input.sheathingLayout.validation)
+        ? "pass"
+        : "blocked";
+  if (input.sheathingLayout) {
+    input.sheathingLayout.validation.notes.forEach((message) => {
+      issues.push({
+        stage: "sheathing",
+        severity: sheathingStatus === "pass" ? "warning" : "error",
+        code: sheathingStatus === "pass" ? "sheathing.warning" : "sheathing.blocking",
+        message,
+        });
+    });
+  }
+
+  const readyForPackaging = readyForSheathing && sheathingStatus === "pass";
+
+  return {
+    schemaVersion: "0.2.0",
+    sourcePdfPath: input.sourcePdfPath,
+    settingsFilePath: input.settingsFilePath,
+    checklistPath: input.checklistPath,
+    ambiguity: {
+      detected: input.geometry.validation.ambiguityDetected,
+      requiresConfirmation,
+      notes: input.geometry.validation.notes.filter((note) => /ambigu|explicit dimension|confirmation/i.test(note)),
+    },
+    geometry: {
+      status: geometryStatus,
+      checks: input.geometry.validation,
+    },
+    framing:
+      input.framingLayout === null
+        ? null
+        : {
+            status: framingStatus,
+            checks: input.framingLayout.validation,
+          },
+    sheathing:
+      input.sheathingLayout === null
+        ? null
+        : {
+            status: sheathingStatus,
+            checks: input.sheathingLayout.validation,
+          },
+    issues,
+    readyForFraming,
+    readyForSheathing,
+    readyForPackaging,
+  };
+}
+
 async function readPdfTextAbsolute(absolutePdfPath: string): Promise<string> {
   try {
     const { stdout } = await execFileAsync("pdftotext", [absolutePdfPath, "-"]);
@@ -1306,9 +1510,9 @@ function deriveProject(input: {
   if (manufacturingPlanFiles.length === 0) {
     issues.push(
       makeIssue(
-        "error",
+        "warning",
         "manufacturing_plan.missing",
-        `Expected ${MANUFACTURING_PLAN_FILE_NAME} somewhere inside the project directory before A2MC outputs can be generated.`,
+        `No ${MANUFACTURING_PLAN_FILE_NAME} file was found. A2MC output generation stays unavailable until one is added.`,
       ),
     );
   }
@@ -1409,20 +1613,6 @@ function deriveProject(input: {
     );
   }
 
-  if (
-    input.settings !== null &&
-    !input.settings.machineProfile.postProcessorId.toLowerCase().includes("a2mc")
-  ) {
-    issues.push(
-      makeIssue(
-        "warning",
-        "machine_profile.post_processor_mismatch",
-        "Machine profile postProcessorId does not reference A2MC, but Cut2Kit currently emits A2MC NC only.",
-        input.settingsFilePath ?? undefined,
-      ),
-    );
-  }
-
   const expectedManifestPaths = [
     `${outputSettings.manifestsDir}/panel-manifest.json`,
     `${outputSettings.manifestsDir}/nest-manifest.json`,
@@ -1451,7 +1641,6 @@ function deriveProject(input: {
     files: input.files.toSorted(compareProjectFiles),
     issues,
     sourceDocuments,
-    framingRules: input.settings ? resolveCut2KitFramingRules({ settings: input.settings }) : null,
     panelCandidates,
     panelManifest,
     nestManifest,
@@ -1700,7 +1889,7 @@ export const makeCut2KitProjects = Effect.gen(function* () {
         cwd: project.cwd,
         operation: "generateWallLayout.validateSettings",
         detail:
-          "AI-first wall generation requires schemaVersion 0.2.0 settings with pdfWorkflow, framing, sheathing, fastening, and rendering sections.",
+          "AI-first wall generation requires schemaVersion 0.3.0 settings with input, artifacts, framing, sheathing, fastening, rendering, output, and ai sections.",
       });
     }
 
@@ -1722,7 +1911,6 @@ export const makeCut2KitProjects = Effect.gen(function* () {
       (issue) =>
         issue.severity === "error" &&
         !issue.code.startsWith("manufacturing_plan.") &&
-        issue.code !== "machine_profile.post_processor_mismatch" &&
         (issue.path === undefined ||
           issue.path === project.settingsFilePath ||
           issue.path === input.sourcePdfPath),
@@ -1744,16 +1932,35 @@ export const makeCut2KitProjects = Effect.gen(function* () {
           "The AI-first wall workflow currently runs only through the Codex/OpenAI GPT-5.4 harness.",
       });
     }
-    const promptReferencePaths = resolveCut2KitPromptReferencePaths(project);
-    const referenceSummaryText = yield* Effect.tryPromise({
-      try: () => readPdfTextAbsolute(nodePath.join(project.cwd, promptReferencePaths.reusableSummaryPdf)),
-      catch: (error) =>
-        new Cut2KitProjectsError({
-          cwd: project.cwd,
-          operation: "generateWallLayout.readReusableSummary",
-          detail: error instanceof Error ? error.message : String(error),
-        }),
-    }).pipe(Effect.catch(() => Effect.succeed("")));
+    if (modelSelection.model !== "gpt-5.4") {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "generateWallLayout.validateModel",
+        detail: "The wall workflow requires GPT-5.4 as the runtime reasoning model.",
+      });
+    }
+    if ((modelSelection.options as { reasoningEffort?: string } | undefined)?.reasoningEffort !== "xhigh") {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "generateWallLayout.validateReasoningEffort",
+        detail: "The wall workflow requires xhigh reasoning effort for GPT-5.4 runs.",
+      });
+    }
+    const promptTemplatePaths = resolveCut2KitPromptTemplatePaths(project);
+    const promptTemplateBundle = yield* loadCut2KitPromptTemplateBundle({
+      cwd: project.cwd,
+      paths: promptTemplatePaths,
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new Cut2KitProjectsError({
+            cwd: project.cwd,
+            operation: "generateWallLayout.loadPromptTemplates",
+            detail: cause.detail,
+            cause,
+          }),
+      ),
+    );
     const extractedText = yield* Effect.tryPromise({
       try: () => readPdfText(project.cwd, input.sourcePdfPath),
       catch: (error) =>
@@ -1786,7 +1993,11 @@ export const makeCut2KitProjects = Effect.gen(function* () {
         project,
         sourcePdfPath: input.sourcePdfPath,
         extractedText,
-        referenceSummaryText,
+        promptTemplates: {
+          systemPrompt: promptTemplateBundle.geometrySystem,
+          userPrompt: promptTemplateBundle.geometryUser,
+          validationChecklist: promptTemplateBundle.validationChecklist,
+        },
       }),
       outputSchema: Cut2KitWallGeometrySchema,
       modelSelection,
@@ -1808,7 +2019,57 @@ export const makeCut2KitProjects = Effect.gen(function* () {
       sourcePdfPath: input.sourcePdfPath,
       settingsFilePath,
       extractedText,
+      settings,
     });
+
+    const writtenPaths: string[] = [];
+    writtenPaths.push(
+      yield* writeWorkspaceFile(project.cwd, artifactPaths.geometryJsonPath, encodeJsonFile(geometry)),
+    );
+
+    const geometryValidationReport = buildWallValidationReport({
+      sourcePdfPath: input.sourcePdfPath,
+      settingsFilePath,
+      checklistPath: promptTemplatePaths.validationChecklist,
+      settings,
+      geometry,
+      framingLayout: null,
+      sheathingLayout: null,
+      confirmedAmbiguityProceeding: input.confirmedAmbiguityProceeding === true,
+    });
+    writtenPaths.push(
+      yield* writeWorkspaceFile(
+        project.cwd,
+        artifactPaths.validationReportJsonPath,
+        encodeJsonFile(geometryValidationReport),
+      ),
+    );
+
+    if (geometryValidationReport.ambiguity.requiresConfirmation) {
+      yield* workspaceEntries.invalidate(project.cwd);
+      const refreshedProject = yield* inspectProject({ cwd: project.cwd });
+      return {
+        status: "needs_confirmation",
+        statusMessage:
+          geometryValidationReport.ambiguity.notes[0] ??
+          "The elevation geometry is ambiguous and requires user confirmation before framing and sheathing generation can continue.",
+        project: refreshedProject,
+        sourcePdfPath: input.sourcePdfPath,
+        artifacts: {
+          geometryJsonPath: artifactPaths.geometryJsonPath,
+          validationReportJsonPath: artifactPaths.validationReportJsonPath,
+          framingJsonPath: artifactPaths.framingJsonPath,
+          framingPdfPath: artifactPaths.framingPdfPath,
+          sheathingJsonPath: artifactPaths.sheathingJsonPath,
+          sheathingPdfPath: artifactPaths.sheathingPdfPath,
+        },
+        geometry,
+        framingLayout: null,
+        sheathingLayout: null,
+        validationReport: geometryValidationReport,
+        writtenPaths: [...new Set(writtenPaths)],
+      };
+    }
 
     const framingDraft = yield* runCut2KitCodexJson({
       operation: "generateWallLayout.framing",
@@ -1817,7 +2078,11 @@ export const makeCut2KitProjects = Effect.gen(function* () {
         project,
         sourcePdfPath: input.sourcePdfPath,
         geometry,
-        referenceSummaryText,
+        promptTemplates: {
+          systemPrompt: promptTemplateBundle.framingSystem,
+          userPrompt: promptTemplateBundle.framingUser,
+          validationChecklist: promptTemplateBundle.validationChecklist,
+        },
       }),
       outputSchema: Cut2KitFramingLayoutV0_2_0Schema,
       modelSelection,
@@ -1839,6 +2104,13 @@ export const makeCut2KitProjects = Effect.gen(function* () {
       sourcePdfPath: input.sourcePdfPath,
       settingsFilePath,
     });
+    writtenPaths.push(
+      yield* writeWorkspaceFile(
+        project.cwd,
+        artifactPaths.framingJsonPath,
+        encodeJsonFile(framingLayout),
+      ),
+    );
 
     const sheathingDraft = yield* runCut2KitCodexJson({
       operation: "generateWallLayout.sheathing",
@@ -1848,7 +2120,11 @@ export const makeCut2KitProjects = Effect.gen(function* () {
         sourcePdfPath: input.sourcePdfPath,
         geometry,
         framingLayout,
-        referenceSummaryText,
+        promptTemplates: {
+          systemPrompt: promptTemplateBundle.sheathingSystem,
+          userPrompt: promptTemplateBundle.sheathingUser,
+          validationChecklist: promptTemplateBundle.validationChecklist,
+        },
       }),
       outputSchema: Cut2KitSheathingLayoutSchema,
       modelSelection,
@@ -1870,6 +2146,57 @@ export const makeCut2KitProjects = Effect.gen(function* () {
       sourcePdfPath: input.sourcePdfPath,
       settingsFilePath,
     });
+    writtenPaths.push(
+      yield* writeWorkspaceFile(
+        project.cwd,
+        artifactPaths.sheathingJsonPath,
+        encodeJsonFile(sheathingLayout),
+      ),
+    );
+
+    const validationReport = buildWallValidationReport({
+      sourcePdfPath: input.sourcePdfPath,
+      settingsFilePath,
+      checklistPath: promptTemplatePaths.validationChecklist,
+      settings,
+      geometry,
+      framingLayout,
+      sheathingLayout,
+      confirmedAmbiguityProceeding: input.confirmedAmbiguityProceeding === true,
+    });
+
+    if (!validationReport.readyForPackaging) {
+      writtenPaths.push(
+        yield* writeWorkspaceFile(
+          project.cwd,
+          artifactPaths.validationReportJsonPath,
+          encodeJsonFile(validationReport),
+        ),
+      );
+      yield* workspaceEntries.invalidate(project.cwd);
+      const refreshedProject = yield* inspectProject({ cwd: project.cwd });
+      return {
+        status: "validation_blocked",
+        statusMessage:
+          validationReport.issues.find((issue) => issue.severity === "error")?.message ??
+          "Validation blocked final PDF packaging for this wall layout run.",
+        project: refreshedProject,
+        sourcePdfPath: input.sourcePdfPath,
+        artifacts: {
+          geometryJsonPath: artifactPaths.geometryJsonPath,
+          validationReportJsonPath: artifactPaths.validationReportJsonPath,
+          framingJsonPath: artifactPaths.framingJsonPath,
+          framingPdfPath: artifactPaths.framingPdfPath,
+          sheathingJsonPath: artifactPaths.sheathingJsonPath,
+          sheathingPdfPath: artifactPaths.sheathingPdfPath,
+        },
+        geometry,
+        framingLayout,
+        sheathingLayout,
+        validationReport,
+        writtenPaths: [...new Set(writtenPaths)],
+      };
+    }
 
     const framingPdfBytes = yield* Effect.tryPromise({
       try: () => renderFramingLayoutPdf(framingLayout),
@@ -1885,7 +2212,8 @@ export const makeCut2KitProjects = Effect.gen(function* () {
         renderSheathingLayoutPdf({
           layout: sheathingLayout,
           rendering: settings.rendering,
-          output: settings.sheathing.output,
+          pages: settings.sheathing.pages,
+          fastening: settings.fastening,
         }),
       catch: (error) =>
         new Cut2KitProjectsError({
@@ -1894,31 +2222,31 @@ export const makeCut2KitProjects = Effect.gen(function* () {
           detail: error instanceof Error ? error.message : String(error),
         }),
     });
-
-    const writtenPaths = [
-      yield* writeWorkspaceFile(project.cwd, artifactPaths.geometryJsonPath, encodeJsonFile(geometry)),
-      yield* writeWorkspaceFile(
-        project.cwd,
-        artifactPaths.framingJsonPath,
-        encodeJsonFile(framingLayout),
-      ),
+    writtenPaths.push(
       yield* writeWorkspaceBytes(project.cwd, artifactPaths.framingPdfPath, framingPdfBytes),
+    );
+    writtenPaths.push(
+      yield* writeWorkspaceBytes(project.cwd, artifactPaths.sheathingPdfPath, sheathingPdfBytes),
+    );
+    writtenPaths.push(
       yield* writeWorkspaceFile(
         project.cwd,
-        artifactPaths.sheathingJsonPath,
-        encodeJsonFile(sheathingLayout),
+        artifactPaths.validationReportJsonPath,
+        encodeJsonFile(validationReport),
       ),
-      yield* writeWorkspaceBytes(project.cwd, artifactPaths.sheathingPdfPath, sheathingPdfBytes),
-    ];
+    );
 
     yield* workspaceEntries.invalidate(project.cwd);
     const refreshedProject = yield* inspectProject({ cwd: project.cwd });
 
     return {
+      status: "completed",
+      statusMessage: null,
       project: refreshedProject,
       sourcePdfPath: input.sourcePdfPath,
       artifacts: {
         geometryJsonPath: artifactPaths.geometryJsonPath,
+        validationReportJsonPath: artifactPaths.validationReportJsonPath,
         framingJsonPath: artifactPaths.framingJsonPath,
         framingPdfPath: artifactPaths.framingPdfPath,
         sheathingJsonPath: artifactPaths.sheathingJsonPath,
@@ -1927,7 +2255,8 @@ export const makeCut2KitProjects = Effect.gen(function* () {
       geometry,
       framingLayout,
       sheathingLayout,
-      writtenPaths,
+      validationReport,
+      writtenPaths: [...new Set(writtenPaths)],
     };
   });
 
