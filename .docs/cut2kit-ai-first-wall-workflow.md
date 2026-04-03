@@ -1,72 +1,41 @@
 # Cut2Kit AI-First Wall Workflow
 
-This note supersedes any older interpretation that the wall conversion layer should become a fully deterministic geometry engine.
+This is the canonical runtime note for the implemented wall-layout flow.
 
-## Product Direction
+## Implemented Flow
 
-Cut2Kit must remain an AI-first CAM application for wall-elevation conversion.
+For one selected elevation PDF, the runtime does this in order:
 
-For a wall elevation PDF, the runtime flow is:
+1. inspect the project and validate `cut2kit.settings.json`
+2. load prompt content from `.docs/`
+3. extract geometry with GPT-5.4 from:
+   - PDF text extraction
+   - a rendered preview image of the selected elevation
+4. write:
+   - extracted wall geometry JSON
+   - validation report JSON
+5. stop and require confirmation if ambiguity remains and settings require it
+6. generate framing-layout JSON with GPT-5.4
+7. generate sheathing-layout JSON with GPT-5.4
+8. deterministically validate the combined result
+9. deterministically render framing and sheathing PDFs
 
-1. intake and visualize the elevation PDF
-2. use GPT-5.4 through the existing Codex/T3Code harness to extract structured wall geometry
-3. use GPT-5.4 again to generate the framing layout
-4. use GPT-5.4 again to generate the OSB sheathing / cutout / fastening layout
-5. deterministically validate the structured outputs
-6. deterministically render and package the PDFs and JSON artifacts
-
-The correct relationship is:
+The current workflow is:
 
 - AI-first runtime generation
-- typed contracts
-- settings-driven reusable rules
+- settings-driven framing and sheathing logic
+- deterministic ambiguity gating
 - deterministic validation
 - deterministic rendering and packaging
 
-The wrong relationship is:
+It is not:
 
-- deterministic geometry conversion engine first
-- AI only used as an assistant or code author
+- a deterministic geometry-conversion engine that replaced the model
+- a direct CAM/toolpath generator for studs or sheathing
 
-## Canonical References
+## Runtime Inputs
 
-Use these as the workflow references:
-
-- `.docs/reusable_prompt_summary_framing_osb.pdf`
-- `examples/elevation3.pdf`
-- `examples/elevation3_framing_layout.pdf`
-- `examples/elevation3_osb_sheet_layout_with_fastening.pdf`
-- `docs/cut2kit.settings.example.json`
-
-## Implementation Rules
-
-- Do not bypass GPT/Codex for framing or sheathing generation.
-- Do not hardcode elevation interpretation that should remain model-driven.
-- Do not replace prompt/orchestration with a deterministic conversion pipeline.
-- Keep validation deterministic and explicit.
-- Keep rendering deterministic and testable.
-- Keep settings focused on defaults, constraints, reusable rules, rendering preferences, and agent-flow configuration.
-
-## Expected Runtime Outputs
-
-For one elevation PDF, Cut2Kit should write:
-
-- extracted elevation JSON
-- validation report JSON
-- framing layout JSON
-- framing layout PDF
-- sheathing layout JSON
-- sheathing layout PDF
-- optional fastening notes/pages when enabled by settings
-
-The framing and sheathing PDFs should follow the style and structure of the example outputs, including:
-
-- framing page plus member/stud schedule
-- overall OSB layout page
-- sheet-by-sheet cutout pages
-- fastening and panel-edge notes page
-
-The runtime prompt content should be loaded from:
+The runtime prompt content is loaded from:
 
 - `.docs/system-geometry.md`
 - `.docs/user-geometry.md`
@@ -76,12 +45,30 @@ The runtime prompt content should be loaded from:
 - `.docs/user-sheathing.md`
 - `.docs/validation-checklist.md`
 
-## Current Harness
+Canonical style and reference inputs live at:
 
-The wall workflow should run through the existing Codex/OpenAI runtime already present in the app, using GPT-5.4 as the primary reasoning engine for:
+- `.docs/reusable_prompt_summary_framing_osb.pdf`
+- `examples/elevation3.pdf`
+- `examples/elevation3_framing_layout.pdf`
+- `examples/elevation3_osb_sheet_layout_with_fastening.pdf`
+- `docs/cut2kit.settings.example.json`
 
-- geometry extraction
-- framing generation
-- sheathing generation
+## Runtime Outputs
 
-Deterministic code exists to validate, render, and package those outputs after the model responds.
+For one elevation PDF, the wall workflow writes:
+
+- `output/reports/wall-layouts/*.extracted-elevation.json`
+- `output/reports/wall-layouts/*.validation-report.json`
+- `output/reports/framing-layouts/*.framing-layout.json`
+- `output/reports/framing-layouts/*.framing-layout.pdf`
+- `output/reports/sheathing-layouts/*.sheathing-layout.json`
+- `output/reports/sheathing-layouts/*.sheathing-layout.pdf`
+
+Optional fastening content appears only when enabled by settings.
+
+## Guardrails
+
+- Do not bypass GPT/Codex for geometry, framing, or sheathing generation.
+- Do not guess through ambiguity that affects correctness.
+- Do not describe future CAM/A2MC handoff as implemented wall behavior.
+- Keep settings focused on reusable rules, constraints, rendering preferences, and prompt wiring.

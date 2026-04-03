@@ -36,18 +36,19 @@ bun run dev:desktop
 
 ## Sample project
 
-A sample Cut2Kit project lives at `examples/prefab-demo-project`.
+A runnable sample project lives at `examples/prefab-demo-project`.
 
 It includes:
 
 - `cut2kit.settings.json`
 - `cut2kit.manufacturing.json`
-- sample dimensioned PDFs under `elevations/`, `floor/`, and `roof/`
-- deterministic A2MC manifest and NC generation inputs
+- one dimensioned elevation PDF under `elevations/`
+- a retained framing PDF fixture under `output/reports/`
+- deterministic A2MC manufacturing-plan input
 
-A canonical reusable settings example lives at `docs/cut2kit.settings.example.json`.
-A mirrored copy also lives at `examples/cut2kit.settings.example.json`.
-An A2MC manufacturing-plan example also lives at `examples/cut2kit.manufacturing.example.json`.
+The canonical settings example lives at `docs/cut2kit.settings.example.json`.
+A standalone A2MC manufacturing-plan example lives at `examples/cut2kit.manufacturing.example.json`.
+Reference input/output fixtures live under `examples/`; see `examples/README.md`.
 
 ## Wall workflow
 
@@ -69,6 +70,8 @@ Prompt content is loaded from `.docs/system-geometry.md`, `.docs/user-geometry.m
 `.docs/system-framing.md`, `.docs/user-framing.md`, `.docs/system-sheathing.md`,
 `.docs/user-sheathing.md`, and `.docs/validation-checklist.md`. Variable framing and sheathing
 rules come from `cut2kit.settings.json`.
+
+The canonical workflow doc is `docs/cut2kit-workflows.md`.
 
 ## Manufacturing workflow
 
@@ -103,5 +106,7 @@ bun run test
   packaging, and manufacturing post-processing.
 - The first real post path is AXYZ A2MC and is driven by explicit manufacturing intent in
   `cut2kit.manufacturing.json`.
+- Future CAM/A2MC planning is preserved in `docs/cut2kit-future-cam-notes.md`, but those notes are
+  not current implemented wall behavior.
 - The wall workflow trusts explicit dimensions first and blocks on unresolved ambiguity rather than
   guessing.

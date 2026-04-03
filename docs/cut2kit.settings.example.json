@@ -33,25 +33,12 @@
   },
   "discovery": {
     "searchRecursively": true,
-    "preferredFolders": [
-      ".docs",
-      "examples",
-      "elevations",
-      "references"
-    ],
-    "knownSettingsFileNames": [
-      "cut2kit.settings.json"
-    ]
+    "preferredFolders": ["elevations", "references", ".docs"],
+    "knownSettingsFileNames": ["cut2kit.settings.json"]
   },
   "input": {
     "autoClassify": true,
     "fileAssignments": [
-      {
-        "pathPattern": "examples/elevation*.pdf",
-        "classification": "elevation",
-        "side": "front",
-        "application": "siding"
-      },
       {
         "pathPattern": "elevations/*.pdf",
         "classification": "elevation",
@@ -62,10 +49,7 @@
     "elevationIntake": {
       "enabled": true,
       "explicitDimensionsAreAuthoritative": true,
-      "geometrySourcePriority": [
-        "dimension_text",
-        "drawn_geometry"
-      ],
+      "geometrySourcePriority": ["dimension_text", "drawn_geometry"],
       "horizontalDimensionMode": "cumulative_from_left_edge",
       "openingPairingStrategy": "consecutive_pairs",
       "openingTypeInference": "sill_line_detection",

@@ -5,7 +5,7 @@
     "jobName": "Prefab Demo House 001",
     "customer": "AXYZ Demo Homes",
     "site": "shop-floor",
-    "description": "Sample Cut2Kit project for PDF discovery, staged wall-layout generation, and optional A2MC output generation.",
+    "description": "Minimal demo project for the current AI-first single-wall workflow plus deterministic A2MC reference output.",
     "units": "imperial"
   },
   "ai": {
@@ -33,49 +33,23 @@
   },
   "discovery": {
     "searchRecursively": true,
-    "preferredFolders": [
-      "elevations",
-      "floor",
-      "roof",
-      ".docs"
-    ],
-    "knownSettingsFileNames": [
-      "cut2kit.settings.json"
-    ]
+    "preferredFolders": ["elevations", ".docs"],
+    "knownSettingsFileNames": ["cut2kit.settings.json"]
   },
   "input": {
     "autoClassify": true,
     "fileAssignments": [
       {
-        "pathPattern": "elevations/front*.pdf",
+        "pathPattern": "elevations/front-wall.pdf",
         "classification": "elevation",
         "side": "front",
         "application": "siding"
-      },
-      {
-        "pathPattern": "elevations/rear*.pdf",
-        "classification": "elevation",
-        "side": "rear",
-        "application": "siding"
-      },
-      {
-        "pathPattern": "floor/*.pdf",
-        "classification": "floor",
-        "application": "flooring"
-      },
-      {
-        "pathPattern": "roof/*.pdf",
-        "classification": "roof",
-        "application": "roofing"
       }
     ],
     "elevationIntake": {
       "enabled": true,
       "explicitDimensionsAreAuthoritative": true,
-      "geometrySourcePriority": [
-        "dimension_text",
-        "drawn_geometry"
-      ],
+      "geometrySourcePriority": ["dimension_text", "drawn_geometry"],
       "horizontalDimensionMode": "cumulative_from_left_edge",
       "openingPairingStrategy": "consecutive_pairs",
       "openingTypeInference": "sill_line_detection",
