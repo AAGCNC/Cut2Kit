@@ -250,6 +250,121 @@ function makeFramingDraft(geometry = makeGeometryDraft()) {
   };
 }
 
+function makeThreadStyleFramingDraft(geometry = makeGeometryDraft()) {
+  const geometryWithPromptStyleMarks = {
+    ...geometry,
+    dimensionText: {
+      ...geometry.dimensionText,
+      horizontalMarks: geometry.dimensionText.horizontalMarks.map((value, index) => ({
+        label: `${value}"`,
+        value,
+        axis: "x" as const,
+        reference: "left_edge" as const,
+        role:
+          index === geometry.dimensionText.horizontalMarks.length - 1
+            ? ("wall-right" as const)
+            : ("opening-mark" as const),
+      })),
+      verticalMarks: geometry.dimensionText.verticalMarks.map((value, index) => ({
+        label: `${value}"`,
+        value,
+        axis: "y" as const,
+        reference: "bottom_edge" as const,
+        role:
+          index === geometry.dimensionText.verticalMarks.length - 1
+            ? ("wall-height" as const)
+            : ("height-mark" as const),
+      })),
+    },
+    openings: geometry.openings.map((opening) => ({
+      id: opening.id,
+      type: opening.kind,
+      x: opening.left,
+      y: opening.bottom,
+      width: opening.width,
+      height: opening.height,
+      headHeight: opening.top,
+      sillHeight: opening.bottom,
+    })),
+  };
+
+  return {
+    schemaVersion: "0.2.0" as const,
+    sourcePdfPath: geometry.sourcePdfPath,
+    settingsFilePath: geometry.settingsFilePath,
+    units: "inch" as const,
+    geometry: geometryWithPromptStyleMarks,
+    wall: {
+      width: geometry.wall.width,
+      height: geometry.wall.height,
+      memberThickness: 1.5,
+      studNominalSize: "2x6",
+      material: "SPF",
+      topMemberOrientation: "flat" as const,
+      bottomMemberOrientation: "flat" as const,
+    },
+    studLayout: {
+      originEdge: "left" as const,
+      spacing: 16,
+      commonStudCenterlines: [16, 48, 64, 96, 112, 160, 176, 192, 208, 240, 256, 304, 320],
+    },
+    openings: geometry.openings.map((opening) => ({
+      id: opening.id,
+      type: opening.kind,
+      x: opening.left,
+      y: opening.bottom,
+      width: opening.width,
+      height: opening.height,
+      headHeight: opening.top,
+      sillHeight: opening.bottom,
+      headMemberId: `${opening.id}-head`,
+      sillMemberId: opening.kind === "window" ? `${opening.id}-sill` : null,
+      gridStudCenterlinesInside: [opening.left + opening.width / 2],
+    })),
+    members: [
+      { id: "bottom-plate", kind: "bottom-plate", x: 0, y: 0, width: geometry.wall.width, height: 1.5 },
+      { id: "top-plate", kind: "top-plate", x: 0, y: geometry.wall.height - 1.5, width: geometry.wall.width, height: 1.5 },
+      { id: "end-left-1", kind: "end-stud", x: 0, y: 1.5, width: 1.5, height: geometry.wall.height - 3 },
+      { id: "end-left-2", kind: "end-stud", x: 1.5, y: 1.5, width: 1.5, height: geometry.wall.height - 3 },
+      { id: "end-right-1", kind: "end-stud", x: geometry.wall.width - 3, y: 1.5, width: 1.5, height: geometry.wall.height - 3 },
+      { id: "end-right-2", kind: "end-stud", x: geometry.wall.width - 1.5, y: 1.5, width: 1.5, height: geometry.wall.height - 3 },
+      { id: "stud-cl-16", kind: "common-stud", x: 15.25, y: 1.5, width: 1.5, height: geometry.wall.height - 3, centerline: 16 },
+      { id: "stud-cl-64", kind: "common-stud", x: 63.25, y: 1.5, width: 1.5, height: geometry.wall.height - 3, centerline: 64 },
+      { id: "window-1-jamb-left", kind: "jamb-stud", x: 34.5, y: 1.5, width: 1.5, height: geometry.wall.height - 3, openingId: "window-1" },
+      { id: "window-1-jamb-right", kind: "jamb-stud", x: 60, y: 1.5, width: 1.5, height: geometry.wall.height - 3, openingId: "window-1" },
+      { id: "window-1-head", kind: "head-member", x: 34.5, y: 80.5, width: 27, height: 1.5, openingId: "window-1" },
+      { id: "window-1-sill", kind: "sill-member", x: 34.5, y: 46, width: 27, height: 1.5, openingId: "window-1" },
+      { id: "window-1-cripple-above", kind: "cripple-stud-above-head", x: 47.25, y: 82, width: 1.5, height: 12.5, centerline: 48, openingId: "window-1" },
+      { id: "window-1-cripple-below", kind: "cripple-stud-below-sill", x: 47.25, y: 1.5, width: 1.5, height: 44.5, centerline: 48, openingId: "window-1" },
+    ],
+    memberSchedule: [
+      { id: "bottom-plate-360", label: "Bottom plate", memberKind: "bottom-plate", count: 1, length: geometry.wall.width },
+      { id: "end-stud-93", label: "End stud", memberKind: "end-stud", count: 4, length: geometry.wall.height - 3 },
+      { id: "header-27", label: "Header", memberKind: "head-member", count: 1, length: 27 },
+      { id: "sill-27", label: "Sill", memberKind: "sill-member", count: 1, length: 27 },
+      { id: "cripple-12-5", label: "Cripple stud", memberKind: "cripple-stud-above-head", count: 1, length: 12.5 },
+    ],
+    validation: {
+      wallWidthMatchesElevation: true,
+      wallHeightMatchesElevation: true,
+      openingSizesMatchElevation: true,
+      headHeightMatchesElevation: true,
+      sillHeightMatchesElevation: true,
+      endStudsDoubled: true,
+      jambStudsPresent: true,
+      commonStudSpacingApplied: true,
+      noCommonStudThroughVoid: true,
+      plateOrientationMatchesExpectation: true,
+      notes: [
+        "Thread-style framing JSON uses x/y openings, centerline studs, and aliased member kinds.",
+      ],
+    },
+    notes: [
+      "This draft emulates the richer framing JSON shape written by the framing-thread prompt path.",
+    ],
+  };
+}
+
 function makeSheathingDraft(geometry = makeGeometryDraft()) {
   return {
     schemaVersion: "0.2.0" as const,
@@ -680,6 +795,92 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         expect(renderedPdf.byteLength).toBeGreaterThan(1000);
       }),
     );
+
+    it.effect("renders a framing-layout PDF from thread-style framing JSON with richer openings and member aliases", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const projectDir = yield* makeTempDir("cut2kit-framing-layout-thread-json-");
+        yield* copyExampleSettings(projectDir);
+        yield* Effect.tryPromise({
+          try: async () => {
+            await fsPromises.writeFile(`${projectDir}/elevation2.pdf`, "%PDF-1.7\n", "utf8");
+            await fsPromises.mkdir(`${projectDir}/output/reports/framing-layouts`, {
+              recursive: true,
+            });
+            await fsPromises.writeFile(
+              `${projectDir}/output/reports/framing-layouts/elevation2.framing-layout.json`,
+              JSON.stringify(makeThreadStyleFramingDraft(), null, 2),
+              "utf8",
+            );
+          },
+          catch: (error) =>
+            new FixtureCopyError({
+              message: `Failed to seed thread-style framing JSON artifact: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            }),
+        });
+
+        const result = yield* cut2kitProjects.renderFramingLayout({
+          cwd: projectDir,
+          relativePath: "output/reports/framing-layouts/elevation2.framing-layout.json",
+        });
+
+        expect(result.pdfPath).toBe(
+          "output/reports/framing-layouts/elevation2.framing-layout.pdf",
+        );
+
+        const renderedPdf = yield* fileSystem.readFile(path.join(projectDir, result.pdfPath));
+        expect(renderedPdf.byteLength).toBeGreaterThan(1000);
+      }),
+    );
+  });
+
+  describe("compileFramingPrompt", () => {
+    it.effect("compiles the framing-thread prompt on the server from loaded templates and staged geometry", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const projectDir = yield* makeTempDir("cut2kit-compile-framing-prompt-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
+
+        yield* Effect.tryPromise({
+          try: async () => {
+            await fsPromises.mkdir(`${projectDir}/output/reports/wall-layouts`, {
+              recursive: true,
+            });
+            await fsPromises.writeFile(
+              `${projectDir}/output/reports/wall-layouts/examples-elevation3.extracted-elevation.json`,
+              JSON.stringify(makeGeometryDraft(), null, 2),
+              "utf8",
+            );
+          },
+          catch: (error) =>
+            new FixtureCopyError({
+              message: `Failed to seed extracted geometry artifact: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            }),
+        });
+
+        const result = yield* cut2kitProjects.compileFramingPrompt({
+          cwd: projectDir,
+          sourcePdfPath: "examples/elevation3.pdf",
+        });
+
+        expect(result.geometryJsonPath).toBe(
+          "output/reports/wall-layouts/examples-elevation3.extracted-elevation.json",
+        );
+        expect(result.geometryLoaded).toBe(true);
+        expect(result.prompt).toContain("You are the framing-planning agent for Cut2Kit.");
+        expect(result.prompt).not.toContain(
+          "Load and follow these prompt files before solving the wall layout:",
+        );
+        expect(result.prompt).toContain('"sourcePdfPath": "examples/elevation3.pdf"');
+      }),
+    );
   });
 
   describe("generateWallLayout", () => {
@@ -710,11 +911,20 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         expect(runCut2KitCodexJsonMock.mock.calls[0]?.[0]?.prompt).toContain(
           "You are the elevation-intake agent for Cut2Kit.",
         );
+        expect(runCut2KitCodexJsonMock.mock.calls[0]?.[0]?.prompt).not.toContain(
+          "Load and follow these prompt files before solving the wall layout:",
+        );
         expect(runCut2KitCodexJsonMock.mock.calls[1]?.[0]?.prompt).toContain(
           "You are the framing-planning agent for Cut2Kit.",
         );
+        expect(runCut2KitCodexJsonMock.mock.calls[1]?.[0]?.prompt).not.toContain(
+          "Load and follow these prompt files before solving the wall layout:",
+        );
         expect(runCut2KitCodexJsonMock.mock.calls[2]?.[0]?.prompt).toContain(
           "You are the sheathing-planning agent for Cut2Kit.",
+        );
+        expect(runCut2KitCodexJsonMock.mock.calls[2]?.[0]?.prompt).not.toContain(
+          "Load and follow these prompt files before solving the wall layout:",
         );
 
         expect(result.status).toBe("completed");

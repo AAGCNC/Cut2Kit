@@ -57,6 +57,20 @@ describe("shouldAutoRenderFramingPdf", () => {
     ).toBe(true);
   });
 
+  it("auto-renders recovery cases when framing JSON exists but the PDF is still missing", () => {
+    expect(
+      shouldAutoRenderFramingPdf({
+        framingJsonPath: "output/reports/framing-layouts/elevation2.framing-layout.json",
+        framingJsonReady: true,
+        framingPdfReady: false,
+        isRenderingFramingLayout: false,
+        hasActiveFramingGeneration: false,
+        jsonJustBecameReady: false,
+        hasAlreadyAttemptedAutoRender: false,
+      }),
+    ).toBe(true);
+  });
+
   it("does not auto-render once the PDF exists or an attempt was already made", () => {
     expect(
       shouldAutoRenderFramingPdf({

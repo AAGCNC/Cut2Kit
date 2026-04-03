@@ -58,36 +58,20 @@ function jsonBlock(value: unknown): string {
 }
 
 function buildPromptTemplateSections(input: {
-  systemPromptPath: string;
-  userPromptPath: string;
-  validationChecklistPath: string;
   promptTemplates: {
-    systemPrompt?: string | null | undefined;
-    userPrompt?: string | null | undefined;
-    validationChecklist?: string | null | undefined;
-  } | undefined;
+    systemPrompt: string;
+    userPrompt: string;
+    validationChecklist: string;
+  };
 }): string[] {
-  const promptTemplates = input.promptTemplates;
-  if (
-    promptTemplates?.systemPrompt &&
-    promptTemplates?.userPrompt &&
-    promptTemplates?.validationChecklist
-  ) {
-    return [
-      "System prompt:",
-      promptTemplates.systemPrompt.trim(),
-      "Initial user prompt:",
-      promptTemplates.userPrompt.trim(),
-      "Validation checklist:",
-      promptTemplates.validationChecklist.trim(),
-    ];
-  }
-
   return [
-    "Load and follow these prompt files before solving the wall layout:",
-    `- system prompt: ${input.systemPromptPath}`,
-    `- initial user prompt: ${input.userPromptPath}`,
-    `- validation checklist: ${input.validationChecklistPath}`,
+    "Cut2Kit loaded the configured prompt templates before this run.",
+    "System instructions:",
+    input.promptTemplates.systemPrompt.trim(),
+    "Task prompt:",
+    input.promptTemplates.userPrompt.trim(),
+    "Validation checklist:",
+    input.promptTemplates.validationChecklist.trim(),
   ];
 }
 
@@ -250,16 +234,15 @@ export function buildCut2KitWallGeometryPrompt(input: {
   project: Cut2KitProject;
   sourcePdfPath: string;
   extractedText: string;
-  promptTemplates?: {
-    systemPrompt?: string | null | undefined;
-    userPrompt?: string | null | undefined;
-    validationChecklist?: string | null | undefined;
+  promptTemplates: {
+    systemPrompt: string;
+    userPrompt: string;
+    validationChecklist: string;
   };
 }): string {
   const artifactPaths = buildWallLayoutArtifactPaths(input.project, input.sourcePdfPath);
   const settingsFilePath = input.project.settingsFilePath ?? "cut2kit.settings.json";
   const promptReferencePaths = resolveCut2KitPromptReferencePaths(input.project);
-  const promptTemplatePaths = resolveCut2KitPromptTemplatePaths(input.project);
 
   const jsonTemplate: Cut2KitWallGeometry = {
     schemaVersion: "0.2.0",
@@ -316,9 +299,6 @@ export function buildCut2KitWallGeometryPrompt(input: {
 
   return [
     ...buildPromptTemplateSections({
-      systemPromptPath: promptTemplatePaths.geometrySystem,
-      userPromptPath: promptTemplatePaths.geometryUser,
-      validationChecklistPath: promptTemplatePaths.validationChecklist,
       promptTemplates: input.promptTemplates,
     }),
     `Selected elevation PDF: ${input.sourcePdfPath}`,
@@ -339,66 +319,67 @@ export function buildCut2KitFramingLayoutPrompt(input: {
   project: Cut2KitProject;
   sourcePdfPath: string;
   geometry?: Cut2KitWallGeometry | undefined;
-  promptTemplates?: {
-    systemPrompt?: string | null | undefined;
-    userPrompt?: string | null | undefined;
-    validationChecklist?: string | null | undefined;
+  promptTemplates: {
+    systemPrompt: string;
+    userPrompt: string;
+    validationChecklist: string;
   };
 }): string {
   const artifactPaths = buildWallLayoutArtifactPaths(input.project, input.sourcePdfPath);
   const settingsFilePath = input.project.settingsFilePath ?? "cut2kit.settings.json";
   const promptReferencePaths = resolveCut2KitPromptReferencePaths(input.project);
-  const promptTemplatePaths = resolveCut2KitPromptTemplatePaths(input.project);
-  const geometry = input.geometry ?? {
-    schemaVersion: "0.2.0" as const,
-    sourcePdfPath: input.sourcePdfPath,
-    settingsFilePath,
-    units: "inch" as const,
-    wall: {
-      width: 360,
-      height: 96,
-      pageLeft: 0,
-      pageRight: 360,
-      pageTop: 96,
-      pageBottom: 0,
-    },
-    commonHeights: {
-      head: 82,
-      windowSill: 46,
-    },
-    dimensionText: {
-      horizontalMarks: [],
-      verticalMarks: [],
-      pairingStrategy: "consecutive_pairs" as const,
-      openingTypeInference: "sill_line_detection" as const,
-    },
-    openings: [],
-    validation: {
-      dimensionTextFound: false,
-      wallDimensionsResolved: false,
-      openingDimensionsResolved: false,
-      wallBoundsFit: true,
-      openingPairsResolved: true,
-      openingTypesResolved: true,
-      headHeightResolved: true,
-      sillHeightResolved: true,
-      conflictsDetected: false,
-      ambiguityDetected: true,
-      requiresUserConfirmation: true,
-      notes: [],
-    },
-    notes: [],
-  };
+  const geometry = input.geometry;
 
   const jsonTemplate: Cut2KitFramingLayoutV0_2_0 = {
     schemaVersion: "0.2.0",
     sourcePdfPath: input.sourcePdfPath,
     settingsFilePath,
     units: "inch",
-    geometry,
+    geometry:
+      geometry ??
+      ({
+        schemaVersion: "0.2.0",
+        sourcePdfPath: input.sourcePdfPath,
+        settingsFilePath,
+        units: "inch",
+        wall: {
+          width: 360,
+          height: 96,
+          pageLeft: 0,
+          pageRight: 360,
+          pageTop: 96,
+          pageBottom: 0,
+        },
+        commonHeights: {
+          head: 82,
+          windowSill: 46,
+        },
+        dimensionText: {
+          horizontalMarks: [],
+          verticalMarks: [],
+          pairingStrategy: "consecutive_pairs",
+          openingTypeInference: "sill_line_detection",
+        },
+        openings: [],
+        validation: {
+          dimensionTextFound: false,
+          wallDimensionsResolved: false,
+          openingDimensionsResolved: false,
+          wallBoundsFit: true,
+          openingPairsResolved: true,
+          openingTypesResolved: true,
+          headHeightResolved: true,
+          sillHeightResolved: true,
+          conflictsDetected: false,
+          ambiguityDetected: true,
+          requiresUserConfirmation: true,
+          notes: [],
+        },
+        notes: [],
+      } satisfies Cut2KitWallGeometry),
     wall: {
-      width: geometry.wall.width,
-      height: geometry.wall.height,
+      width: geometry?.wall.width ?? 360,
+      height: geometry?.wall.height ?? 96,
       memberThickness: 1.5,
       studNominalSize: "2x6",
       material: "SPF",
@@ -410,14 +391,14 @@ export function buildCut2KitFramingLayoutPrompt(input: {
       spacing: 16,
       commonStudCenterlines: [16, 32, 48],
     },
-    openings: geometry.openings,
+    openings: geometry?.openings ?? [],
     members: [
       {
         id: "bottom-plate",
         kind: "bottom-plate",
         x: 0,
         y: 0,
-        width: geometry.wall.width,
+        width: geometry?.wall.width ?? 360,
         height: 1.5,
       },
     ],
@@ -427,7 +408,7 @@ export function buildCut2KitFramingLayoutPrompt(input: {
         label: "Bottom plate",
         memberKind: "bottom-plate",
         count: 1,
-        length: geometry.wall.width,
+        length: geometry?.wall.width ?? 360,
       },
     ],
     validation: {
@@ -448,9 +429,6 @@ export function buildCut2KitFramingLayoutPrompt(input: {
 
   return [
     ...buildPromptTemplateSections({
-      systemPromptPath: promptTemplatePaths.framingSystem,
-      userPromptPath: promptTemplatePaths.framingUser,
-      validationChecklistPath: promptTemplatePaths.validationChecklist,
       promptTemplates: input.promptTemplates,
     }),
     `Selected elevation PDF: ${input.sourcePdfPath}`,
@@ -458,8 +436,11 @@ export function buildCut2KitFramingLayoutPrompt(input: {
     `Write the structured framing-layout JSON to: ${artifactPaths.framingJsonPath}`,
     `Cut2Kit will deterministically render the framing-layout PDF to: ${artifactPaths.framingPdfPath}`,
     `Canonical framing example: ${promptReferencePaths.framingExamplePdf}`,
-    "Wall geometry JSON:",
-    jsonBlock(geometry),
+    ...(geometry
+      ? ["Wall geometry JSON:", jsonBlock(geometry)]
+      : [
+          `No extracted-elevation JSON is available yet for this wall. If needed, derive and save it to ${artifactPaths.geometryJsonPath} before finalizing ${artifactPaths.framingJsonPath}.`,
+        ]),
     "Output only valid JSON matching this schema template:",
     jsonBlock(jsonTemplate),
   ].join("\n\n");
@@ -470,16 +451,15 @@ export function buildCut2KitSheathingLayoutPrompt(input: {
   sourcePdfPath: string;
   geometry: Cut2KitWallGeometry;
   framingLayout: Cut2KitFramingLayoutV0_2_0;
-  promptTemplates?: {
-    systemPrompt?: string | null | undefined;
-    userPrompt?: string | null | undefined;
-    validationChecklist?: string | null | undefined;
+  promptTemplates: {
+    systemPrompt: string;
+    userPrompt: string;
+    validationChecklist: string;
   };
 }): string {
   const artifactPaths = buildWallLayoutArtifactPaths(input.project, input.sourcePdfPath);
   const settingsFilePath = input.project.settingsFilePath ?? "cut2kit.settings.json";
   const promptReferencePaths = resolveCut2KitPromptReferencePaths(input.project);
-  const promptTemplatePaths = resolveCut2KitPromptTemplatePaths(input.project);
 
   const jsonTemplate: Cut2KitSheathingLayout = {
     schemaVersion: "0.2.0",
@@ -542,9 +522,6 @@ export function buildCut2KitSheathingLayoutPrompt(input: {
 
   return [
     ...buildPromptTemplateSections({
-      systemPromptPath: promptTemplatePaths.sheathingSystem,
-      userPromptPath: promptTemplatePaths.sheathingUser,
-      validationChecklistPath: promptTemplatePaths.validationChecklist,
       promptTemplates: input.promptTemplates,
     }),
     `Selected elevation PDF: ${input.sourcePdfPath}`,

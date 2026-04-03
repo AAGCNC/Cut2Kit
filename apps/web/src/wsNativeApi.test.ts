@@ -52,6 +52,7 @@ const rpcClientMock = {
   },
   cut2kit: {
     inspectProject: vi.fn(),
+    compileFramingPrompt: vi.fn(),
     generateOutputs: vi.fn(),
     generateWallLayout: vi.fn(),
     renderFramingLayout: vi.fn(),
@@ -306,6 +307,26 @@ describe("wsNativeApi", () => {
     expect(rpcClientMock.projects.readFile).toHaveBeenCalledWith({
       cwd: "/tmp/project",
       relativePath: "elevations/front-wall.pdf",
+    });
+  });
+
+  it("forwards framing prompt compilation to the Cut2Kit RPC", async () => {
+    rpcClientMock.cut2kit.compileFramingPrompt.mockResolvedValue({
+      sourcePdfPath: "examples/elevation3.pdf",
+      prompt: "Compiled framing prompt",
+      geometryJsonPath: "output/reports/wall-layouts/examples-elevation3.extracted-elevation.json",
+      geometryLoaded: true,
+    });
+
+    const api = createWsNativeApi();
+    await api.cut2kit.compileFramingPrompt({
+      cwd: "/tmp/project",
+      sourcePdfPath: "examples/elevation3.pdf",
+    });
+
+    expect(rpcClientMock.cut2kit.compileFramingPrompt).toHaveBeenCalledWith({
+      cwd: "/tmp/project",
+      sourcePdfPath: "examples/elevation3.pdf",
     });
   });
 

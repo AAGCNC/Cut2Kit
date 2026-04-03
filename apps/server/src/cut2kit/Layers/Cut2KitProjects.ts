@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { Effect, Layer, Schema } from "effect";
 
 import {
+  type Cut2KitCompileFramingPromptResult,
   type Cut2KitApplication,
   type Cut2KitFileClassification,
   type Cut2KitFileRole,
@@ -77,6 +78,7 @@ const IGNORED_DIRECTORY_NAMES = new Set([".git", "node_modules", ".turbo", "dist
 const SettingsJson = fromLenientJson(Cut2KitSettingsSchema);
 const ManufacturingPlanJson = fromLenientJson(Cut2KitManufacturingPlanSchema);
 const FramingLayoutJson = fromLenientJson(Cut2KitFramingLayoutSchema);
+const WallGeometryJson = fromLenientJson(Cut2KitWallGeometrySchema);
 const execFileAsync = promisify(execFile);
 
 type Cut2KitWallWorkflowSettings = typeof Cut2KitSettingsSchema.Type;
@@ -778,6 +780,385 @@ async function readManufacturingPlanFile(
   }
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function asBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function normalizeDimensionMarks(value: unknown): number[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => {
+      if (typeof entry === "number" && Number.isFinite(entry)) {
+        return entry;
+      }
+      const record = asRecord(entry);
+      return asFiniteNumber(record?.value);
+    })
+    .filter((entry): entry is number => entry !== null);
+}
+
+function normalizeCompatibleOpening(
+  value: unknown,
+): Cut2KitWallGeometry["openings"][number] | null {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  const id = asString(record.id);
+  const kind =
+    (asString(record.kind) ?? asString(record.type)) as
+      | Cut2KitWallGeometry["openings"][number]["kind"]
+      | null;
+  const left = asFiniteNumber(record.left) ?? asFiniteNumber(record.x);
+  const bottom =
+    asFiniteNumber(record.bottom) ??
+    asFiniteNumber(record.y) ??
+    asFiniteNumber(record.sillHeight) ??
+    0;
+  const width =
+    asFiniteNumber(record.width) ??
+    (() => {
+      const right = asFiniteNumber(record.right);
+      return left !== null && right !== null ? right - left : null;
+    })();
+  const height =
+    asFiniteNumber(record.height) ??
+    (() => {
+      const top = asFiniteNumber(record.top) ?? asFiniteNumber(record.headHeight);
+      return top !== null ? top - bottom : null;
+    })();
+  const right =
+    asFiniteNumber(record.right) ?? (left !== null && width !== null ? left + width : null);
+  const top =
+    asFiniteNumber(record.top) ??
+    asFiniteNumber(record.headHeight) ??
+    (bottom !== null && height !== null ? bottom + height : null);
+
+  if (
+    id === null ||
+    (kind !== "window" && kind !== "door") ||
+    left === null ||
+    right === null ||
+    bottom === null ||
+    top === null ||
+    width === null ||
+    height === null
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    kind,
+    left,
+    right,
+    bottom,
+    top,
+    width,
+    height,
+    clearOpening: asBoolean(record.clearOpening) ?? true,
+  };
+}
+
+function normalizeCompatibleMemberKind(
+  value: unknown,
+): Cut2KitFramingLayoutV0_2_0["members"][number]["kind"] | null {
+  const kind = asString(value);
+  switch (kind) {
+    case "bottom-plate":
+    case "top-plate":
+    case "end-stud":
+    case "jamb-stud":
+    case "common-stud":
+      return kind;
+    case "head-member":
+      return "header";
+    case "sill-member":
+      return "sill";
+    case "cripple-stud":
+    case "cripple-stud-above-head":
+    case "cripple-stud-below-sill":
+      return "cripple-stud";
+    default:
+      return null;
+  }
+}
+
+function normalizeCompatibleMember(
+  value: unknown,
+): Cut2KitFramingLayoutV0_2_0["members"][number] | null {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  const id = asString(record.id);
+  const kind = normalizeCompatibleMemberKind(record.kind);
+  const x = asFiniteNumber(record.x);
+  const y = asFiniteNumber(record.y);
+  const width = asFiniteNumber(record.width);
+  const height = asFiniteNumber(record.height);
+  if (id === null || kind === null || x === null || y === null || width === null || height === null) {
+    return null;
+  }
+
+  return {
+    id,
+    kind,
+    x,
+    y,
+    width,
+    height,
+    ...(asFiniteNumber(record.centerlineX) ?? asFiniteNumber(record.centerline) ?? null) !== null
+      ? {
+          centerlineX:
+            asFiniteNumber(record.centerlineX) ?? (asFiniteNumber(record.centerline) as number),
+        }
+      : {},
+    ...(asString(record.sourceOpeningId) ?? asString(record.openingId) ?? null) !== null
+      ? {
+          sourceOpeningId:
+            asString(record.sourceOpeningId) ?? (asString(record.openingId) as string),
+        }
+      : {},
+    ...(asString(record.notes) !== null ? { notes: asString(record.notes) as string } : {}),
+  };
+}
+
+function normalizeCompatibleMemberScheduleItem(
+  value: unknown,
+): Cut2KitFramingLayoutV0_2_0["memberSchedule"][number] | null {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+  const id = asString(record.id);
+  const label = asString(record.label);
+  const memberKind = normalizeCompatibleMemberKind(record.memberKind);
+  const count = asFiniteNumber(record.count);
+  const length = asFiniteNumber(record.length);
+  if (
+    id === null ||
+    label === null ||
+    memberKind === null ||
+    count === null ||
+    !Number.isInteger(count) ||
+    count < 1 ||
+    length === null
+  ) {
+    return null;
+  }
+  return {
+    id,
+    label,
+    memberKind,
+    count,
+    length,
+    ...(asString(record.notes) !== null ? { notes: asString(record.notes) as string } : {}),
+  };
+}
+
+function normalizeCompatibleGeometryValidation(
+  value: unknown,
+): Cut2KitWallGeometry["validation"] {
+  const record = asRecord(value);
+  return {
+    dimensionTextFound: asBoolean(record?.dimensionTextFound) ?? false,
+    wallDimensionsResolved: asBoolean(record?.wallDimensionsResolved) ?? false,
+    openingDimensionsResolved: asBoolean(record?.openingDimensionsResolved) ?? false,
+    wallBoundsFit: asBoolean(record?.wallBoundsFit) ?? false,
+    openingPairsResolved: asBoolean(record?.openingPairsResolved) ?? false,
+    openingTypesResolved: asBoolean(record?.openingTypesResolved) ?? false,
+    headHeightResolved: asBoolean(record?.headHeightResolved) ?? false,
+    sillHeightResolved: asBoolean(record?.sillHeightResolved) ?? false,
+    conflictsDetected: asBoolean(record?.conflictsDetected) ?? false,
+    ambiguityDetected: asBoolean(record?.ambiguityDetected) ?? false,
+    requiresUserConfirmation: asBoolean(record?.requiresUserConfirmation) ?? false,
+    notes: asStringArray(record?.notes),
+  };
+}
+
+function normalizeCompatibleFramingValidation(
+  value: unknown,
+): Cut2KitFramingLayoutV0_2_0["validation"] {
+  const record = asRecord(value);
+  return {
+    wallWidthMatchesElevation: asBoolean(record?.wallWidthMatchesElevation) ?? false,
+    wallHeightMatchesElevation: asBoolean(record?.wallHeightMatchesElevation) ?? false,
+    openingSizesMatchElevation: asBoolean(record?.openingSizesMatchElevation) ?? false,
+    headHeightMatchesElevation: asBoolean(record?.headHeightMatchesElevation) ?? false,
+    sillHeightMatchesElevation: asBoolean(record?.sillHeightMatchesElevation) ?? false,
+    endStudsDoubled: asBoolean(record?.endStudsDoubled) ?? false,
+    jambStudsPresent: asBoolean(record?.jambStudsPresent) ?? false,
+    commonStudSpacingApplied: asBoolean(record?.commonStudSpacingApplied) ?? false,
+    noCommonStudThroughVoid: asBoolean(record?.noCommonStudThroughVoid) ?? false,
+    plateOrientationMatchesExpectation: asBoolean(record?.plateOrientationMatchesExpectation) ?? false,
+    notes: asStringArray(record?.notes),
+  };
+}
+
+function normalizeCompatibleGeometry(
+  value: unknown,
+  sourcePdfPath: string,
+  settingsFilePath: string,
+): Cut2KitWallGeometry | null {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+  const wall = asRecord(record.wall);
+  const commonHeights = asRecord(record.commonHeights);
+  const dimensionText = asRecord(record.dimensionText);
+  const openings = Array.isArray(record.openings)
+    ? record.openings
+        .map((opening) => normalizeCompatibleOpening(opening))
+        .filter((opening): opening is Cut2KitWallGeometry["openings"][number] => opening !== null)
+    : [];
+  const wallWidth = asFiniteNumber(wall?.width);
+  const wallHeight = asFiniteNumber(wall?.height);
+  const head = asFiniteNumber(commonHeights?.head);
+  const windowSill = asFiniteNumber(commonHeights?.windowSill);
+  if (wallWidth === null || wallHeight === null || head === null || windowSill === null) {
+    return null;
+  }
+  return {
+    schemaVersion: "0.2.0",
+    sourcePdfPath,
+    settingsFilePath,
+    units: "inch",
+    wall: {
+      width: wallWidth,
+      height: wallHeight,
+      pageLeft: asFiniteNumber(wall?.pageLeft) ?? 0,
+      pageRight: asFiniteNumber(wall?.pageRight) ?? wallWidth,
+      pageTop: asFiniteNumber(wall?.pageTop) ?? wallHeight,
+      pageBottom: asFiniteNumber(wall?.pageBottom) ?? 0,
+    },
+    commonHeights: {
+      head,
+      windowSill,
+    },
+    dimensionText: {
+      horizontalMarks: normalizeDimensionMarks(dimensionText?.horizontalMarks),
+      verticalMarks: normalizeDimensionMarks(dimensionText?.verticalMarks),
+      pairingStrategy: "consecutive_pairs",
+      openingTypeInference: "sill_line_detection",
+    },
+    openings,
+    validation: normalizeCompatibleGeometryValidation(record.validation),
+    notes: asStringArray(record.notes),
+  };
+}
+
+function normalizeCompatibleFramingLayout(value: unknown): Cut2KitFramingLayoutV0_2_0 | null {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+  const sourcePdfPath = asString(record.sourcePdfPath);
+  const settingsFilePath = asString(record.settingsFilePath);
+  const wall = asRecord(record.wall);
+  const studLayout = asRecord(record.studLayout);
+  const geometry = normalizeCompatibleGeometry(record.geometry, sourcePdfPath ?? "", settingsFilePath ?? "");
+  const openingsSource = Array.isArray(record.openings) ? record.openings : geometry?.openings ?? [];
+  const openings = openingsSource
+    .map((opening) => normalizeCompatibleOpening(opening))
+    .filter((opening): opening is Cut2KitWallGeometry["openings"][number] => opening !== null);
+  const members = Array.isArray(record.members)
+    ? record.members
+        .map((member) => normalizeCompatibleMember(member))
+        .filter((member): member is Cut2KitFramingLayoutV0_2_0["members"][number] => member !== null)
+    : [];
+  const memberSchedule = Array.isArray(record.memberSchedule)
+    ? record.memberSchedule
+        .map((item) => normalizeCompatibleMemberScheduleItem(item))
+        .filter(
+          (item): item is Cut2KitFramingLayoutV0_2_0["memberSchedule"][number] => item !== null,
+        )
+    : [];
+  const wallWidth = asFiniteNumber(wall?.width);
+  const wallHeight = asFiniteNumber(wall?.height);
+  const memberThickness = asFiniteNumber(wall?.memberThickness);
+  const studNominalSize = asString(wall?.studNominalSize);
+  const material = asString(wall?.material);
+  const topMemberOrientation = asString(wall?.topMemberOrientation);
+  const bottomMemberOrientation = asString(wall?.bottomMemberOrientation);
+  const originEdge = asString(studLayout?.originEdge);
+  const spacing = asFiniteNumber(studLayout?.spacing);
+  const commonStudCenterlines = Array.isArray(studLayout?.commonStudCenterlines)
+    ? studLayout.commonStudCenterlines.filter(
+        (entry): entry is number => typeof entry === "number" && Number.isFinite(entry),
+      )
+    : [];
+
+  if (
+    sourcePdfPath === null ||
+    settingsFilePath === null ||
+    geometry === null ||
+    wallWidth === null ||
+    wallHeight === null ||
+    memberThickness === null ||
+    studNominalSize === null ||
+    material === null ||
+    (topMemberOrientation !== "flat" && topMemberOrientation !== "on_edge") ||
+    (bottomMemberOrientation !== "flat" && bottomMemberOrientation !== "on_edge") ||
+    (originEdge !== "left" && originEdge !== "right") ||
+    spacing === null ||
+    members.length === 0
+  ) {
+    return null;
+  }
+
+  const normalized = {
+    schemaVersion: "0.2.0",
+    sourcePdfPath,
+    settingsFilePath,
+    units: "inch",
+    geometry,
+    wall: {
+      width: wallWidth,
+      height: wallHeight,
+      memberThickness,
+      studNominalSize,
+      material,
+      topMemberOrientation,
+      bottomMemberOrientation,
+    },
+    studLayout: {
+      originEdge,
+      spacing,
+      commonStudCenterlines,
+    },
+    openings,
+    members,
+    memberSchedule,
+    validation: normalizeCompatibleFramingValidation(record.validation),
+    notes: asStringArray(record.notes),
+  };
+
+  const decoded = Schema.decodeUnknownExit(Cut2KitFramingLayoutV0_2_0Schema)(normalized);
+  return decoded._tag === "Success" ? decoded.value : null;
+}
+
 async function readFramingLayoutFile(
   cwd: string,
   relativePath: string,
@@ -786,6 +1167,18 @@ async function readFramingLayoutFile(
     const raw = await fsPromises.readFile(nodePath.join(cwd, relativePath), "utf8");
     const decoded = Schema.decodeUnknownExit(FramingLayoutJson)(raw);
     if (decoded._tag === "Failure") {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        const normalized = normalizeCompatibleFramingLayout(parsed);
+        if (normalized !== null) {
+          return {
+            framingLayout: normalized,
+            issues: [],
+          };
+        }
+      } catch {
+        // Fall through to the original schema error below.
+      }
       return {
         framingLayout: null,
         issues: [
@@ -809,6 +1202,40 @@ async function readFramingLayoutFile(
         makeIssue(
           "error",
           "framing_layout.read_failed",
+          error instanceof Error ? error.message : String(error),
+          relativePath,
+        ),
+      ],
+    };
+  }
+}
+
+async function readWallGeometryFile(
+  cwd: string,
+  relativePath: string,
+): Promise<{ geometry: Cut2KitWallGeometry | null; issues: Cut2KitIssue[] }> {
+  try {
+    const raw = await fsPromises.readFile(nodePath.join(cwd, relativePath), "utf8");
+    const decoded = Schema.decodeUnknownExit(WallGeometryJson)(raw);
+    if (decoded._tag === "Failure") {
+      return {
+        geometry: null,
+        issues: [
+          makeIssue("error", "wall_geometry.invalid", formatSchemaError(decoded.cause), relativePath),
+        ],
+      };
+    }
+    return {
+      geometry: decoded.value,
+      issues: [],
+    };
+  } catch (error) {
+    return {
+      geometry: null,
+      issues: [
+        makeIssue(
+          "error",
+          "wall_geometry.read_failed",
           error instanceof Error ? error.message : String(error),
           relativePath,
         ),
@@ -1818,6 +2245,140 @@ export const makeCut2KitProjects = Effect.gen(function* () {
     return resolved.relativePath;
   });
 
+  const loadPromptTemplateBundleForProject = Effect.fn(
+    "Cut2KitProjects.loadPromptTemplateBundleForProject",
+  )(function* (project: Cut2KitProject) {
+    const promptTemplatePaths = resolveCut2KitPromptTemplatePaths(project);
+    const promptTemplateBundle = yield* loadCut2KitPromptTemplateBundle({
+      cwd: project.cwd,
+      paths: promptTemplatePaths,
+    }).pipe(
+      Effect.mapError(
+        (cause) =>
+          new Cut2KitProjectsError({
+            cwd: project.cwd,
+            operation: "cut2kit.loadPromptTemplates",
+            detail: cause.detail,
+            cause,
+          }),
+      ),
+    );
+
+    return { promptTemplatePaths, promptTemplateBundle };
+  });
+
+  const readOptionalWallGeometryArtifact = Effect.fn(
+    "Cut2KitProjects.readOptionalWallGeometryArtifact",
+  )(function* (project: Cut2KitProject, relativePath: string) {
+    const resolved = yield* workspacePaths
+      .resolveRelativePathWithinRoot({
+        workspaceRoot: project.cwd,
+        relativePath,
+      })
+      .pipe(
+        Effect.mapError(
+          (cause) =>
+            new Cut2KitProjectsError({
+              cwd: project.cwd,
+              operation: "compileFramingPrompt.resolveGeometryArtifact",
+              detail: "Geometry artifact path escaped the workspace root.",
+              cause,
+            }),
+        ),
+      );
+
+    const stat = yield* Effect.tryPromise({
+      try: async () => {
+        try {
+          return await fsPromises.stat(resolved.absolutePath);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+            return null;
+          }
+          throw error;
+        }
+      },
+      catch: (error) =>
+        new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "compileFramingPrompt.statGeometryArtifact",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+    });
+
+    if (!stat?.isFile()) {
+      return null;
+    }
+
+    const { geometry, issues } = yield* Effect.tryPromise({
+      try: () => readWallGeometryFile(project.cwd, resolved.relativePath),
+      catch: (error) =>
+        new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "compileFramingPrompt.readGeometryArtifact",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+    });
+
+    if (issues.length > 0 || geometry === null) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "compileFramingPrompt.decodeGeometryArtifact",
+        detail:
+          issues[0]?.message ??
+          "The extracted-elevation artifact exists but could not be decoded.",
+      });
+    }
+
+    return geometry;
+  });
+
+  const compileFramingPrompt: Cut2KitProjectsShape["compileFramingPrompt"] = Effect.fn(
+    "Cut2KitProjects.compileFramingPrompt",
+  )(function* (input): Effect.fn.Return<Cut2KitCompileFramingPromptResult, Cut2KitProjectsError> {
+    const project = yield* inspectProject({ cwd: input.cwd });
+    const settings = project.settings;
+    if (!isWallWorkflowSettings(settings)) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "compileFramingPrompt.validateSettings",
+        detail:
+          "Cut2Kit settings must be valid wall-workflow settings before compiling a framing prompt.",
+      });
+    }
+
+    const sourceDocument = project.sourceDocuments.find(
+      (document) => document.sourcePath === input.sourcePdfPath,
+    );
+    if (!sourceDocument || sourceDocument.classification !== "elevation") {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "compileFramingPrompt.validateSourcePdf",
+        detail: "Select a source document classified as an elevation PDF.",
+      });
+    }
+
+    const artifactPaths = buildWallLayoutArtifactPaths(project, input.sourcePdfPath);
+    const { promptTemplateBundle } = yield* loadPromptTemplateBundleForProject(project);
+    const geometry = yield* readOptionalWallGeometryArtifact(project, artifactPaths.geometryJsonPath);
+
+    return {
+      sourcePdfPath: input.sourcePdfPath,
+      prompt: buildCut2KitFramingLayoutPrompt({
+        project,
+        sourcePdfPath: input.sourcePdfPath,
+        ...(geometry ? { geometry } : {}),
+        promptTemplates: {
+          systemPrompt: promptTemplateBundle.framingSystem,
+          userPrompt: promptTemplateBundle.framingUser,
+          validationChecklist: promptTemplateBundle.validationChecklist,
+        },
+      }),
+      geometryJsonPath: artifactPaths.geometryJsonPath,
+      geometryLoaded: geometry !== null,
+    };
+  });
+
   const generateOutputs: Cut2KitProjectsShape["generateOutputs"] = Effect.fn(
     "Cut2KitProjects.generateOutputs",
   )(function* (input): Effect.fn.Return<Cut2KitGenerateOutputsResult, Cut2KitProjectsError> {
@@ -1946,11 +2507,9 @@ export const makeCut2KitProjects = Effect.gen(function* () {
         detail: "The wall workflow requires xhigh reasoning effort for GPT-5.4 runs.",
       });
     }
-    const promptTemplatePaths = resolveCut2KitPromptTemplatePaths(project);
-    const promptTemplateBundle = yield* loadCut2KitPromptTemplateBundle({
-      cwd: project.cwd,
-      paths: promptTemplatePaths,
-    }).pipe(
+    const { promptTemplatePaths, promptTemplateBundle } = yield* loadPromptTemplateBundleForProject(
+      project,
+    ).pipe(
       Effect.mapError(
         (cause) =>
           new Cut2KitProjectsError({
@@ -2337,6 +2896,7 @@ export const makeCut2KitProjects = Effect.gen(function* () {
 
   return {
     inspectProject,
+    compileFramingPrompt,
     generateOutputs,
     generateWallLayout,
     renderFramingLayout,

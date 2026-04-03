@@ -1142,6 +1142,20 @@ export const Cut2KitRenderFramingLayoutResult = Schema.Struct({
 });
 export type Cut2KitRenderFramingLayoutResult = typeof Cut2KitRenderFramingLayoutResult.Type;
 
+export const Cut2KitCompileFramingPromptInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  sourcePdfPath: TrimmedNonEmptyString,
+});
+export type Cut2KitCompileFramingPromptInput = typeof Cut2KitCompileFramingPromptInput.Type;
+
+export const Cut2KitCompileFramingPromptResult = Schema.Struct({
+  sourcePdfPath: TrimmedNonEmptyString,
+  prompt: TrimmedNonEmptyString,
+  geometryJsonPath: TrimmedNonEmptyString,
+  geometryLoaded: Schema.Boolean,
+});
+export type Cut2KitCompileFramingPromptResult = typeof Cut2KitCompileFramingPromptResult.Type;
+
 export class Cut2KitProjectError extends Schema.TaggedErrorClass<Cut2KitProjectError>()(
   "Cut2KitProjectError",
   {

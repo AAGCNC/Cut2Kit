@@ -31,7 +31,11 @@ export function shouldAutoRenderFramingPdf(input: {
     return false;
   }
 
-  return input.hasActiveFramingGeneration || input.jsonJustBecameReady;
+  return (
+    input.hasActiveFramingGeneration ||
+    input.jsonJustBecameReady ||
+    (input.framingJsonReady && !input.framingPdfReady)
+  );
 }
 
 export function canRenderFramingPdfFromJson(input: {

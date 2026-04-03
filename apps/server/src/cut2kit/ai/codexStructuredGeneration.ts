@@ -6,7 +6,6 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type { CodexModelSelection } from "@t3tools/contracts";
 import { normalizeCodexModelOptionsWithCapabilities } from "@t3tools/shared/model";
 
-import { ServerConfig } from "../../config.ts";
 import { toJsonSchemaObject } from "../../git/Utils.ts";
 import { getCodexModelCapabilities } from "../../provider/Layers/CodexProvider.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
@@ -73,6 +72,85 @@ const safeUnlink = (filePath: string): Effect.Effect<void, never, FileSystem.Fil
     yield* fileSystem.remove(filePath).pipe(Effect.catch(() => Effect.void));
   });
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function schemaAlreadyAllowsNull(schema: unknown): boolean {
+  if (!isRecord(schema)) {
+    return false;
+  }
+  const type = schema.type;
+  if (type === "null") {
+    return true;
+  }
+  if (Array.isArray(type) && type.includes("null")) {
+    return true;
+  }
+  return ["anyOf", "oneOf"].some((key) =>
+    Array.isArray(schema[key]) &&
+    schema[key].some(
+      (entry) => isRecord(entry) && (entry.type === "null" || (Array.isArray(entry.type) && entry.type.includes("null"))),
+    ),
+  );
+}
+
+function makeSchemaNullable(schema: unknown): unknown {
+  if (!isRecord(schema) || schemaAlreadyAllowsNull(schema)) {
+    return schema;
+  }
+  return {
+    anyOf: [schema, { type: "null" }],
+  };
+}
+
+function toOpenAiStructuredOutputSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) {
+    return schema.map((entry) => toOpenAiStructuredOutputSchema(entry));
+  }
+  if (!isRecord(schema)) {
+    return schema;
+  }
+
+  const transformedEntries = Object.fromEntries(
+    Object.entries(schema).map(([key, value]) => [key, toOpenAiStructuredOutputSchema(value)]),
+  );
+
+  if (!isRecord(transformedEntries.properties)) {
+    return transformedEntries;
+  }
+
+  const propertyEntries = Object.entries(transformedEntries.properties);
+  const originalRequired = new Set(
+    Array.isArray(transformedEntries.required)
+      ? transformedEntries.required.filter((entry): entry is string => typeof entry === "string")
+      : [],
+  );
+
+  transformedEntries.properties = Object.fromEntries(
+    propertyEntries.map(([key, value]) => [
+      key,
+      originalRequired.has(key) ? value : makeSchemaNullable(value),
+    ]),
+  );
+  transformedEntries.required = propertyEntries.map(([key]) => key);
+  return transformedEntries;
+}
+
+function stripNullValues(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripNullValues(entry));
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, entry]) => entry !== null)
+      .map(([key, entry]) => [key, stripNullValues(entry)]),
+  );
+}
+
 export const runCut2KitCodexJson = Effect.fn("runCut2KitCodexJson")(function* <S extends Schema.Top>(input: {
   operation: string;
   cwd: string;
@@ -92,7 +170,6 @@ export const runCut2KitCodexJson = Effect.fn("runCut2KitCodexJson")(function* <S
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const serverConfig = yield* Effect.service(ServerConfig);
   const serverSettingsService = yield* Effect.service(ServerSettingsService);
 
   for (const imagePath of input.imagePaths ?? []) {
@@ -114,7 +191,7 @@ export const runCut2KitCodexJson = Effect.fn("runCut2KitCodexJson")(function* <S
   const schemaPath = yield* writeTempFile(
     input.operation,
     "codex-schema",
-    JSON.stringify(toJsonSchemaObject(input.outputSchema)),
+    JSON.stringify(toOpenAiStructuredOutputSchema(toJsonSchemaObject(input.outputSchema))),
   );
   const outputPath = yield* writeTempFile(input.operation, "codex-output", "");
 
@@ -131,14 +208,15 @@ export const runCut2KitCodexJson = Effect.fn("runCut2KitCodexJson")(function* <S
     input.modelSelection.options?.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
 
   const runCodexCommand = Effect.fn("runCut2KitCodexJson.runCodexCommand")(function* () {
-    const command = ChildProcess.make(
-      codexSettings?.binaryPath || "codex",
-      [
-        "exec",
-        "--ephemeral",
-        "-s",
-        "read-only",
-        "--model",
+      const command = ChildProcess.make(
+        codexSettings?.binaryPath || "codex",
+        [
+          "exec",
+          "--ephemeral",
+          "--skip-git-repo-check",
+          "-s",
+          "read-only",
+          "--model",
         input.modelSelection.model,
         "--config",
         `model_reasoning_effort="${reasoningEffort}"`,
@@ -237,6 +315,17 @@ export const runCut2KitCodexJson = Effect.fn("runCut2KitCodexJson")(function* <S
             detail: "Failed to read Codex output file.",
             cause,
           }),
+      ),
+      Effect.flatMap((rawJson) =>
+        Effect.try({
+          try: () => JSON.stringify(stripNullValues(JSON.parse(rawJson) as unknown)),
+          catch: (cause) =>
+            new Cut2KitCodexGenerationError({
+              operation: input.operation,
+              detail: "Codex returned invalid JSON.",
+              cause,
+            }),
+        }),
       ),
       Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(input.outputSchema))),
       Effect.catchTag("SchemaError", (cause) =>

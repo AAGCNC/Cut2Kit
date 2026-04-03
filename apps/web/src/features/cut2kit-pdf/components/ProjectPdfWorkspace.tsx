@@ -309,7 +309,9 @@ export function ProjectPdfWorkspace({
             emptyTitle="No framing layout PDF yet"
             emptyDescription={
               artifactPaths
-                ? `Cut2Kit expects the rendered framing layout at ${artifactPaths.pdfPath}.`
+                ? generatedLayoutJsonPath
+                  ? `Framing-layout JSON is ready. Render the PDF to write ${artifactPaths.pdfPath}.`
+                  : `When rendered, Cut2Kit writes the framing-layout PDF to ${artifactPaths.pdfPath}.`
                 : "Select an elevation PDF first to determine the framing-layout output path."
             }
             loadingTitle="Loading framing-layout PDF"

@@ -53,6 +53,8 @@ import {
   ProjectWriteFileResult,
 } from "./project";
 import {
+  Cut2KitCompileFramingPromptInput,
+  Cut2KitCompileFramingPromptResult,
   Cut2KitGenerateOutputsInput,
   Cut2KitGenerateOutputsResult,
   Cut2KitGenerateWallLayoutInput,
@@ -93,6 +95,7 @@ export const WS_METHODS = {
   projectsReadFile: "projects.readFile",
   projectsWriteFile: "projects.writeFile",
   cut2kitInspectProject: "cut2kit.inspectProject",
+  cut2kitCompileFramingPrompt: "cut2kit.compileFramingPrompt",
   cut2kitGenerateOutputs: "cut2kit.generateOutputs",
   cut2kitGenerateWallLayout: "cut2kit.generateWallLayout",
   cut2kitRenderFramingLayout: "cut2kit.renderFramingLayout",
@@ -185,6 +188,12 @@ export const WsProjectsWriteFileRpc = Rpc.make(WS_METHODS.projectsWriteFile, {
 export const WsCut2KitInspectProjectRpc = Rpc.make(WS_METHODS.cut2kitInspectProject, {
   payload: Cut2KitInspectProjectInput,
   success: Cut2KitProject,
+  error: Cut2KitProjectError,
+});
+
+export const WsCut2KitCompileFramingPromptRpc = Rpc.make(WS_METHODS.cut2kitCompileFramingPrompt, {
+  payload: Cut2KitCompileFramingPromptInput,
+  success: Cut2KitCompileFramingPromptResult,
   error: Cut2KitProjectError,
 });
 
@@ -380,6 +389,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsReadFileRpc,
   WsProjectsWriteFileRpc,
   WsCut2KitInspectProjectRpc,
+  WsCut2KitCompileFramingPromptRpc,
   WsCut2KitGenerateOutputsRpc,
   WsCut2KitGenerateWallLayoutRpc,
   WsCut2KitRenderFramingLayoutRpc,

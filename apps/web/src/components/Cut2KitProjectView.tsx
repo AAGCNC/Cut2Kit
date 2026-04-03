@@ -1,6 +1,5 @@
 import {
   buildCut2KitAgentPrompt,
-  buildCut2KitFramingLayoutPrompt,
   buildFramingLayoutArtifactPaths,
   buildFramingLayoutThreadTitle,
   resolveCut2KitAutomationModelSelection,
@@ -119,6 +118,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   );
 
   const snapshot = snapshotQuery.data ?? null;
+  const hasWallWorkflowSettings = snapshot?.settings !== null && snapshot?.settings !== undefined;
   const issueSummary = useMemo(() => {
     if (!snapshot) {
       return { warnings: 0, errors: 0 };
@@ -147,16 +147,31 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         : null,
     [snapshot, selectedSourcePdfPath],
   );
-  const framingPrompt = useMemo(
-    () =>
-      snapshot && selectedSourcePdfPath
-        ? buildCut2KitFramingLayoutPrompt({
-            project: snapshot,
-            sourcePdfPath: selectedSourcePdfPath,
-          })
-        : "",
-    [selectedSourcePdfPath, snapshot],
-  );
+  const framingPromptQuery = useQuery({
+    queryKey: [
+      "cut2kit",
+      "compileFramingPrompt",
+      snapshot?.cwd ?? null,
+      selectedSourcePdfPath,
+      snapshot?.summary.totalFiles ?? 0,
+    ],
+    enabled:
+      snapshot !== null &&
+      hasWallWorkflowSettings &&
+      selectedSourcePdfPath !== null &&
+      selectedElevationOption?.classification === "elevation",
+    queryFn: async () => {
+      const api = readNativeApi();
+      if (!api || !snapshot || !selectedSourcePdfPath) {
+        throw new Error("Cut2Kit prompt compilation is unavailable.");
+      }
+      return api.cut2kit.compileFramingPrompt({
+        cwd: snapshot.cwd,
+        sourcePdfPath: selectedSourcePdfPath,
+      });
+    },
+  });
+  const framingPrompt = framingPromptQuery.data?.prompt ?? "";
   const framingGenerationThread = useStore((store) =>
     activeFramingGeneration
       ? (store.threads.find((thread) => thread.id === activeFramingGeneration.threadId) ?? null)
@@ -291,6 +306,15 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     if (!project || !selectedSourcePdfPath) return;
     const api = readNativeApi();
     if (!api) return;
+    if (!snapshot?.settings) {
+      toastManager.add({
+        type: "error",
+        title: "Cut2Kit settings are required",
+        description:
+          "Add a valid cut2kit.settings.json file to this project before running the wall workflow.",
+      });
+      return;
+    }
 
     setIsGeneratingWallLayout(true);
     try {
@@ -366,7 +390,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     } finally {
       setIsGeneratingWallLayout(false);
     }
-  }, [project, queryClient, selectedSourcePdfPath]);
+  }, [project, queryClient, selectedSourcePdfPath, snapshot?.settings]);
 
   const handleOpenInEditor = useCallback(async () => {
     if (!project) return;
@@ -434,6 +458,15 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
 
     const api = readNativeApi();
     if (!api) return;
+    if (!snapshot.settings) {
+      toastManager.add({
+        type: "error",
+        title: "Cut2Kit settings are required",
+        description:
+          "Add a valid cut2kit.settings.json file to this project before starting framing generation.",
+      });
+      return;
+    }
 
     const createdAt = new Date().toISOString();
     const threadId = newThreadId();
@@ -444,6 +477,13 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
 
     setIsStartingFramingGeneration(true);
     try {
+      const compiledPrompt =
+        framingPromptQuery.data ??
+        (await api.cut2kit.compileFramingPrompt({
+          cwd: snapshot.cwd,
+          sourcePdfPath: selectedSourcePdfPath,
+        }));
+
       await api.orchestration.dispatchCommand({
         type: "thread.create",
         commandId: newCommandId(),
@@ -465,7 +505,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         message: {
           messageId: newMessageId(),
           role: "user",
-          text: framingPrompt,
+          text: compiledPrompt.prompt,
           attachments: [],
         },
         modelSelection,
@@ -499,7 +539,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     }
   }, [
     framingArtifacts,
-    framingPrompt,
+    framingPromptQuery.data,
     project,
     selectedElevationOption?.classification,
     selectedSourcePdfPath,
@@ -755,7 +795,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 The primary wall workflow runs geometry extraction, framing generation, and OSB
                 generation through Codex/GPT-5.4, then validates and renders the PDFs
                 deterministically. The framing-only thread below remains available as an advanced
-                prompt/debug path.
+                prompt/debug path, and its prompt preview is compiled server-side from the
+                configured templates and current wall artifacts.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -765,7 +806,17 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 </div>
                 <ScrollArea className="min-h-0 flex-1">
                   <pre className="whitespace-pre-wrap px-3 py-3 text-xs leading-5 text-foreground">
-                    {framingPrompt || "Select an elevation PDF to build the framing-layout prompt."}
+                    {!hasWallWorkflowSettings
+                      ? "Add cut2kit.settings.json to this project before compiling the framing-layout prompt."
+                      : !selectedSourcePdfPath
+                        ? "Select an elevation PDF to compile the framing-layout prompt."
+                        : framingPromptQuery.isLoading
+                          ? "Compiling the framing-layout prompt on the server..."
+                          : framingPromptQuery.isError
+                            ? framingPromptQuery.error instanceof Error
+                              ? framingPromptQuery.error.message
+                              : "Could not compile the framing-layout prompt."
+                            : framingPrompt}
                   </pre>
                 </ScrollArea>
               </div>
@@ -840,6 +891,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                     onClick={() => void handleGenerateWallLayout()}
                     disabled={
                       isGeneratingWallLayout ||
+                      !hasWallWorkflowSettings ||
                       !selectedSourcePdfPath ||
                       selectedElevationOption?.classification !== "elevation"
                     }
@@ -853,6 +905,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                     onClick={() => void handleGenerateFramingLayout()}
                     disabled={
                       isStartingFramingGeneration ||
+                      !hasWallWorkflowSettings ||
                       !selectedSourcePdfPath ||
                       selectedElevationOption?.classification !== "elevation"
                     }
