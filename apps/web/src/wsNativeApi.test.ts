@@ -53,6 +53,7 @@ const rpcClientMock = {
   cut2kit: {
     inspectProject: vi.fn(),
     generateOutputs: vi.fn(),
+    generateWallLayout: vi.fn(),
     renderFramingLayout: vi.fn(),
   },
   shell: {

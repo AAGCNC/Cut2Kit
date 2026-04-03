@@ -27,6 +27,8 @@ import type {
 import type {
   Cut2KitGenerateOutputsInput,
   Cut2KitGenerateOutputsResult,
+  Cut2KitGenerateWallLayoutInput,
+  Cut2KitGenerateWallLayoutResult,
   Cut2KitInspectProjectInput,
   Cut2KitProject,
   Cut2KitRenderFramingLayoutInput,
@@ -153,6 +155,9 @@ export interface NativeApi {
   cut2kit: {
     inspectProject: (input: Cut2KitInspectProjectInput) => Promise<Cut2KitProject>;
     generateOutputs: (input: Cut2KitGenerateOutputsInput) => Promise<Cut2KitGenerateOutputsResult>;
+    generateWallLayout: (
+      input: Cut2KitGenerateWallLayoutInput,
+    ) => Promise<Cut2KitGenerateWallLayoutResult>;
     renderFramingLayout: (
       input: Cut2KitRenderFramingLayoutInput,
     ) => Promise<Cut2KitRenderFramingLayoutResult>;

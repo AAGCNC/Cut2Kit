@@ -1,97 +1,66 @@
 {
-  "schemaVersion": "0.1.0",
+  "schemaVersion": "0.2.0",
   "project": {
-    "projectId": "triplem-house-001",
-    "jobName": "Triple M Sample House 001",
-    "customer": "Triple M Housing",
-    "site": "pilot",
-    "description": "Sample Cut2Kit project for elevation-driven panelization",
+    "projectId": "cut2kit-elevation3-demo",
+    "jobName": "Cut2Kit Elevation 3 Demo",
+    "customer": "AXYZ",
+    "site": "prototype-lab",
+    "description": "AI-first wall workflow example for elevation PDF -> framing PDF -> OSB PDF.",
     "units": "imperial"
   },
   "production": {
     "primaryMode": "kitting",
     "allowLineSideQueue": true,
-    "applications": ["siding", "flooring", "roofing"]
+    "applications": ["siding"]
   },
   "machineProfile": {
-    "profileId": "AXYZ-ROUTER-PLACEHOLDER",
-    "postProcessorId": "pending-definition",
+    "profileId": "AXYZ-ROUTER-A2MC",
+    "postProcessorId": "axyz-a2mc",
     "stockCatalogId": "default-prefab-sheet-stock"
   },
   "discovery": {
     "searchRecursively": true,
-    "preferredFolders": ["elevations", "floor", "roof", "references"],
+    "preferredFolders": [".docs", "examples", "elevations", "references"],
     "knownSettingsFileNames": ["cut2kit.settings.json"]
   },
-  "dxf": {
-    "defaultUnits": "inch",
+  "pdf": {
     "autoClassify": true,
-    "layerMappings": {
-      "outline": ["OUTLINE", "WALL_OUTLINE", "PROFILE"],
-      "openings": ["OPENINGS", "WINDOW", "DOOR"],
-      "studs": ["STUD", "STUDS", "FRAMING_STUD"],
-      "joists": ["JOIST", "JOISTS", "FRAMING_JOIST"],
-      "dimensions": ["DIM", "DIMS"],
-      "annotations": ["TEXT", "NOTES", "ANNO"]
-    },
     "fileAssignments": [
       {
-        "pathPattern": "elevations/front*.dxf",
+        "pathPattern": "examples/elevation*.pdf",
         "classification": "elevation",
         "side": "front",
         "application": "siding"
       },
       {
-        "pathPattern": "elevations/rear*.dxf",
+        "pathPattern": "elevations/*.pdf",
         "classification": "elevation",
-        "side": "rear",
+        "side": "front",
         "application": "siding"
-      },
-      {
-        "pathPattern": "elevations/left*.dxf",
-        "classification": "elevation",
-        "side": "left",
-        "application": "siding"
-      },
-      {
-        "pathPattern": "elevations/right*.dxf",
-        "classification": "elevation",
-        "side": "right",
-        "application": "siding"
-      },
-      {
-        "pathPattern": "floor/*.dxf",
-        "classification": "floor",
-        "application": "flooring"
-      },
-      {
-        "pathPattern": "roof/*.dxf",
-        "classification": "roof",
-        "application": "roofing"
       }
     ]
   },
-  "framing": {
+  "framingRules": {
     "studs": {
       "enabled": true,
       "onCenter": 16,
-      "originReference": "east",
+      "originReference": "left",
       "continuityPolicy": "stop_at_openings",
       "openingEdgePolicy": "double_stud_at_openings",
       "allowMidBreakPanelSeam": false,
       "drywallAlignmentPreference": true,
-      "endCondition": "customer_defined"
+      "endCondition": "double end studs"
     },
     "joists": {
-      "enabled": true,
-      "direction": "east_west",
+      "enabled": false,
+      "direction": "customer_defined",
       "onCenter": 16,
-      "originReference": "north",
-      "continuityPolicy": "stop_at_openings"
+      "originReference": "front",
+      "continuityPolicy": "customer_defined"
     },
     "headersAndTrimmers": {
       "autoGenerateWhenOpeningsExist": true,
-      "openingEdgeClearance": 0.125
+      "openingEdgeClearance": 0.0
     }
   },
   "openings": {
@@ -109,18 +78,13 @@
   "panelization": {
     "strategy": "rule_driven",
     "targetPanelWidth": 48,
-    "maxPanelWidth": 60,
-    "maxPanelHeight": 144,
-    "minPanelWidth": 8,
-    "minPanelHeight": 8,
+    "maxPanelWidth": 48,
+    "maxPanelHeight": 96,
+    "minPanelWidth": 12,
+    "minPanelHeight": 12,
     "edgeTrimAllowance": 0.125,
     "kerfAllowance": 0.0,
-    "seamPriority": [
-      "align_to_structural_members",
-      "avoid_openings",
-      "prefer_shipping_friendly_panels",
-      "allow_manual_override"
-    ],
+    "seamPriority": ["align_to_structural_members", "avoid_openings"],
     "perApplication": {
       "siding": {
         "grainOrOrientation": "vertical",
@@ -131,30 +95,30 @@
         "preferredBreakDirection": "joist_aligned"
       },
       "roofing": {
-        "grainOrOrientation": "slope_defined",
+        "grainOrOrientation": "customer_defined",
         "preferredBreakDirection": "rafter_or_joist_aligned"
       }
     }
   },
   "nesting": {
     "strategy": "deterministic_with_ai_suggestions",
-    "sortPriority": ["application", "material", "thickness", "kitGroup"],
+    "sortPriority": ["application", "material", "kitGroup"],
     "optimizeFor": "yield_then_sequence",
     "allowRotation": true,
     "groupByHouseSide": true,
-    "maxConcurrentNests": 4
+    "maxConcurrentNests": 2
   },
   "queueing": {
     "kitting": {
       "enabled": true,
       "groupBy": "assembly_zone",
-      "sequence": ["front", "left", "right", "rear", "floor", "roof"],
+      "sequence": ["front"],
       "outputPrefix": "KIT"
     },
     "lineSide": {
       "enabled": true,
       "groupBy": "production_flow",
-      "sequence": ["floor", "walls", "roof"],
+      "sequence": ["walls"],
       "outputPrefix": "LINE"
     }
   },
@@ -163,23 +127,185 @@
     "manifestsDir": "output/manifests",
     "ncDir": "output/nc",
     "reportsDir": "output/reports",
-    "overwritePolicy": "version_if_exists"
+    "overwritePolicy": "overwrite"
   },
   "ai": {
     "enabled": true,
-    "agentName": "Cut to Kit Agent",
+    "agentName": "Cut2Kit Agent",
     "provider": "codex",
     "model": "gpt-5.4",
-    "reasoningEffort": "high",
-    "preferFastServiceTierWhenAvailable": true,
+    "reasoningEffort": "xhigh",
+    "preferFastServiceTierWhenAvailable": false,
     "approvalRequiredForRuleEdits": true,
     "approvalRequiredForQueueGeneration": true,
+    "primaryWorkflow": "ai-first-wall-layout",
+    "runtimeGenerationOrder": [
+      "extract_wall_geometry",
+      "generate_framing_layout",
+      "generate_sheathing_layout",
+      "validate_and_package"
+    ],
+    "promptReferencePaths": {
+      "reusableSummaryPdf": ".docs/reusable_prompt_summary_framing_osb.pdf",
+      "framingExamplePdf": "examples/elevation3_framing_layout.pdf",
+      "sheathingExamplePdf": "examples/elevation3_osb_sheet_layout_with_fastening.pdf"
+    },
     "allowedTasks": [
-      "explain_project_state",
-      "suggest_layer_mappings",
-      "suggest_rule_json",
-      "suggest_panelization_strategy",
-      "summarize_warnings"
+      "interpret_elevation_pdf",
+      "generate_framing_layout",
+      "generate_sheathing_layout",
+      "summarize_validation_results"
     ]
+  },
+  "pdfWorkflow": {
+    "autoClassify": true,
+    "fileAssignments": [
+      {
+        "pathPattern": "examples/elevation*.pdf",
+        "classification": "elevation",
+        "side": "front",
+        "application": "siding"
+      }
+    ],
+    "elevationIntake": {
+      "enabled": true,
+      "geometrySourcePriority": ["dimension_text", "drawn_geometry"],
+      "horizontalDimensionMode": "cumulative_from_left_edge",
+      "openingPairingStrategy": "consecutive_pairs",
+      "openingTypeInference": "sill_line_detection",
+      "requireCommonHeadHeight": true,
+      "requireCommonWindowSillHeight": true,
+      "units": "inch"
+    }
+  },
+  "framing": {
+    "enabled": true,
+    "material": {
+      "label": "SPF",
+      "nominalSize": "2x6",
+      "thickness": 1.5,
+      "depth": 5.5
+    },
+    "plates": {
+      "top": {
+        "enabled": true,
+        "continuity": "continuous",
+        "orientationInElevation": "flat"
+      },
+      "bottom": {
+        "enabled": true,
+        "continuity": "continuous",
+        "orientationInElevation": "flat"
+      }
+    },
+    "horizontalMembers": {
+      "orientationInElevation": "flat"
+    },
+    "endStuds": {
+      "leftCount": 2,
+      "rightCount": 2
+    },
+    "jambStuds": {
+      "countPerSide": 1,
+      "leftOffsetMode": "shift_left",
+      "leftOffset": 1.5,
+      "preserveClearOpenings": true
+    },
+    "studLayout": {
+      "enabled": true,
+      "spacing": 16,
+      "originSide": "left",
+      "direction": "left_to_right",
+      "stopBeforeNextBearingStudWithinOrEqual": 2
+    },
+    "openings": {
+      "clearArchitecturalOpenings": true,
+      "headMember": {
+        "windows": true,
+        "doors": true
+      },
+      "sillMember": {
+        "windows": true,
+        "doors": false
+      }
+    },
+    "crippleStuds": {
+      "aboveHeads": true,
+      "belowWindowSills": true,
+      "splitGridStudsInsideOpenings": true
+    },
+    "labeling": {
+      "includeMemberSchedule": true,
+      "includeStudCenterSchedule": true
+    }
+  },
+  "sheathing": {
+    "enabled": true,
+    "materialLabel": "7/16 in OSB",
+    "panelThickness": 0.4375,
+    "sheet": {
+      "nominalWidth": 48,
+      "nominalHeight": 96,
+      "installedOrientation": "vertical",
+      "runDirection": "left_to_right",
+      "allowTerminalRip": true
+    },
+    "openingsRemainUncovered": true,
+    "output": {
+      "includeOverallLayoutPage": true,
+      "includePerSheetCutoutPages": true,
+      "includeFasteningPage": true
+    },
+    "notes": {
+      "includeDisclaimer": true,
+      "panelEdgeGap": 0.125,
+      "supportedEdgeBehavior": "edges_over_framing_or_blocking"
+    }
+  },
+  "fastening": {
+    "enabled": true,
+    "typicalReferenceOnly": true,
+    "supportedEdgeSpacing": 6,
+    "fieldSpacing": 12,
+    "edgeDistance": 0.375,
+    "includeOverdrivingWarning": true,
+    "disclaimerText": "Confirm final fastening schedule, blocking, and edge support requirements with the governing code, engineering, and the panel manufacturer.",
+    "noteLines": [
+      "Use the stud framing layout for support lines.",
+      "Place panel edges over framing members or provide blocking where required.",
+      "Keep fasteners approximately 3/8 in back from panel edges and do not overdrive fasteners."
+    ]
+  },
+  "rendering": {
+    "units": "inch",
+    "dimensionFormat": "feet-and-inches",
+    "framing": {
+      "pageSize": "letter",
+      "pageOrientation": "landscape",
+      "margins": {
+        "left": 84,
+        "right": 84,
+        "top": 96,
+        "bottom": 174
+      },
+      "includeMemberSchedule": true,
+      "titleTemplate": "{source} - Stud Framing Layout",
+      "subtitleTemplate": "{material} framing. Plates shown flat."
+    },
+    "sheathing": {
+      "pageSize": "letter",
+      "pageOrientation": "landscape",
+      "margins": {
+        "left": 42,
+        "right": 42,
+        "top": 78,
+        "bottom": 48
+      },
+      "scaleToFitFirstPage": true,
+      "cutoutDetailsPerPage": 4,
+      "titleTemplate": "{source} - OSB Sheathing Layout",
+      "subtitleTemplate": "{material}, nominal {sheet} sheets. Openings remain uncovered.",
+      "fasteningTitleTemplate": "{source} - Fastening Pattern and Panel Edge Notes"
+    }
   }
 }

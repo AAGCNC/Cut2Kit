@@ -84,6 +84,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   const queryClient = useQueryClient();
   const { handleNewThread } = useHandleNewThread();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingWallLayout, setIsGeneratingWallLayout] = useState(false);
   const [isPreparingAgent, setIsPreparingAgent] = useState(false);
   const [selectedSourcePdfPath, setSelectedSourcePdfPath] = useState<string | null>(null);
   const [isStartingFramingGeneration, setIsStartingFramingGeneration] = useState(false);
@@ -226,6 +227,34 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       setIsGenerating(false);
     }
   }, [project, queryClient]);
+
+  const handleGenerateWallLayout = useCallback(async () => {
+    if (!project || !selectedSourcePdfPath) return;
+    const api = readNativeApi();
+    if (!api) return;
+
+    setIsGeneratingWallLayout(true);
+    try {
+      const result = await api.cut2kit.generateWallLayout({
+        cwd: project.cwd,
+        sourcePdfPath: selectedSourcePdfPath,
+      });
+      queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), result.project);
+      toastManager.add({
+        type: "success",
+        title: "Wall layout package generated",
+        description: `${result.writtenPaths.length} framing/sheathing artifacts written for ${selectedSourcePdfPath}.`,
+      });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not generate wall layout package",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+      });
+    } finally {
+      setIsGeneratingWallLayout(false);
+    }
+  }, [project, queryClient, selectedSourcePdfPath]);
 
   const handleOpenInEditor = useCallback(async () => {
     if (!project) return;
@@ -539,6 +568,17 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
               Open Folder
             </Button>
             <Button
+              onClick={() => void handleGenerateWallLayout()}
+              disabled={
+                isGeneratingWallLayout ||
+                !selectedSourcePdfPath ||
+                selectedElevationOption?.classification !== "elevation"
+              }
+            >
+              <HammerIcon className="size-4" />
+              {isGeneratingWallLayout ? "Generating Wall Package..." : "Generate Wall Package"}
+            </Button>
+            <Button
               variant="outline"
               onClick={() => void handleGenerateFramingLayout()}
               disabled={
@@ -581,11 +621,12 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
 
           <Card className="flex min-h-0 flex-[1_1_0%] flex-col overflow-hidden">
             <CardHeader className="border-b border-border/70">
-              <CardTitle>Framing Layout Automation</CardTitle>
+              <CardTitle>AI-First Wall Automation</CardTitle>
               <CardDescription>
-                Cut2Kit sends the selected elevation PDF and project settings to Codex, expects a
-                structured framing-layout JSON artifact back, then renders the PDF deterministically
-                from that JSON.
+                The primary wall workflow runs geometry extraction, framing generation, and OSB
+                generation through Codex/GPT-5.4, then validates and renders the PDFs
+                deterministically. The framing-only thread below remains available as an advanced
+                prompt/debug path.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -619,8 +660,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {selectedSourcePdfPath
-                      ? `The framing run will use ${selectedSourcePdfPath} as the authoritative wall elevation PDF.`
-                      : "Choose an elevation PDF in the workspace above before starting the framing run."}
+                      ? `The AI-first wall run will use ${selectedSourcePdfPath} as the authoritative wall elevation PDF.`
+                      : "Choose an elevation PDF in the workspace above before starting the wall run."}
                   </p>
                 </div>
 
@@ -666,6 +707,19 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 </div>
 
                 <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={() => void handleGenerateWallLayout()}
+                    disabled={
+                      isGeneratingWallLayout ||
+                      !selectedSourcePdfPath ||
+                      selectedElevationOption?.classification !== "elevation"
+                    }
+                  >
+                    <HammerIcon className="size-4" />
+                    {isGeneratingWallLayout
+                      ? "Generating Wall Package..."
+                      : "Generate Wall Package"}
+                  </Button>
                   <Button
                     onClick={() => void handleGenerateFramingLayout()}
                     disabled={

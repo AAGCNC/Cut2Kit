@@ -260,6 +260,18 @@ const WsRpcLayer = WsRpcGroup.toLayer(
               }),
           ),
         ),
+      [WS_METHODS.cut2kitGenerateWallLayout]: (input) =>
+        cut2kitProjects.generateWallLayout(input).pipe(
+          Effect.mapError(
+            (cause) =>
+              new Cut2KitProjectError({
+                cwd: input.cwd,
+                operation: "cut2kit.generateWallLayout",
+                detail: cause.detail,
+                cause,
+              }),
+          ),
+        ),
       [WS_METHODS.cut2kitRenderFramingLayout]: (input) =>
         cut2kitProjects.renderFramingLayout(input).pipe(
           Effect.mapError(

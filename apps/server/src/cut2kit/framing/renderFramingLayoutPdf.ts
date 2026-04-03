@@ -140,6 +140,10 @@ function drawVerticalDimensionLine(
   doc.restore();
 }
 
+function formatInches(value: number): string {
+  return `${Math.round(value * 100) / 100}"`;
+}
+
 export async function renderFramingLayoutPdf(layout: Cut2KitFramingLayout): Promise<Uint8Array> {
   const doc = new PDFDocument({
     autoFirstPage: false,
@@ -319,6 +323,62 @@ export async function renderFramingLayoutPdf(layout: Cut2KitFramingLayout): Prom
       width: PAGE_WIDTH - 96,
     });
   });
+
+  if ("memberSchedule" in layout) {
+    doc.addPage({ size: [PAGE_WIDTH, PAGE_HEIGHT], margin: 0 });
+    doc.rect(0, 0, PAGE_WIDTH, PAGE_HEIGHT).fill("#f7f1e6");
+    doc
+      .fillColor("#1f140d")
+      .font("Helvetica-Bold")
+      .fontSize(18)
+      .text("Framing Member / Stud Schedule", 48, 32);
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .fillColor("#4f4338")
+      .text(
+        "This page summarizes full-height studs, opening members, and the member schedule derived from the AI-generated framing layout.",
+        48,
+        56,
+        { width: PAGE_WIDTH - 96 },
+      );
+
+    const studRows = layout.members
+      .filter((member) => member.kind.endsWith("stud"))
+      .sort((left, right) => (left.centerlineX ?? left.x) - (right.centerlineX ?? right.x))
+      .slice(0, 18);
+    doc.font("Helvetica-Bold").fontSize(11).fillColor("#24180f").text("Stud centers", 48, 102);
+    doc.font("Helvetica-Bold").fontSize(9);
+    doc.text("Member", 48, 122, { width: 180 });
+    doc.text("Center", 240, 122, { width: 80 });
+    doc.text("Span", 320, 122, { width: 180 });
+    doc.font("Helvetica").fillColor("#392c21");
+    studRows.forEach((member, index) => {
+      const y = 140 + index * 16;
+      const span =
+        member.height >= member.width
+          ? `${formatInches(member.y)} to ${formatInches(member.y + member.height)}`
+          : `${formatInches(member.x)} to ${formatInches(member.x + member.width)}`;
+      doc.text(member.id.replace(/-/g, " "), 48, y, { width: 180 });
+      doc.text(formatInches(member.centerlineX ?? member.x + member.width / 2), 240, y, {
+        width: 80,
+      });
+      doc.text(span, 320, y, { width: 180 });
+    });
+
+    doc.font("Helvetica-Bold").fontSize(11).fillColor("#24180f").text("Member schedule", 48, 450);
+    doc.font("Helvetica-Bold").fontSize(9);
+    doc.text("Label", 48, 470, { width: 300 });
+    doc.text("Count", 360, 470, { width: 60 });
+    doc.text("Length", 430, 470, { width: 80 });
+    doc.font("Helvetica").fillColor("#392c21");
+    layout.memberSchedule.slice(0, 10).forEach((item, index) => {
+      const y = 488 + index * 14;
+      doc.text(item.label, 48, y, { width: 300 });
+      doc.text(String(item.count), 360, y, { width: 60 });
+      doc.text(formatInches(item.length), 430, y, { width: 80 });
+    });
+  }
 
   doc.end();
   return await completed;

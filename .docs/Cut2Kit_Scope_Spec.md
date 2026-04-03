@@ -1,5 +1,7 @@
 # Cut2Kit Scope Specification (Draft v0.1)
 
+> Implementation note: for the current wall-elevation workflow, follow [.docs/cut2kit-ai-first-wall-workflow.md](./cut2kit-ai-first-wall-workflow.md). The runtime conversion path for elevation -> framing -> OSB is AI-first, with deterministic validation and rendering around the model output.
+
 ## 1. Document Status
 
 - **Product:** AXYZ Cut2Kit

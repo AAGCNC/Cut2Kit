@@ -3,6 +3,19 @@ import fsPromises from "node:fs/promises";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Path, Schema } from "effect";
+import { afterEach, vi } from "vitest";
+
+const { runCut2KitCodexJsonMock } = vi.hoisted(() => ({
+  runCut2KitCodexJsonMock: vi.fn(),
+}));
+
+vi.mock("../ai/codexStructuredGeneration.ts", () => ({
+  runCut2KitCodexJson: runCut2KitCodexJsonMock,
+}));
+
+afterEach(() => {
+  runCut2KitCodexJsonMock.mockReset();
+});
 
 import { ServerConfig } from "../../config.ts";
 import { WorkspaceEntriesLive } from "../../workspace/Layers/WorkspaceEntries.ts";
@@ -28,6 +41,8 @@ const TestLayer = Layer.empty.pipe(
 );
 
 const sampleProjectPath = new URL("../../../../../examples/prefab-demo-project", import.meta.url);
+const exampleSettingsPath = new URL("../../../../../.docs/cut2kit.settings.example.json", import.meta.url);
+const exampleElevationPath = new URL("../../../../../examples/elevation3.pdf", import.meta.url);
 
 class FixtureCopyError extends Schema.TaggedErrorClass<FixtureCopyError>()("FixtureCopyError", {
   message: Schema.String,
@@ -48,6 +63,426 @@ const copyFixtureProject = (destination: string) =>
         }`,
       }),
   });
+
+const copyExampleSettings = (destination: string) =>
+  Effect.tryPromise({
+    try: () =>
+      fsPromises.copyFile(exampleSettingsPath, `${destination}/cut2kit.settings.json`),
+    catch: (error) =>
+      new FixtureCopyError({
+        message: `Failed to copy Cut2Kit example settings: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      }),
+  });
+
+const copyExampleElevation = (destination: string) =>
+  Effect.tryPromise({
+    try: async () => {
+      await fsPromises.mkdir(`${destination}/examples`, { recursive: true });
+      await fsPromises.copyFile(exampleElevationPath, `${destination}/examples/elevation3.pdf`);
+    },
+    catch: (error) =>
+      new FixtureCopyError({
+        message: `Failed to copy Cut2Kit example elevation: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      }),
+  });
+
+function makeGeometryDraft() {
+  return {
+    schemaVersion: "0.2.0" as const,
+    sourcePdfPath: "examples/elevation3.pdf",
+    settingsFilePath: "cut2kit.settings.json",
+    units: "inch" as const,
+    wall: {
+      width: 360,
+      height: 96,
+      pageLeft: 0,
+      pageRight: 360,
+      pageTop: 96,
+      pageBottom: 0,
+    },
+    commonHeights: {
+      head: 82,
+      windowSill: 46,
+    },
+    dimensionText: {
+      horizontalMarks: [36, 60, 84, 120, 156, 204, 240, 288, 336, 360],
+      verticalMarks: [0, 46, 82, 96],
+      pairingStrategy: "consecutive_pairs" as const,
+      openingTypeInference: "sill_line_detection" as const,
+    },
+    openings: [
+      {
+        id: "window-1",
+        kind: "window" as const,
+        left: 36,
+        right: 60,
+        bottom: 46,
+        top: 82,
+        width: 24,
+        height: 36,
+        clearOpening: true,
+      },
+      {
+        id: "door-1",
+        kind: "door" as const,
+        left: 84,
+        right: 120,
+        bottom: 0,
+        top: 82,
+        width: 36,
+        height: 82,
+        clearOpening: true,
+      },
+      {
+        id: "window-2",
+        kind: "window" as const,
+        left: 156,
+        right: 204,
+        bottom: 46,
+        top: 82,
+        width: 48,
+        height: 36,
+        clearOpening: true,
+      },
+      {
+        id: "window-3",
+        kind: "window" as const,
+        left: 240,
+        right: 288,
+        bottom: 46,
+        top: 82,
+        width: 48,
+        height: 36,
+        clearOpening: true,
+      },
+      {
+        id: "window-4",
+        kind: "window" as const,
+        left: 336,
+        right: 360,
+        bottom: 46,
+        top: 82,
+        width: 24,
+        height: 36,
+        clearOpening: true,
+      },
+    ],
+    validation: {
+      dimensionTextFound: true,
+      wallBoundsFit: true,
+      openingPairsResolved: true,
+      openingTypesResolved: true,
+      headHeightResolved: true,
+      sillHeightResolved: true,
+      notes: [],
+    },
+    notes: [],
+  };
+}
+
+function makeFramingDraft(geometry = makeGeometryDraft()) {
+  return {
+    schemaVersion: "0.2.0" as const,
+    sourcePdfPath: "examples/elevation3.pdf",
+    settingsFilePath: "cut2kit.settings.json",
+    units: "inch" as const,
+    geometry,
+    wall: {
+      width: 360,
+      height: 96,
+      memberThickness: 1.5,
+      studNominalSize: "2x6",
+      material: "SPF",
+      topMemberOrientation: "flat" as const,
+      bottomMemberOrientation: "flat" as const,
+    },
+    studLayout: {
+      originEdge: "left" as const,
+      spacing: 16,
+      commonStudCenterlines: [16, 64, 208],
+    },
+    openings: geometry.openings,
+    members: [
+      { id: "bottom-plate", kind: "bottom-plate" as const, x: 0, y: 0, width: 360, height: 1.5 },
+      { id: "top-plate", kind: "top-plate" as const, x: 0, y: 94.5, width: 360, height: 1.5 },
+      { id: "end-left-1", kind: "end-stud" as const, x: 0, y: 1.5, width: 1.5, height: 93 },
+      { id: "end-left-2", kind: "end-stud" as const, x: 1.5, y: 1.5, width: 1.5, height: 93 },
+      { id: "end-right-1", kind: "end-stud" as const, x: 357, y: 1.5, width: 1.5, height: 93 },
+      { id: "end-right-2", kind: "end-stud" as const, x: 358.5, y: 1.5, width: 1.5, height: 93 },
+      { id: "stud-16", kind: "common-stud" as const, x: 15.25, y: 1.5, width: 1.5, height: 93, centerlineX: 16 },
+      { id: "stud-64", kind: "common-stud" as const, x: 63.25, y: 1.5, width: 1.5, height: 93, centerlineX: 64 },
+      { id: "stud-208", kind: "common-stud" as const, x: 207.25, y: 1.5, width: 1.5, height: 93, centerlineX: 208 },
+      { id: "w1-jamb-l", kind: "jamb-stud" as const, x: 34.5, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-1" },
+      { id: "w1-jamb-r", kind: "jamb-stud" as const, x: 60, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-1" },
+      { id: "door-jamb-l", kind: "jamb-stud" as const, x: 82.5, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "door-1" },
+      { id: "door-jamb-r", kind: "jamb-stud" as const, x: 120, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "door-1" },
+      { id: "w2-jamb-l", kind: "jamb-stud" as const, x: 154.5, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-2" },
+      { id: "w2-jamb-r", kind: "jamb-stud" as const, x: 204, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-2" },
+      { id: "w3-jamb-l", kind: "jamb-stud" as const, x: 238.5, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-3" },
+      { id: "w3-jamb-r", kind: "jamb-stud" as const, x: 288, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-3" },
+      { id: "w4-jamb-l", kind: "jamb-stud" as const, x: 334.5, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-4" },
+      { id: "w4-jamb-r", kind: "jamb-stud" as const, x: 360, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-4" },
+    ],
+    memberSchedule: [],
+    validation: {
+      wallWidthMatchesElevation: true,
+      wallHeightMatchesElevation: true,
+      openingSizesMatchElevation: true,
+      headHeightMatchesElevation: true,
+      sillHeightMatchesElevation: true,
+      endStudsDoubled: true,
+      jambStudsPresent: true,
+      commonStudSpacingApplied: true,
+      noCommonStudThroughVoid: true,
+      plateOrientationMatchesExpectation: true,
+      notes: [],
+    },
+    notes: [],
+  };
+}
+
+function makeSheathingDraft(geometry = makeGeometryDraft()) {
+  return {
+    schemaVersion: "0.2.0" as const,
+    sourcePdfPath: "examples/elevation3.pdf",
+    settingsFilePath: "cut2kit.settings.json",
+    units: "inch" as const,
+    geometry,
+    wall: {
+      width: 360,
+      height: 96,
+      materialLabel: "7/16 in OSB",
+      panelThickness: 0.4375,
+      sheetNominalWidth: 48,
+      sheetNominalHeight: 96,
+      installedOrientation: "vertical" as const,
+      runDirection: "left_to_right" as const,
+    },
+    sheets: [
+      {
+        id: "sheet-1",
+        index: 1,
+        left: 0,
+        right: 48,
+        bottom: 0,
+        top: 96,
+        width: 48,
+        height: 96,
+        isTerminalRip: false,
+        cutouts: [
+          {
+            id: "cutout-w1-left",
+            sourceOpeningId: "window-1",
+            left: 36,
+            right: 48,
+            bottom: 46,
+            top: 82,
+            width: 12,
+            height: 36,
+          },
+        ],
+        notes: [],
+      },
+      {
+        id: "sheet-2",
+        index: 2,
+        left: 48,
+        right: 96,
+        bottom: 0,
+        top: 96,
+        width: 48,
+        height: 96,
+        isTerminalRip: false,
+        cutouts: [
+          {
+            id: "cutout-w1-right",
+            sourceOpeningId: "window-1",
+            left: 48,
+            right: 60,
+            bottom: 46,
+            top: 82,
+            width: 12,
+            height: 36,
+          },
+          {
+            id: "cutout-door-left",
+            sourceOpeningId: "door-1",
+            left: 84,
+            right: 96,
+            bottom: 0,
+            top: 82,
+            width: 12,
+            height: 82,
+          },
+        ],
+        notes: [],
+      },
+      {
+        id: "sheet-3",
+        index: 3,
+        left: 96,
+        right: 144,
+        bottom: 0,
+        top: 96,
+        width: 48,
+        height: 96,
+        isTerminalRip: false,
+        cutouts: [
+          {
+            id: "cutout-door-right",
+            sourceOpeningId: "door-1",
+            left: 96,
+            right: 120,
+            bottom: 0,
+            top: 82,
+            width: 24,
+            height: 82,
+          },
+        ],
+        notes: [],
+      },
+      {
+        id: "sheet-4",
+        index: 4,
+        left: 144,
+        right: 192,
+        bottom: 0,
+        top: 96,
+        width: 48,
+        height: 96,
+        isTerminalRip: false,
+        cutouts: [
+          {
+            id: "cutout-w2-left",
+            sourceOpeningId: "window-2",
+            left: 156,
+            right: 192,
+            bottom: 46,
+            top: 82,
+            width: 36,
+            height: 36,
+          },
+        ],
+        notes: [],
+      },
+      {
+        id: "sheet-5",
+        index: 5,
+        left: 192,
+        right: 240,
+        bottom: 0,
+        top: 96,
+        width: 48,
+        height: 96,
+        isTerminalRip: false,
+        cutouts: [
+          {
+            id: "cutout-w2-right",
+            sourceOpeningId: "window-2",
+            left: 192,
+            right: 204,
+            bottom: 46,
+            top: 82,
+            width: 12,
+            height: 36,
+          },
+        ],
+        notes: [],
+      },
+      {
+        id: "sheet-6",
+        index: 6,
+        left: 240,
+        right: 288,
+        bottom: 0,
+        top: 96,
+        width: 48,
+        height: 96,
+        isTerminalRip: false,
+        cutouts: [
+          {
+            id: "cutout-w3",
+            sourceOpeningId: "window-3",
+            left: 240,
+            right: 288,
+            bottom: 46,
+            top: 82,
+            width: 48,
+            height: 36,
+          },
+        ],
+        notes: [],
+      },
+      {
+        id: "sheet-7",
+        index: 7,
+        left: 288,
+        right: 336,
+        bottom: 0,
+        top: 96,
+        width: 48,
+        height: 96,
+        isTerminalRip: false,
+        cutouts: [],
+        notes: [],
+      },
+      {
+        id: "sheet-8",
+        index: 8,
+        left: 336,
+        right: 360,
+        bottom: 0,
+        top: 96,
+        width: 24,
+        height: 96,
+        isTerminalRip: true,
+        cutouts: [
+          {
+            id: "cutout-w4",
+            sourceOpeningId: "window-4",
+            left: 336,
+            right: 360,
+            bottom: 46,
+            top: 82,
+            width: 24,
+            height: 36,
+          },
+        ],
+        notes: [],
+      },
+    ],
+    summary: {
+      sheetCount: 8,
+      fullSheetCount: 7,
+      terminalRipWidth: 24,
+    },
+    fastening: {
+      supportedEdgeSpacing: 6,
+      fieldSpacing: 12,
+      edgeDistance: 0.375,
+      typicalReferenceOnly: true,
+      noteLines: [
+        "Use the stud framing layout for support lines.",
+        "Keep panel edges over framing members or provide blocking where required.",
+      ],
+      disclaimerText:
+        "Confirm final fastening schedule and edge support requirements with code, engineering, and manufacturer instructions.",
+    },
+    validation: {
+      openingCoverageRemoved: true,
+      sheetCountMatchesLayout: true,
+      terminalRipComputed: true,
+      cutoutsWithinSheets: true,
+      firstPageFitsMargins: true,
+      notes: [],
+    },
+    notes: [],
+  };
+}
 
 it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
   describe("inspectProject", () => {
@@ -117,6 +552,20 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         expect(project.sourceDocuments[0]?.sourcePath).toBe("elevation2.pdf");
         expect(project.sourceDocuments[0]?.classification).toBe("elevation");
         expect(project.issues.some((issue) => issue.code === "pdf.unclassified")).toBe(false);
+      }),
+    );
+
+    it.effect("maps 0.2.0 framingRules into the project snapshot", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const projectDir = yield* makeTempDir("cut2kit-ai-settings-project-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
+
+        const project = yield* cut2kitProjects.inspectProject({ cwd: projectDir });
+
+        expect(project.settings?.schemaVersion).toBe("0.2.0");
+        expect(project.framingRules?.studs.onCenter).toBe(16);
       }),
     );
   });
@@ -371,6 +820,67 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
 
         const renderedPdf = yield* fileSystem.readFile(path.join(projectDir, result.pdfPath));
         expect(renderedPdf.byteLength).toBeGreaterThan(1000);
+      }),
+    );
+  });
+
+  describe("generateWallLayout", () => {
+    it.effect("runs the AI-first geometry -> framing -> sheathing workflow and writes packaged artifacts", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const projectDir = yield* makeTempDir("cut2kit-ai-wall-project-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
+
+        const geometryDraft = makeGeometryDraft();
+        const framingDraft = makeFramingDraft(geometryDraft);
+        const sheathingDraft = makeSheathingDraft(geometryDraft);
+
+        runCut2KitCodexJsonMock
+          .mockReturnValueOnce(Effect.succeed(geometryDraft))
+          .mockReturnValueOnce(Effect.succeed(framingDraft))
+          .mockReturnValueOnce(Effect.succeed(sheathingDraft));
+
+        const result = yield* cut2kitProjects.generateWallLayout({
+          cwd: projectDir,
+          sourcePdfPath: "examples/elevation3.pdf",
+        });
+
+        expect(runCut2KitCodexJsonMock).toHaveBeenCalledTimes(3);
+        expect(runCut2KitCodexJsonMock.mock.calls[0]?.[0]?.prompt).toContain(
+          "AI-first: interpret the elevation PDF and emit structured wall geometry",
+        );
+        expect(runCut2KitCodexJsonMock.mock.calls[1]?.[0]?.prompt).toContain(
+          "This is the framing phase of the reusable summary workflow",
+        );
+        expect(runCut2KitCodexJsonMock.mock.calls[2]?.[0]?.prompt).toContain(
+          "This is the second AI-first conversion phase",
+        );
+
+        expect(result.artifacts.geometryJsonPath).toBe(
+          "output/reports/wall-layouts/examples-elevation3.wall-geometry.json",
+        );
+        expect(result.artifacts.framingPdfPath).toBe(
+          "output/reports/framing-layouts/examples-elevation3.framing-layout.pdf",
+        );
+        expect(result.artifacts.sheathingPdfPath).toBe(
+          "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.pdf",
+        );
+        expect(result.framingLayout.validation.endStudsDoubled).toBe(true);
+        expect(result.sheathingLayout.summary.sheetCount).toBe(8);
+        expect(result.sheathingLayout.validation.firstPageFitsMargins).toBe(true);
+        expect(result.writtenPaths).toHaveLength(5);
+
+        const framingPdf = yield* fileSystem.readFile(
+          path.join(projectDir, result.artifacts.framingPdfPath),
+        );
+        const sheathingPdf = yield* fileSystem.readFile(
+          path.join(projectDir, result.artifacts.sheathingPdfPath),
+        );
+        expect(framingPdf.byteLength).toBeGreaterThan(1000);
+        expect(sheathingPdf.byteLength).toBeGreaterThan(1000);
       }),
     );
   });

@@ -55,6 +55,8 @@ import {
 import {
   Cut2KitGenerateOutputsInput,
   Cut2KitGenerateOutputsResult,
+  Cut2KitGenerateWallLayoutInput,
+  Cut2KitGenerateWallLayoutResult,
   Cut2KitInspectProjectInput,
   Cut2KitProject,
   Cut2KitProjectError,
@@ -92,6 +94,7 @@ export const WS_METHODS = {
   projectsWriteFile: "projects.writeFile",
   cut2kitInspectProject: "cut2kit.inspectProject",
   cut2kitGenerateOutputs: "cut2kit.generateOutputs",
+  cut2kitGenerateWallLayout: "cut2kit.generateWallLayout",
   cut2kitRenderFramingLayout: "cut2kit.renderFramingLayout",
 
   // Shell methods
@@ -188,6 +191,12 @@ export const WsCut2KitInspectProjectRpc = Rpc.make(WS_METHODS.cut2kitInspectProj
 export const WsCut2KitGenerateOutputsRpc = Rpc.make(WS_METHODS.cut2kitGenerateOutputs, {
   payload: Cut2KitGenerateOutputsInput,
   success: Cut2KitGenerateOutputsResult,
+  error: Cut2KitProjectError,
+});
+
+export const WsCut2KitGenerateWallLayoutRpc = Rpc.make(WS_METHODS.cut2kitGenerateWallLayout, {
+  payload: Cut2KitGenerateWallLayoutInput,
+  success: Cut2KitGenerateWallLayoutResult,
   error: Cut2KitProjectError,
 });
 
@@ -372,6 +381,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsWriteFileRpc,
   WsCut2KitInspectProjectRpc,
   WsCut2KitGenerateOutputsRpc,
+  WsCut2KitGenerateWallLayoutRpc,
   WsCut2KitRenderFramingLayoutRpc,
   WsShellOpenInEditorRpc,
   WsGitStatusRpc,
