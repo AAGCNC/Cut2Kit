@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { decodeProjectFileBytes } from "~/lib/projectFileContents";
 
@@ -186,10 +187,16 @@ export function ProjectPdfWorkspace({
   project,
   selectedSourcePdfPath,
   onSelectedSourcePdfPathChange,
+  onRenderFramingLayoutPdf,
+  canRenderFramingLayoutPdf,
+  isRenderingFramingLayoutPdf,
 }: {
   project: Cut2KitProject;
   selectedSourcePdfPath: string | null;
   onSelectedSourcePdfPathChange: (nextPath: string | null) => void;
+  onRenderFramingLayoutPdf?: () => void;
+  canRenderFramingLayoutPdf?: boolean;
+  isRenderingFramingLayoutPdf?: boolean;
 }) {
   const options = useMemo(
     () => buildProjectPdfOptions(project).filter(isFramingWorkspacePdfOption),
@@ -314,6 +321,20 @@ export function ProjectPdfWorkspace({
             errorTitle="Could not load framing-layout PDF"
             badges={
               <>
+                {generatedLayoutJsonPath ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onRenderFramingLayoutPdf?.()}
+                    disabled={!canRenderFramingLayoutPdf}
+                  >
+                    {isRenderingFramingLayoutPdf
+                      ? "Rendering PDF..."
+                      : generatedLayoutPdfPath
+                        ? "Regenerate PDF"
+                        : "Generate PDF"}
+                  </Button>
+                ) : null}
                 <Badge variant={generatedLayoutPdfPath ? "success" : "outline"}>
                   {generatedLayoutPdfPath ? "rendered" : "pending"}
                 </Badge>

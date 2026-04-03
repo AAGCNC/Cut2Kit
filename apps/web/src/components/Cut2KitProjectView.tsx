@@ -13,6 +13,7 @@ import { BotIcon, CheckIcon, FolderIcon, HammerIcon, TriangleAlertIcon } from "l
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProjectPdfWorkspace } from "../features/cut2kit-pdf/components/ProjectPdfWorkspace";
+import { cut2kitPdfQueryKeys } from "../features/cut2kit-pdf/hooks/usePdfDocument";
 import {
   buildProjectPdfOptions,
   findProjectPdfOption,
@@ -28,6 +29,11 @@ import { useProjectById } from "../storeSelectors";
 import { toastManager } from "./ui/toast";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { Cut2KitProjectExplorer } from "./sidebar/Cut2KitProjectExplorer";
+import {
+  canRenderFramingPdfFromJson,
+  didFramingJsonBecomeReady,
+  shouldAutoRenderFramingPdf,
+} from "./cut2kitFramingLayout.logic";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -95,8 +101,15 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     jsonPath: string;
     pdfPath: string;
   } | null>(null);
-  const renderedGenerationThreadIdsRef = useRef(new Set<ThreadId>());
   const completedGenerationThreadIdsRef = useRef(new Set<ThreadId>());
+  const autoRenderedFramingJsonPathsRef = useRef(new Set<string>());
+  const previousSelectedFramingJsonRef = useRef<{
+    jsonPath: string | null;
+    jsonReady: boolean;
+  }>({
+    jsonPath: null,
+    jsonReady: false,
+  });
 
   const snapshotQuery = useQuery(
     cut2kitProjectQueryOptions({
@@ -202,6 +215,15 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     [activeFramingGeneration, snapshot],
   );
   const framingThreadStatus = framingGenerationThread?.session?.orchestrationStatus ?? null;
+  const canRenderSelectedFramingLayoutPdf = useMemo(
+    () =>
+      canRenderFramingPdfFromJson({
+        framingJsonPath: framingArtifacts?.jsonPath ?? null,
+        framingJsonReady,
+        isRenderingFramingLayout,
+      }),
+    [framingArtifacts?.jsonPath, framingJsonReady, isRenderingFramingLayout],
+  );
 
   const handleGenerateOutputs = useCallback(async () => {
     if (!project) return;
@@ -227,6 +249,43 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       setIsGenerating(false);
     }
   }, [project, queryClient]);
+
+  const renderFramingLayoutFromJson = useCallback(
+    async (relativePath: string, options?: { auto?: boolean }) => {
+      if (!project) return;
+      const api = readNativeApi();
+      if (!api) return;
+
+      setIsRenderingFramingLayout(true);
+      try {
+        const result = await api.cut2kit.renderFramingLayout({
+          cwd: project.cwd,
+          relativePath,
+        });
+        queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), result.project);
+        await queryClient.invalidateQueries({
+          queryKey: cut2kitPdfQueryKeys.document(project.cwd, result.pdfPath),
+        });
+        toastManager.add({
+          type: "success",
+          title: "Framing layout PDF rendered",
+          description: options?.auto
+            ? `Detected ${result.jsonPath} and wrote ${result.pdfPath} automatically.`
+            : `Wrote ${result.pdfPath} from ${result.jsonPath}.`,
+        });
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Could not render framing layout PDF",
+          description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        });
+        throw error;
+      } finally {
+        setIsRenderingFramingLayout(false);
+      }
+    },
+    [project, queryClient],
+  );
 
   const handleGenerateWallLayout = useCallback(async () => {
     if (!project || !selectedSourcePdfPath) return;
@@ -363,8 +422,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         createdAt,
       });
 
-      renderedGenerationThreadIdsRef.current.delete(threadId);
       completedGenerationThreadIdsRef.current.delete(threadId);
+      autoRenderedFramingJsonPathsRef.current.delete(framingArtifacts.jsonPath);
       setActiveFramingGeneration({
         threadId,
         sourcePdfPath: selectedSourcePdfPath,
@@ -394,6 +453,20 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     snapshot,
   ]);
 
+  const handleRenderSelectedFramingLayoutPdf = useCallback(async () => {
+    if (!project || !framingArtifacts || !framingJsonReady) {
+      toastManager.add({
+        type: "error",
+        title: "Framing layout JSON not found",
+        description:
+          "Generate or write the framing layout JSON first, then render the framing PDF from that artifact.",
+      });
+      return;
+    }
+
+    await renderFramingLayoutFromJson(framingArtifacts.jsonPath);
+  }, [framingArtifacts, framingJsonReady, project, renderFramingLayoutFromJson]);
+
   const handleOpenFramingThread = useCallback(async () => {
     if (!activeFramingGeneration) return;
     await navigate({
@@ -403,7 +476,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   }, [activeFramingGeneration, navigate]);
 
   useEffect(() => {
-    if (!project || !activeFramingGeneration) {
+    if (!project || !selectedSourcePdfPath || framingPdfReady) {
       return;
     }
     const intervalId = globalThis.setInterval(() => {
@@ -414,55 +487,56 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     return () => {
       globalThis.clearInterval(intervalId);
     };
-  }, [activeFramingGeneration, project, queryClient]);
+  }, [framingPdfReady, project, queryClient, selectedSourcePdfPath]);
 
   useEffect(() => {
-    if (!project || !activeFramingGeneration || isRenderingFramingLayout) {
-      return;
-    }
-    if (!isTerminalGenerationStatus(framingThreadStatus) || !activeFramingJsonReady) {
-      return;
-    }
-    if (renderedGenerationThreadIdsRef.current.has(activeFramingGeneration.threadId)) {
+    const nextJsonPath = framingArtifacts?.jsonPath ?? null;
+    const previousJsonState = previousSelectedFramingJsonRef.current;
+    const jsonJustBecameReady = didFramingJsonBecomeReady({
+      previousJsonPath: previousJsonState.jsonPath,
+      previousJsonReady: previousJsonState.jsonReady,
+      nextJsonPath,
+      nextJsonReady: framingJsonReady,
+    });
+    previousSelectedFramingJsonRef.current = {
+      jsonPath: nextJsonPath,
+      jsonReady: framingJsonReady,
+    };
+
+    if (
+      !project ||
+      !shouldAutoRenderFramingPdf({
+        framingJsonPath: nextJsonPath,
+        framingJsonReady,
+        framingPdfReady,
+        isRenderingFramingLayout,
+        hasActiveFramingGeneration: activeFramingGeneration !== null,
+        jsonJustBecameReady,
+        hasAlreadyAttemptedAutoRender:
+          nextJsonPath !== null && autoRenderedFramingJsonPathsRef.current.has(nextJsonPath),
+      })
+    ) {
       return;
     }
 
-    const api = readNativeApi();
-    if (!api) return;
+    if (nextJsonPath === null) {
+      return;
+    }
 
-    renderedGenerationThreadIdsRef.current.add(activeFramingGeneration.threadId);
-    setIsRenderingFramingLayout(true);
-    void api.cut2kit
-      .renderFramingLayout({
-        cwd: project.cwd,
-        relativePath: activeFramingGeneration.jsonPath,
-      })
-      .then((result) => {
-        queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), result.project);
-        toastManager.add({
-          type: "success",
-          title: "Framing layout PDF rendered",
-          description: `Wrote ${result.pdfPath} from ${result.jsonPath}.`,
-        });
-      })
-      .catch((error) => {
-        renderedGenerationThreadIdsRef.current.delete(activeFramingGeneration.threadId);
-        toastManager.add({
-          type: "error",
-          title: "Could not render framing layout PDF",
-          description: error instanceof Error ? error.message : "An unexpected error occurred.",
-        });
-      })
-      .finally(() => {
-        setIsRenderingFramingLayout(false);
-      });
+    autoRenderedFramingJsonPathsRef.current.add(nextJsonPath);
+    void renderFramingLayoutFromJson(nextJsonPath, {
+      auto: true,
+    }).catch(() => {
+      autoRenderedFramingJsonPathsRef.current.delete(nextJsonPath);
+    });
   }, [
     activeFramingGeneration,
-    activeFramingJsonReady,
-    framingThreadStatus,
+    framingArtifacts?.jsonPath,
+    framingJsonReady,
+    framingPdfReady,
     isRenderingFramingLayout,
     project,
-    queryClient,
+    renderFramingLayoutFromJson,
   ]);
 
   useEffect(() => {
@@ -502,8 +576,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     }
     if (
       isRenderingFramingLayout ||
-      !activeFramingPdfReady ||
-      !renderedGenerationThreadIdsRef.current.has(activeFramingGeneration.threadId)
+      !activeFramingPdfReady
     ) {
       return;
     }
@@ -616,6 +689,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
               project={snapshot}
               selectedSourcePdfPath={selectedSourcePdfPath}
               onSelectedSourcePdfPathChange={setSelectedSourcePdfPath}
+              onRenderFramingLayoutPdf={() => void handleRenderSelectedFramingLayoutPdf()}
+              canRenderFramingLayoutPdf={canRenderSelectedFramingLayoutPdf}
+              isRenderingFramingLayoutPdf={isRenderingFramingLayout}
             />
           </div>
 
