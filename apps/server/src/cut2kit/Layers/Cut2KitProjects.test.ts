@@ -41,7 +41,10 @@ const TestLayer = Layer.empty.pipe(
 );
 
 const sampleProjectPath = new URL("../../../../../examples/prefab-demo-project", import.meta.url);
-const exampleSettingsPath = new URL("../../../../../docs/cut2kit.settings.example.json", import.meta.url);
+const exampleSettingsPath = new URL(
+  "../../../../../docs/cut2kit.settings.example.json",
+  import.meta.url,
+);
 const exampleElevationPath = new URL("../../../../../examples/elevation3.pdf", import.meta.url);
 
 class FixtureCopyError extends Schema.TaggedErrorClass<FixtureCopyError>()("FixtureCopyError", {
@@ -66,8 +69,7 @@ const copyFixtureProject = (destination: string) =>
 
 const copyExampleSettings = (destination: string) =>
   Effect.tryPromise({
-    try: () =>
-      fsPromises.copyFile(exampleSettingsPath, `${destination}/cut2kit.settings.json`),
+    try: () => fsPromises.copyFile(exampleSettingsPath, `${destination}/cut2kit.settings.json`),
     catch: (error) =>
       new FixtureCopyError({
         message: `Failed to copy Cut2Kit example settings: ${
@@ -218,19 +220,123 @@ function makeFramingDraft(geometry = makeGeometryDraft()) {
       { id: "end-left-2", kind: "end-stud" as const, x: 1.5, y: 1.5, width: 1.5, height: 93 },
       { id: "end-right-1", kind: "end-stud" as const, x: 357, y: 1.5, width: 1.5, height: 93 },
       { id: "end-right-2", kind: "end-stud" as const, x: 358.5, y: 1.5, width: 1.5, height: 93 },
-      { id: "stud-16", kind: "common-stud" as const, x: 15.25, y: 1.5, width: 1.5, height: 93, centerlineX: 16 },
-      { id: "stud-64", kind: "common-stud" as const, x: 63.25, y: 1.5, width: 1.5, height: 93, centerlineX: 64 },
-      { id: "stud-208", kind: "common-stud" as const, x: 207.25, y: 1.5, width: 1.5, height: 93, centerlineX: 208 },
-      { id: "w1-jamb-l", kind: "jamb-stud" as const, x: 34.5, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-1" },
-      { id: "w1-jamb-r", kind: "jamb-stud" as const, x: 60, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-1" },
-      { id: "door-jamb-l", kind: "jamb-stud" as const, x: 82.5, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "door-1" },
-      { id: "door-jamb-r", kind: "jamb-stud" as const, x: 120, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "door-1" },
-      { id: "w2-jamb-l", kind: "jamb-stud" as const, x: 154.5, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-2" },
-      { id: "w2-jamb-r", kind: "jamb-stud" as const, x: 204, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-2" },
-      { id: "w3-jamb-l", kind: "jamb-stud" as const, x: 238.5, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-3" },
-      { id: "w3-jamb-r", kind: "jamb-stud" as const, x: 288, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-3" },
-      { id: "w4-jamb-l", kind: "jamb-stud" as const, x: 334.5, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-4" },
-      { id: "w4-jamb-r", kind: "jamb-stud" as const, x: 360, y: 1.5, width: 1.5, height: 93, sourceOpeningId: "window-4" },
+      {
+        id: "stud-16",
+        kind: "common-stud" as const,
+        x: 15.25,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        centerlineX: 16,
+      },
+      {
+        id: "stud-64",
+        kind: "common-stud" as const,
+        x: 63.25,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        centerlineX: 64,
+      },
+      {
+        id: "stud-208",
+        kind: "common-stud" as const,
+        x: 207.25,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        centerlineX: 208,
+      },
+      {
+        id: "w1-jamb-l",
+        kind: "jamb-stud" as const,
+        x: 34.5,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        sourceOpeningId: "window-1",
+      },
+      {
+        id: "w1-jamb-r",
+        kind: "jamb-stud" as const,
+        x: 60,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        sourceOpeningId: "window-1",
+      },
+      {
+        id: "door-jamb-l",
+        kind: "jamb-stud" as const,
+        x: 82.5,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        sourceOpeningId: "door-1",
+      },
+      {
+        id: "door-jamb-r",
+        kind: "jamb-stud" as const,
+        x: 120,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        sourceOpeningId: "door-1",
+      },
+      {
+        id: "w2-jamb-l",
+        kind: "jamb-stud" as const,
+        x: 154.5,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        sourceOpeningId: "window-2",
+      },
+      {
+        id: "w2-jamb-r",
+        kind: "jamb-stud" as const,
+        x: 204,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        sourceOpeningId: "window-2",
+      },
+      {
+        id: "w3-jamb-l",
+        kind: "jamb-stud" as const,
+        x: 238.5,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        sourceOpeningId: "window-3",
+      },
+      {
+        id: "w3-jamb-r",
+        kind: "jamb-stud" as const,
+        x: 288,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        sourceOpeningId: "window-3",
+      },
+      {
+        id: "w4-jamb-l",
+        kind: "jamb-stud" as const,
+        x: 334.5,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        sourceOpeningId: "window-4",
+      },
+      {
+        id: "w4-jamb-r",
+        kind: "jamb-stud" as const,
+        x: 360,
+        y: 1.5,
+        width: 1.5,
+        height: 93,
+        sourceOpeningId: "window-4",
+      },
     ],
     memberSchedule: [],
     validation: {
@@ -322,27 +428,153 @@ function makeThreadStyleFramingDraft(geometry = makeGeometryDraft()) {
       gridStudCenterlinesInside: [opening.left + opening.width / 2],
     })),
     members: [
-      { id: "bottom-plate", kind: "bottom-plate", x: 0, y: 0, width: geometry.wall.width, height: 1.5 },
-      { id: "top-plate", kind: "top-plate", x: 0, y: geometry.wall.height - 1.5, width: geometry.wall.width, height: 1.5 },
-      { id: "end-left-1", kind: "end-stud", x: 0, y: 1.5, width: 1.5, height: geometry.wall.height - 3 },
-      { id: "end-left-2", kind: "end-stud", x: 1.5, y: 1.5, width: 1.5, height: geometry.wall.height - 3 },
-      { id: "end-right-1", kind: "end-stud", x: geometry.wall.width - 3, y: 1.5, width: 1.5, height: geometry.wall.height - 3 },
-      { id: "end-right-2", kind: "end-stud", x: geometry.wall.width - 1.5, y: 1.5, width: 1.5, height: geometry.wall.height - 3 },
-      { id: "stud-cl-16", kind: "common-stud", x: 15.25, y: 1.5, width: 1.5, height: geometry.wall.height - 3, centerline: 16 },
-      { id: "stud-cl-64", kind: "common-stud", x: 63.25, y: 1.5, width: 1.5, height: geometry.wall.height - 3, centerline: 64 },
-      { id: "window-1-jamb-left", kind: "jamb-stud", x: 34.5, y: 1.5, width: 1.5, height: geometry.wall.height - 3, openingId: "window-1" },
-      { id: "window-1-jamb-right", kind: "jamb-stud", x: 60, y: 1.5, width: 1.5, height: geometry.wall.height - 3, openingId: "window-1" },
-      { id: "window-1-head", kind: "head-member", x: 34.5, y: 80.5, width: 27, height: 1.5, openingId: "window-1" },
-      { id: "window-1-sill", kind: "sill-member", x: 34.5, y: 46, width: 27, height: 1.5, openingId: "window-1" },
-      { id: "window-1-cripple-above", kind: "cripple-stud-above-head", x: 47.25, y: 82, width: 1.5, height: 12.5, centerline: 48, openingId: "window-1" },
-      { id: "window-1-cripple-below", kind: "cripple-stud-below-sill", x: 47.25, y: 1.5, width: 1.5, height: 44.5, centerline: 48, openingId: "window-1" },
+      {
+        id: "bottom-plate",
+        kind: "bottom-plate",
+        x: 0,
+        y: 0,
+        width: geometry.wall.width,
+        height: 1.5,
+      },
+      {
+        id: "top-plate",
+        kind: "top-plate",
+        x: 0,
+        y: geometry.wall.height - 1.5,
+        width: geometry.wall.width,
+        height: 1.5,
+      },
+      {
+        id: "end-left-1",
+        kind: "end-stud",
+        x: 0,
+        y: 1.5,
+        width: 1.5,
+        height: geometry.wall.height - 3,
+      },
+      {
+        id: "end-left-2",
+        kind: "end-stud",
+        x: 1.5,
+        y: 1.5,
+        width: 1.5,
+        height: geometry.wall.height - 3,
+      },
+      {
+        id: "end-right-1",
+        kind: "end-stud",
+        x: geometry.wall.width - 3,
+        y: 1.5,
+        width: 1.5,
+        height: geometry.wall.height - 3,
+      },
+      {
+        id: "end-right-2",
+        kind: "end-stud",
+        x: geometry.wall.width - 1.5,
+        y: 1.5,
+        width: 1.5,
+        height: geometry.wall.height - 3,
+      },
+      {
+        id: "stud-cl-16",
+        kind: "common-stud",
+        x: 15.25,
+        y: 1.5,
+        width: 1.5,
+        height: geometry.wall.height - 3,
+        centerline: 16,
+      },
+      {
+        id: "stud-cl-64",
+        kind: "common-stud",
+        x: 63.25,
+        y: 1.5,
+        width: 1.5,
+        height: geometry.wall.height - 3,
+        centerline: 64,
+      },
+      {
+        id: "window-1-jamb-left",
+        kind: "jamb-stud",
+        x: 34.5,
+        y: 1.5,
+        width: 1.5,
+        height: geometry.wall.height - 3,
+        openingId: "window-1",
+      },
+      {
+        id: "window-1-jamb-right",
+        kind: "jamb-stud",
+        x: 60,
+        y: 1.5,
+        width: 1.5,
+        height: geometry.wall.height - 3,
+        openingId: "window-1",
+      },
+      {
+        id: "window-1-head",
+        kind: "head-member",
+        x: 34.5,
+        y: 80.5,
+        width: 27,
+        height: 1.5,
+        openingId: "window-1",
+      },
+      {
+        id: "window-1-sill",
+        kind: "sill-member",
+        x: 34.5,
+        y: 46,
+        width: 27,
+        height: 1.5,
+        openingId: "window-1",
+      },
+      {
+        id: "window-1-cripple-above",
+        kind: "cripple-stud-above-head",
+        x: 47.25,
+        y: 82,
+        width: 1.5,
+        height: 12.5,
+        centerline: 48,
+        openingId: "window-1",
+      },
+      {
+        id: "window-1-cripple-below",
+        kind: "cripple-stud-below-sill",
+        x: 47.25,
+        y: 1.5,
+        width: 1.5,
+        height: 44.5,
+        centerline: 48,
+        openingId: "window-1",
+      },
     ],
     memberSchedule: [
-      { id: "bottom-plate-360", label: "Bottom plate", memberKind: "bottom-plate", count: 1, length: geometry.wall.width },
-      { id: "end-stud-93", label: "End stud", memberKind: "end-stud", count: 4, length: geometry.wall.height - 3 },
+      {
+        id: "bottom-plate-360",
+        label: "Bottom plate",
+        memberKind: "bottom-plate",
+        count: 1,
+        length: geometry.wall.width,
+      },
+      {
+        id: "end-stud-93",
+        label: "End stud",
+        memberKind: "end-stud",
+        count: 4,
+        length: geometry.wall.height - 3,
+      },
       { id: "header-27", label: "Header", memberKind: "head-member", count: 1, length: 27 },
       { id: "sill-27", label: "Sill", memberKind: "sill-member", count: 1, length: 27 },
-      { id: "cripple-12-5", label: "Cripple stud", memberKind: "cripple-stud-above-head", count: 1, length: 12.5 },
+      {
+        id: "cripple-12-5",
+        label: "Cripple stud",
+        memberKind: "cripple-stud-above-head",
+        count: 1,
+        length: 12.5,
+      },
     ],
     validation: {
       wallWidthMatchesElevation: true,
@@ -691,6 +923,41 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
           true,
         );
         expect(project.settings?.framing.crippleStuds.splitGridStudsInsideOpenings).toBe(true);
+        expect(project.resolvedPromptTemplates?.geometrySystem.source).toBe("repo_default");
+        expect(project.resolvedPromptTemplates?.geometrySystem.contents.length).toBeGreaterThan(0);
+      }),
+    );
+
+    it.effect("prefers a project-local prompt markdown override when one exists", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const projectDir = yield* makeTempDir("cut2kit-ai-prompt-override-project-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
+
+        yield* Effect.tryPromise({
+          try: async () => {
+            await fsPromises.mkdir(`${projectDir}/.docs`, { recursive: true });
+            await fsPromises.writeFile(
+              `${projectDir}/.docs/system-geometry.md`,
+              "You are the overridden geometry agent for this project.\n",
+              "utf8",
+            );
+          },
+          catch: (error) =>
+            new FixtureCopyError({
+              message: `Failed to seed project-local prompt override: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            }),
+        });
+
+        const project = yield* cut2kitProjects.inspectProject({ cwd: projectDir });
+
+        expect(project.resolvedPromptTemplates?.geometrySystem.source).toBe("workspace");
+        expect(project.resolvedPromptTemplates?.geometrySystem.contents).toContain(
+          "overridden geometry agent",
+        );
       }),
     );
   });
@@ -796,102 +1063,200 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
       }),
     );
 
-    it.effect("renders a framing-layout PDF from thread-style framing JSON with richer openings and member aliases", () =>
-      Effect.gen(function* () {
-        const cut2kitProjects = yield* Cut2KitProjects;
-        const fileSystem = yield* FileSystem.FileSystem;
-        const path = yield* Path.Path;
-        const projectDir = yield* makeTempDir("cut2kit-framing-layout-thread-json-");
-        yield* copyExampleSettings(projectDir);
-        yield* Effect.tryPromise({
-          try: async () => {
-            await fsPromises.writeFile(`${projectDir}/elevation2.pdf`, "%PDF-1.7\n", "utf8");
-            await fsPromises.mkdir(`${projectDir}/output/reports/framing-layouts`, {
-              recursive: true,
-            });
-            await fsPromises.writeFile(
-              `${projectDir}/output/reports/framing-layouts/elevation2.framing-layout.json`,
-              JSON.stringify(makeThreadStyleFramingDraft(), null, 2),
-              "utf8",
-            );
-          },
-          catch: (error) =>
-            new FixtureCopyError({
-              message: `Failed to seed thread-style framing JSON artifact: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            }),
-        });
+    it.effect(
+      "renders a framing-layout PDF from thread-style framing JSON with richer openings and member aliases",
+      () =>
+        Effect.gen(function* () {
+          const cut2kitProjects = yield* Cut2KitProjects;
+          const fileSystem = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const projectDir = yield* makeTempDir("cut2kit-framing-layout-thread-json-");
+          yield* copyExampleSettings(projectDir);
+          yield* Effect.tryPromise({
+            try: async () => {
+              await fsPromises.writeFile(`${projectDir}/elevation2.pdf`, "%PDF-1.7\n", "utf8");
+              await fsPromises.mkdir(`${projectDir}/output/reports/framing-layouts`, {
+                recursive: true,
+              });
+              await fsPromises.writeFile(
+                `${projectDir}/output/reports/framing-layouts/elevation2.framing-layout.json`,
+                JSON.stringify(makeThreadStyleFramingDraft(), null, 2),
+                "utf8",
+              );
+            },
+            catch: (error) =>
+              new FixtureCopyError({
+                message: `Failed to seed thread-style framing JSON artifact: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              }),
+          });
 
-        const result = yield* cut2kitProjects.renderFramingLayout({
-          cwd: projectDir,
-          relativePath: "output/reports/framing-layouts/elevation2.framing-layout.json",
-        });
+          const result = yield* cut2kitProjects.renderFramingLayout({
+            cwd: projectDir,
+            relativePath: "output/reports/framing-layouts/elevation2.framing-layout.json",
+          });
 
-        expect(result.pdfPath).toBe(
-          "output/reports/framing-layouts/elevation2.framing-layout.pdf",
-        );
+          expect(result.pdfPath).toBe(
+            "output/reports/framing-layouts/elevation2.framing-layout.pdf",
+          );
 
-        const renderedPdf = yield* fileSystem.readFile(path.join(projectDir, result.pdfPath));
-        expect(renderedPdf.byteLength).toBeGreaterThan(1000);
-      }),
+          const renderedPdf = yield* fileSystem.readFile(path.join(projectDir, result.pdfPath));
+          expect(renderedPdf.byteLength).toBeGreaterThan(1000);
+        }),
     );
   });
 
   describe("compileFramingPrompt", () => {
-    it.effect("compiles the framing-thread prompt on the server from loaded templates and staged geometry", () =>
+    it.effect(
+      "compiles the framing-thread prompt on the server from loaded templates and staged geometry",
+      () =>
+        Effect.gen(function* () {
+          const cut2kitProjects = yield* Cut2KitProjects;
+          const projectDir = yield* makeTempDir("cut2kit-compile-framing-prompt-");
+          yield* copyExampleSettings(projectDir);
+          yield* copyExampleElevation(projectDir);
+
+          yield* Effect.tryPromise({
+            try: async () => {
+              await fsPromises.mkdir(`${projectDir}/output/reports/wall-layouts`, {
+                recursive: true,
+              });
+              await fsPromises.writeFile(
+                `${projectDir}/output/reports/wall-layouts/examples-elevation3.extracted-elevation.json`,
+                JSON.stringify(makeGeometryDraft(), null, 2),
+                "utf8",
+              );
+            },
+            catch: (error) =>
+              new FixtureCopyError({
+                message: `Failed to seed extracted geometry artifact: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              }),
+          });
+
+          const result = yield* cut2kitProjects.compileFramingPrompt({
+            cwd: projectDir,
+            sourcePdfPath: "examples/elevation3.pdf",
+          });
+
+          expect(result.geometryJsonPath).toBe(
+            "output/reports/wall-layouts/examples-elevation3.extracted-elevation.json",
+          );
+          expect(result.geometryLoaded).toBe(true);
+          expect(result.prompt).toContain("You are the framing-planning agent for Cut2Kit.");
+          expect(result.prompt).not.toContain(
+            "Load and follow these prompt files before solving the wall layout:",
+          );
+          expect(result.prompt).toContain('"sourcePdfPath": "examples/elevation3.pdf"');
+        }),
+    );
+  });
+
+  describe("generateWallLayout", () => {
+    it.effect(
+      "runs the AI-first geometry -> framing -> sheathing workflow and writes packaged artifacts",
+      () =>
+        Effect.gen(function* () {
+          const cut2kitProjects = yield* Cut2KitProjects;
+          const fileSystem = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const projectDir = yield* makeTempDir("cut2kit-ai-wall-project-");
+          yield* copyExampleSettings(projectDir);
+          yield* copyExampleElevation(projectDir);
+
+          const geometryDraft = makeGeometryDraft();
+          const framingDraft = makeFramingDraft(geometryDraft);
+          const sheathingDraft = makeSheathingDraft(geometryDraft);
+
+          runCut2KitCodexJsonMock
+            .mockReturnValueOnce(Effect.succeed(geometryDraft))
+            .mockReturnValueOnce(Effect.succeed(framingDraft))
+            .mockReturnValueOnce(Effect.succeed(sheathingDraft));
+
+          const result = yield* cut2kitProjects.generateWallLayout({
+            cwd: projectDir,
+            sourcePdfPath: "examples/elevation3.pdf",
+          });
+
+          expect(runCut2KitCodexJsonMock).toHaveBeenCalledTimes(3);
+          expect(runCut2KitCodexJsonMock.mock.calls[0]?.[0]?.prompt).toContain(
+            "You are the elevation-intake agent for Cut2Kit.",
+          );
+          expect(runCut2KitCodexJsonMock.mock.calls[0]?.[0]?.prompt).not.toContain(
+            "Load and follow these prompt files before solving the wall layout:",
+          );
+          expect(runCut2KitCodexJsonMock.mock.calls[1]?.[0]?.prompt).toContain(
+            "You are the framing-planning agent for Cut2Kit.",
+          );
+          expect(runCut2KitCodexJsonMock.mock.calls[1]?.[0]?.prompt).not.toContain(
+            "Load and follow these prompt files before solving the wall layout:",
+          );
+          expect(runCut2KitCodexJsonMock.mock.calls[2]?.[0]?.prompt).toContain(
+            "You are the sheathing-planning agent for Cut2Kit.",
+          );
+          expect(runCut2KitCodexJsonMock.mock.calls[2]?.[0]?.prompt).not.toContain(
+            "Load and follow these prompt files before solving the wall layout:",
+          );
+
+          expect(result.status).toBe("completed");
+          expect(result.artifacts.geometryJsonPath).toBe(
+            "output/reports/wall-layouts/examples-elevation3.extracted-elevation.json",
+          );
+          expect(result.artifacts.validationReportJsonPath).toBe(
+            "output/reports/wall-layouts/examples-elevation3.validation-report.json",
+          );
+          expect(result.artifacts.framingPdfPath).toBe(
+            "output/reports/framing-layouts/examples-elevation3.framing-layout.pdf",
+          );
+          expect(result.artifacts.sheathingPdfPath).toBe(
+            "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.pdf",
+          );
+          expect(result.validationReport.readyForPackaging).toBe(true);
+          expect(result.framingLayout?.validation.endStudsDoubled).toBe(true);
+          expect(result.sheathingLayout?.summary.sheetCount).toBe(8);
+          expect(result.sheathingLayout?.validation.firstPageFitsMargins).toBe(true);
+          expect(result.writtenPaths).toHaveLength(6);
+
+          const framingPdf = yield* fileSystem.readFile(
+            path.join(projectDir, result.artifacts.framingPdfPath),
+          );
+          const sheathingPdf = yield* fileSystem.readFile(
+            path.join(projectDir, result.artifacts.sheathingPdfPath),
+          );
+          const validationReport = yield* fileSystem.readFileString(
+            path.join(projectDir, result.artifacts.validationReportJsonPath),
+          );
+          expect(framingPdf.byteLength).toBeGreaterThan(1000);
+          expect(sheathingPdf.byteLength).toBeGreaterThan(1000);
+          expect(validationReport).toContain('"readyForPackaging": true');
+        }),
+    );
+
+    it.effect("uses the project-local prompt markdown override during wall generation", () =>
       Effect.gen(function* () {
         const cut2kitProjects = yield* Cut2KitProjects;
-        const projectDir = yield* makeTempDir("cut2kit-compile-framing-prompt-");
+        const projectDir = yield* makeTempDir("cut2kit-ai-wall-prompt-override-");
         yield* copyExampleSettings(projectDir);
         yield* copyExampleElevation(projectDir);
 
         yield* Effect.tryPromise({
           try: async () => {
-            await fsPromises.mkdir(`${projectDir}/output/reports/wall-layouts`, {
-              recursive: true,
-            });
+            await fsPromises.mkdir(`${projectDir}/.docs`, { recursive: true });
             await fsPromises.writeFile(
-              `${projectDir}/output/reports/wall-layouts/examples-elevation3.extracted-elevation.json`,
-              JSON.stringify(makeGeometryDraft(), null, 2),
+              `${projectDir}/.docs/system-geometry.md`,
+              "You are the overridden geometry agent for this project.\n",
               "utf8",
             );
           },
           catch: (error) =>
             new FixtureCopyError({
-              message: `Failed to seed extracted geometry artifact: ${
+              message: `Failed to seed project-local prompt override: ${
                 error instanceof Error ? error.message : String(error)
               }`,
             }),
         });
-
-        const result = yield* cut2kitProjects.compileFramingPrompt({
-          cwd: projectDir,
-          sourcePdfPath: "examples/elevation3.pdf",
-        });
-
-        expect(result.geometryJsonPath).toBe(
-          "output/reports/wall-layouts/examples-elevation3.extracted-elevation.json",
-        );
-        expect(result.geometryLoaded).toBe(true);
-        expect(result.prompt).toContain("You are the framing-planning agent for Cut2Kit.");
-        expect(result.prompt).not.toContain(
-          "Load and follow these prompt files before solving the wall layout:",
-        );
-        expect(result.prompt).toContain('"sourcePdfPath": "examples/elevation3.pdf"');
-      }),
-    );
-  });
-
-  describe("generateWallLayout", () => {
-    it.effect("runs the AI-first geometry -> framing -> sheathing workflow and writes packaged artifacts", () =>
-      Effect.gen(function* () {
-        const cut2kitProjects = yield* Cut2KitProjects;
-        const fileSystem = yield* FileSystem.FileSystem;
-        const path = yield* Path.Path;
-        const projectDir = yield* makeTempDir("cut2kit-ai-wall-project-");
-        yield* copyExampleSettings(projectDir);
-        yield* copyExampleElevation(projectDir);
 
         const geometryDraft = makeGeometryDraft();
         const framingDraft = makeFramingDraft(geometryDraft);
@@ -902,62 +1267,14 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
           .mockReturnValueOnce(Effect.succeed(framingDraft))
           .mockReturnValueOnce(Effect.succeed(sheathingDraft));
 
-        const result = yield* cut2kitProjects.generateWallLayout({
+        yield* cut2kitProjects.generateWallLayout({
           cwd: projectDir,
           sourcePdfPath: "examples/elevation3.pdf",
         });
 
-        expect(runCut2KitCodexJsonMock).toHaveBeenCalledTimes(3);
         expect(runCut2KitCodexJsonMock.mock.calls[0]?.[0]?.prompt).toContain(
-          "You are the elevation-intake agent for Cut2Kit.",
+          "overridden geometry agent for this project",
         );
-        expect(runCut2KitCodexJsonMock.mock.calls[0]?.[0]?.prompt).not.toContain(
-          "Load and follow these prompt files before solving the wall layout:",
-        );
-        expect(runCut2KitCodexJsonMock.mock.calls[1]?.[0]?.prompt).toContain(
-          "You are the framing-planning agent for Cut2Kit.",
-        );
-        expect(runCut2KitCodexJsonMock.mock.calls[1]?.[0]?.prompt).not.toContain(
-          "Load and follow these prompt files before solving the wall layout:",
-        );
-        expect(runCut2KitCodexJsonMock.mock.calls[2]?.[0]?.prompt).toContain(
-          "You are the sheathing-planning agent for Cut2Kit.",
-        );
-        expect(runCut2KitCodexJsonMock.mock.calls[2]?.[0]?.prompt).not.toContain(
-          "Load and follow these prompt files before solving the wall layout:",
-        );
-
-        expect(result.status).toBe("completed");
-        expect(result.artifacts.geometryJsonPath).toBe(
-          "output/reports/wall-layouts/examples-elevation3.extracted-elevation.json",
-        );
-        expect(result.artifacts.validationReportJsonPath).toBe(
-          "output/reports/wall-layouts/examples-elevation3.validation-report.json",
-        );
-        expect(result.artifacts.framingPdfPath).toBe(
-          "output/reports/framing-layouts/examples-elevation3.framing-layout.pdf",
-        );
-        expect(result.artifacts.sheathingPdfPath).toBe(
-          "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.pdf",
-        );
-        expect(result.validationReport.readyForPackaging).toBe(true);
-        expect(result.framingLayout?.validation.endStudsDoubled).toBe(true);
-        expect(result.sheathingLayout?.summary.sheetCount).toBe(8);
-        expect(result.sheathingLayout?.validation.firstPageFitsMargins).toBe(true);
-        expect(result.writtenPaths).toHaveLength(6);
-
-        const framingPdf = yield* fileSystem.readFile(
-          path.join(projectDir, result.artifacts.framingPdfPath),
-        );
-        const sheathingPdf = yield* fileSystem.readFile(
-          path.join(projectDir, result.artifacts.sheathingPdfPath),
-        );
-        const validationReport = yield* fileSystem.readFileString(
-          path.join(projectDir, result.artifacts.validationReportJsonPath),
-        );
-        expect(framingPdf.byteLength).toBeGreaterThan(1000);
-        expect(sheathingPdf.byteLength).toBeGreaterThan(1000);
-        expect(validationReport).toContain('"readyForPackaging": true');
       }),
     );
 

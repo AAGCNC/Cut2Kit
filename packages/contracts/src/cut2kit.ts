@@ -462,6 +462,32 @@ const Cut2KitPromptTemplatePaths = Schema.Struct({
 });
 export type Cut2KitPromptTemplatePaths = typeof Cut2KitPromptTemplatePaths.Type;
 
+export const Cut2KitPromptTemplateSource = Schema.Literals([
+  "workspace",
+  "repo_default",
+  "external",
+]);
+export type Cut2KitPromptTemplateSource = typeof Cut2KitPromptTemplateSource.Type;
+
+export const Cut2KitResolvedPromptTemplate = Schema.Struct({
+  configuredPath: TrimmedNonEmptyString,
+  resolvedPath: TrimmedNonEmptyString,
+  source: Cut2KitPromptTemplateSource,
+  contents: Schema.String,
+});
+export type Cut2KitResolvedPromptTemplate = typeof Cut2KitResolvedPromptTemplate.Type;
+
+export const Cut2KitResolvedPromptTemplates = Schema.Struct({
+  geometrySystem: Cut2KitResolvedPromptTemplate,
+  geometryUser: Cut2KitResolvedPromptTemplate,
+  framingSystem: Cut2KitResolvedPromptTemplate,
+  framingUser: Cut2KitResolvedPromptTemplate,
+  sheathingSystem: Cut2KitResolvedPromptTemplate,
+  sheathingUser: Cut2KitResolvedPromptTemplate,
+  validationChecklist: Cut2KitResolvedPromptTemplate,
+});
+export type Cut2KitResolvedPromptTemplates = typeof Cut2KitResolvedPromptTemplates.Type;
+
 export const Cut2KitAiSettings = Schema.Struct({
   enabled: Schema.Boolean,
   agentName: TrimmedNonEmptyString,
@@ -1002,6 +1028,7 @@ export const Cut2KitProject = Schema.Struct({
   status: Cut2KitProjectStatus,
   settingsFilePath: Schema.NullOr(TrimmedNonEmptyString),
   settings: Schema.NullOr(Cut2KitSettings),
+  resolvedPromptTemplates: Schema.NullOr(Cut2KitResolvedPromptTemplates),
   manufacturingPlanFilePath: Schema.NullOr(TrimmedNonEmptyString),
   manufacturingPlan: Schema.NullOr(Cut2KitManufacturingPlan),
   files: Schema.Array(ProjectFileRecord),

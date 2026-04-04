@@ -57,11 +57,10 @@ import {
   Cut2KitProjectsError,
   type Cut2KitProjectsShape,
 } from "../Services/Cut2KitProjects.ts";
-import {
-  runCut2KitCodexJson,
-} from "../ai/codexStructuredGeneration.ts";
+import { runCut2KitCodexJson } from "../ai/codexStructuredGeneration.ts";
 import {
   loadCut2KitPromptTemplateBundle,
+  loadCut2KitResolvedPromptTemplates,
 } from "../ai/promptTemplates.ts";
 import { A2mcPostError, getA2mcTargetController, renderA2mcProgram } from "../cam/A2mcPost.ts";
 import { renderFramingLayoutPdf } from "../framing/renderFramingLayoutPdf.ts";
@@ -797,7 +796,9 @@ function asBoolean(value: unknown): boolean | null {
 }
 
 function asStringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
 }
 
 function normalizeDimensionMarks(value: unknown): number[] {
@@ -824,10 +825,9 @@ function normalizeCompatibleOpening(
   }
 
   const id = asString(record.id);
-  const kind =
-    (asString(record.kind) ?? asString(record.type)) as
-      | Cut2KitWallGeometry["openings"][number]["kind"]
-      | null;
+  const kind = (asString(record.kind) ?? asString(record.type)) as
+    | Cut2KitWallGeometry["openings"][number]["kind"]
+    | null;
   const left = asFiniteNumber(record.left) ?? asFiniteNumber(record.x);
   const bottom =
     asFiniteNumber(record.bottom) ??
@@ -917,7 +917,14 @@ function normalizeCompatibleMember(
   const y = asFiniteNumber(record.y);
   const width = asFiniteNumber(record.width);
   const height = asFiniteNumber(record.height);
-  if (id === null || kind === null || x === null || y === null || width === null || height === null) {
+  if (
+    id === null ||
+    kind === null ||
+    x === null ||
+    y === null ||
+    width === null ||
+    height === null
+  ) {
     return null;
   }
 
@@ -928,18 +935,18 @@ function normalizeCompatibleMember(
     y,
     width,
     height,
-    ...(asFiniteNumber(record.centerlineX) ?? asFiniteNumber(record.centerline) ?? null) !== null
+    ...((asFiniteNumber(record.centerlineX) ?? asFiniteNumber(record.centerline) ?? null) !== null
       ? {
           centerlineX:
             asFiniteNumber(record.centerlineX) ?? (asFiniteNumber(record.centerline) as number),
         }
-      : {},
-    ...(asString(record.sourceOpeningId) ?? asString(record.openingId) ?? null) !== null
+      : {}),
+    ...((asString(record.sourceOpeningId) ?? asString(record.openingId) ?? null) !== null
       ? {
           sourceOpeningId:
             asString(record.sourceOpeningId) ?? (asString(record.openingId) as string),
         }
-      : {},
+      : {}),
     ...(asString(record.notes) !== null ? { notes: asString(record.notes) as string } : {}),
   };
 }
@@ -977,9 +984,7 @@ function normalizeCompatibleMemberScheduleItem(
   };
 }
 
-function normalizeCompatibleGeometryValidation(
-  value: unknown,
-): Cut2KitWallGeometry["validation"] {
+function normalizeCompatibleGeometryValidation(value: unknown): Cut2KitWallGeometry["validation"] {
   const record = asRecord(value);
   return {
     dimensionTextFound: asBoolean(record?.dimensionTextFound) ?? false,
@@ -1011,7 +1016,8 @@ function normalizeCompatibleFramingValidation(
     jambStudsPresent: asBoolean(record?.jambStudsPresent) ?? false,
     commonStudSpacingApplied: asBoolean(record?.commonStudSpacingApplied) ?? false,
     noCommonStudThroughVoid: asBoolean(record?.noCommonStudThroughVoid) ?? false,
-    plateOrientationMatchesExpectation: asBoolean(record?.plateOrientationMatchesExpectation) ?? false,
+    plateOrientationMatchesExpectation:
+      asBoolean(record?.plateOrientationMatchesExpectation) ?? false,
     notes: asStringArray(record?.notes),
   };
 }
@@ -1078,15 +1084,23 @@ function normalizeCompatibleFramingLayout(value: unknown): Cut2KitFramingLayoutV
   const settingsFilePath = asString(record.settingsFilePath);
   const wall = asRecord(record.wall);
   const studLayout = asRecord(record.studLayout);
-  const geometry = normalizeCompatibleGeometry(record.geometry, sourcePdfPath ?? "", settingsFilePath ?? "");
-  const openingsSource = Array.isArray(record.openings) ? record.openings : geometry?.openings ?? [];
+  const geometry = normalizeCompatibleGeometry(
+    record.geometry,
+    sourcePdfPath ?? "",
+    settingsFilePath ?? "",
+  );
+  const openingsSource = Array.isArray(record.openings)
+    ? record.openings
+    : (geometry?.openings ?? []);
   const openings = openingsSource
     .map((opening) => normalizeCompatibleOpening(opening))
     .filter((opening): opening is Cut2KitWallGeometry["openings"][number] => opening !== null);
   const members = Array.isArray(record.members)
     ? record.members
         .map((member) => normalizeCompatibleMember(member))
-        .filter((member): member is Cut2KitFramingLayoutV0_2_0["members"][number] => member !== null)
+        .filter(
+          (member): member is Cut2KitFramingLayoutV0_2_0["members"][number] => member !== null,
+        )
     : [];
   const memberSchedule = Array.isArray(record.memberSchedule)
     ? record.memberSchedule
@@ -1221,7 +1235,12 @@ async function readWallGeometryFile(
       return {
         geometry: null,
         issues: [
-          makeIssue("error", "wall_geometry.invalid", formatSchemaError(decoded.cause), relativePath),
+          makeIssue(
+            "error",
+            "wall_geometry.invalid",
+            formatSchemaError(decoded.cause),
+            relativePath,
+          ),
         ],
       };
     }
@@ -1274,13 +1293,11 @@ function withinTolerance(left: number, right: number, tolerance = 0.25): boolean
   return Math.abs(left - right) <= tolerance;
 }
 
-function buildGeometryValidation(
-  input: {
-    geometry: Cut2KitWallGeometry;
-    extractedText: string;
-    settings: Cut2KitWallWorkflowSettings;
-  },
-): Cut2KitWallGeometry["validation"] {
+function buildGeometryValidation(input: {
+  geometry: Cut2KitWallGeometry;
+  extractedText: string;
+  settings: Cut2KitWallWorkflowSettings;
+}): Cut2KitWallGeometry["validation"] {
   const geometry = input.geometry;
   const windows = geometry.openings.filter((opening) => opening.kind === "window");
   const notes: string[] = [];
@@ -1457,12 +1474,16 @@ function buildFramingValidation(input: {
   const rightEndStuds = input.layout.members.filter(
     (member) =>
       member.kind === "end-stud" &&
-      member.x >= input.layout.wall.width - memberThickness * input.settings.framing.endStuds.rightCount - 0.25,
+      member.x >=
+        input.layout.wall.width -
+          memberThickness * input.settings.framing.endStuds.rightCount -
+          0.25,
   ).length;
   const spacing = input.settings.framing.studLayout.spacing;
-  const commonStudSpacingApplied = input.layout.studLayout.commonStudCenterlines.every((centerline) =>
-    withinTolerance(centerline % spacing, 0, 0.25) ||
-    withinTolerance(centerline % spacing, spacing, 0.25),
+  const commonStudSpacingApplied = input.layout.studLayout.commonStudCenterlines.every(
+    (centerline) =>
+      withinTolerance(centerline % spacing, 0, 0.25) ||
+      withinTolerance(centerline % spacing, spacing, 0.25),
   );
   const noCommonStudThroughVoid = input.layout.members
     .filter((member) => member.kind === "common-stud")
@@ -1484,13 +1505,17 @@ function buildFramingValidation(input: {
     return jambs.length >= input.settings.framing.jambStuds.countPerSide * 2;
   });
 
-  if (!commonStudSpacingApplied) notes.push("Common stud centerlines drift from the configured spacing grid.");
+  if (!commonStudSpacingApplied)
+    notes.push("Common stud centerlines drift from the configured spacing grid.");
   if (!noCommonStudThroughVoid) notes.push("At least one common stud crosses an opening void.");
   if (!jambStudsPresent) notes.push("At least one opening is missing the required jamb studs.");
 
   return {
     wallWidthMatchesElevation: withinTolerance(input.layout.wall.width, input.geometry.wall.width),
-    wallHeightMatchesElevation: withinTolerance(input.layout.wall.height, input.geometry.wall.height),
+    wallHeightMatchesElevation: withinTolerance(
+      input.layout.wall.height,
+      input.geometry.wall.height,
+    ),
     openingSizesMatchElevation: input.layout.openings.every((opening, index) => {
       const geometryOpening = input.geometry.openings[index];
       return (
@@ -1514,7 +1539,8 @@ function buildFramingValidation(input: {
     commonStudSpacingApplied,
     noCommonStudThroughVoid,
     plateOrientationMatchesExpectation:
-      input.layout.wall.topMemberOrientation === input.settings.framing.plates.top.orientationInElevation &&
+      input.layout.wall.topMemberOrientation ===
+        input.settings.framing.plates.top.orientationInElevation &&
       input.layout.wall.bottomMemberOrientation ===
         input.settings.framing.plates.bottom.orientationInElevation,
     notes,
@@ -1567,7 +1593,9 @@ function normalizeFramingLayout(input: {
     openings: input.geometry.openings,
     members,
     memberSchedule:
-      input.layout.memberSchedule.length > 0 ? input.layout.memberSchedule : buildMemberSchedule(members),
+      input.layout.memberSchedule.length > 0
+        ? input.layout.memberSchedule
+        : buildMemberSchedule(members),
   };
   const validation = buildFramingValidation({
     geometry: input.geometry,
@@ -1630,9 +1658,11 @@ function buildSheathingValidation(input: {
       contentHeight: input.geometry.wall.height,
     }) > 0;
   if (!cutoutsWithinSheets) notes.push("At least one cutout extends beyond its parent sheet.");
-  if (!openingCoverageRemoved) notes.push("Openings are not fully removed from the sheathing cutouts.");
+  if (!openingCoverageRemoved)
+    notes.push("Openings are not fully removed from the sheathing cutouts.");
   if (!terminalRipComputed) notes.push("Terminal rip width does not match the wall remainder.");
-  if (!firstPageFitsMargins) notes.push("Overall sheathing layout does not fit within the configured page margins.");
+  if (!firstPageFitsMargins)
+    notes.push("Overall sheathing layout does not fit within the configured page margins.");
 
   return {
     openingCoverageRemoved,
@@ -1679,7 +1709,8 @@ function normalizeSheathingLayout(input: {
     sheetCount: sheets.length,
     fullSheetCount: sheets.filter((sheet) => sheet.isTerminalRip === false).length,
     terminalRipWidth:
-      sheets.find((sheet) => sheet.isTerminalRip)?.width ?? (input.geometry.wall.width % input.settings.sheathing.sheet.nominalWidth),
+      sheets.find((sheet) => sheet.isTerminalRip)?.width ??
+      input.geometry.wall.width % input.settings.sheathing.sheet.nominalWidth,
   };
   const layout: Cut2KitSheathingLayout = {
     ...input.layout,
@@ -1786,12 +1817,11 @@ function buildWallValidationReport(input: {
   const requiresConfirmation =
     geometryNeedsConfirmation(input.geometry, input.settings) &&
     !input.confirmedAmbiguityProceeding;
-  const geometryStatus =
-    requiresConfirmation
-      ? "needs_confirmation"
-      : geometryCanContinue(input.geometry)
-        ? "pass"
-        : "blocked";
+  const geometryStatus = requiresConfirmation
+    ? "needs_confirmation"
+    : geometryCanContinue(input.geometry)
+      ? "pass"
+      : "blocked";
   const readyForFraming = geometryStatus === "pass";
 
   input.geometry.validation.notes.forEach((message) => {
@@ -1834,7 +1864,7 @@ function buildWallValidationReport(input: {
         severity: sheathingStatus === "pass" ? "warning" : "error",
         code: sheathingStatus === "pass" ? "sheathing.warning" : "sheathing.blocking",
         message,
-        });
+      });
     });
   }
 
@@ -1848,7 +1878,9 @@ function buildWallValidationReport(input: {
     ambiguity: {
       detected: input.geometry.validation.ambiguityDetected,
       requiresConfirmation,
-      notes: input.geometry.validation.notes.filter((note) => /ambigu|explicit dimension|confirmation/i.test(note)),
+      notes: input.geometry.validation.notes.filter((note) =>
+        /ambigu|explicit dimension|confirmation/i.test(note),
+      ),
     },
     geometry: {
       status: geometryStatus,
@@ -1890,7 +1922,9 @@ async function readPdfText(cwd: string, relativePdfPath: string): Promise<string
 
 async function renderPdfPreviewImage(cwd: string, relativePdfPath: string): Promise<string> {
   const absolutePdfPath = nodePath.join(cwd, relativePdfPath);
-  const tempDir = await fsPromises.mkdtemp(nodePath.join(os.tmpdir(), "cut2kit-elevation-preview-"));
+  const tempDir = await fsPromises.mkdtemp(
+    nodePath.join(os.tmpdir(), "cut2kit-elevation-preview-"),
+  );
   const outputBase = nodePath.join(tempDir, "page-1");
   await execFileAsync("pdftoppm", ["-png", "-f", "1", "-singlefile", absolutePdfPath, outputBase]);
   return `${outputBase}.png`;
@@ -1901,6 +1935,7 @@ function deriveProject(input: {
   files: ReadonlyArray<ProjectFileRecord>;
   settings: Cut2KitSettings | null;
   settingsFilePath: string | null;
+  resolvedPromptTemplates: Cut2KitProject["resolvedPromptTemplates"];
   manufacturingPlan: Cut2KitManufacturingPlan | null;
   manufacturingPlanFilePath: string | null;
   discoveredAt: string;
@@ -2063,6 +2098,7 @@ function deriveProject(input: {
     status: errorCount > 0 ? "error" : warningCount > 0 ? "warning" : "ready",
     settingsFilePath: input.settingsFilePath,
     settings: input.settings,
+    resolvedPromptTemplates: input.resolvedPromptTemplates,
     manufacturingPlanFilePath: input.manufacturingPlanFilePath,
     manufacturingPlan: input.manufacturingPlan,
     files: input.files.toSorted(compareProjectFiles),
@@ -2155,12 +2191,19 @@ export const makeCut2KitProjects = Effect.gen(function* () {
             }),
         })
       : { manufacturingPlan: null, issues: [] };
+    const resolvedPromptTemplates = yield* loadCut2KitResolvedPromptTemplates({
+      cwd: normalizedCwd,
+      paths: resolveCut2KitPromptTemplatePaths({
+        settings: settingsResult.settings,
+      }),
+    }).pipe(Effect.catch(() => Effect.succeed(null)));
 
     return deriveProject({
       cwd: normalizedCwd,
       files,
       settings: settingsResult.settings,
       settingsFilePath,
+      resolvedPromptTemplates,
       manufacturingPlan: manufacturingPlanResult.manufacturingPlan,
       manufacturingPlanFilePath,
       discoveredAt: DEFAULT_DISCOVERED_AT,
@@ -2325,8 +2368,7 @@ export const makeCut2KitProjects = Effect.gen(function* () {
         cwd: project.cwd,
         operation: "compileFramingPrompt.decodeGeometryArtifact",
         detail:
-          issues[0]?.message ??
-          "The extracted-elevation artifact exists but could not be decoded.",
+          issues[0]?.message ?? "The extracted-elevation artifact exists but could not be decoded.",
       });
     }
 
@@ -2360,7 +2402,10 @@ export const makeCut2KitProjects = Effect.gen(function* () {
 
     const artifactPaths = buildWallLayoutArtifactPaths(project, input.sourcePdfPath);
     const { promptTemplateBundle } = yield* loadPromptTemplateBundleForProject(project);
-    const geometry = yield* readOptionalWallGeometryArtifact(project, artifactPaths.geometryJsonPath);
+    const geometry = yield* readOptionalWallGeometryArtifact(
+      project,
+      artifactPaths.geometryJsonPath,
+    );
 
     return {
       sourcePdfPath: input.sourcePdfPath,
@@ -2500,7 +2545,10 @@ export const makeCut2KitProjects = Effect.gen(function* () {
         detail: "The wall workflow requires GPT-5.4 as the runtime reasoning model.",
       });
     }
-    if ((modelSelection.options as { reasoningEffort?: string } | undefined)?.reasoningEffort !== "xhigh") {
+    if (
+      (modelSelection.options as { reasoningEffort?: string } | undefined)?.reasoningEffort !==
+      "xhigh"
+    ) {
       return yield* new Cut2KitProjectsError({
         cwd: project.cwd,
         operation: "generateWallLayout.validateReasoningEffort",
@@ -2583,7 +2631,11 @@ export const makeCut2KitProjects = Effect.gen(function* () {
 
     const writtenPaths: string[] = [];
     writtenPaths.push(
-      yield* writeWorkspaceFile(project.cwd, artifactPaths.geometryJsonPath, encodeJsonFile(geometry)),
+      yield* writeWorkspaceFile(
+        project.cwd,
+        artifactPaths.geometryJsonPath,
+        encodeJsonFile(geometry),
+      ),
     );
 
     const geometryValidationReport = buildWallValidationReport({

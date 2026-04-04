@@ -9,11 +9,13 @@ import {
   type Cut2KitSettingsProjectContext,
   type Cut2KitSettingsEditorState,
   loadCut2KitSettingsEditorState,
+  replaceCut2KitPromptTemplateDraft,
   reloadCut2KitSettingsEditorState,
   replaceCut2KitSettingsEditorDraft,
   resolveCut2KitSettingsFilePath,
   saveCut2KitSettingsEditorState,
   setCut2KitDraftValue,
+  type Cut2KitPromptTemplateKey,
 } from "~/lib/cut2kitSettingsEditor";
 import { refreshCut2KitProjectQuery } from "~/lib/cut2kitReactQuery";
 import { readNativeApi } from "~/nativeApi";
@@ -55,6 +57,7 @@ export type UseCut2KitSettingsEditorResult = {
   isAdvancedJsonDirty: boolean;
   hasUnsavedChanges: boolean;
   updateDraftAtPath: (path: Cut2KitSettingsEditorPath, value: unknown) => void;
+  updatePromptTemplate: (key: Cut2KitPromptTemplateKey, value: string) => void;
   setAdvancedJsonText: (value: string) => void;
   applyAdvancedJson: () => void;
   resetAdvancedJsonToDraft: () => void;
@@ -80,6 +83,7 @@ export function useCut2KitSettingsEditor(input: {
   const projectCwd = input.project?.cwd ?? null;
   const projectName = input.project?.name ?? null;
   const projectSettingsFilePath = input.project?.settingsFilePath ?? null;
+  const projectResolvedPromptTemplates = input.project?.resolvedPromptTemplates ?? null;
   const project = useMemo(
     () =>
       projectId && projectCwd && projectName
@@ -88,9 +92,10 @@ export function useCut2KitSettingsEditor(input: {
             id: projectId,
             name: projectName,
             settingsFilePath: projectSettingsFilePath,
+            resolvedPromptTemplates: projectResolvedPromptTemplates,
           }
         : null,
-    [projectCwd, projectId, projectName, projectSettingsFilePath],
+    [projectCwd, projectId, projectName, projectResolvedPromptTemplates, projectSettingsFilePath],
   );
 
   const settingsFilePath = useMemo(() => {
@@ -202,6 +207,24 @@ export function useCut2KitSettingsEditor(input: {
     setIsAdvancedJsonDirty(true);
   }, []);
 
+  const updatePromptTemplate = useCallback(
+    (key: Cut2KitPromptTemplateKey, value: string) => {
+      if (!state) {
+        return;
+      }
+
+      const updatedState = replaceCut2KitPromptTemplateDraft(state, key, value);
+      setState(updatedState);
+
+      if (!isAdvancedJsonDirty) {
+        syncAdvancedJsonToDraft(updatedState.draft);
+      } else {
+        setAdvancedJsonErrorMessage(null);
+      }
+    },
+    [isAdvancedJsonDirty, state, syncAdvancedJsonToDraft],
+  );
+
   const applyAdvancedJson = useCallback(() => {
     if (!state) {
       return;
@@ -257,8 +280,22 @@ export function useCut2KitSettingsEditor(input: {
     setIsLoading(true);
     setLoadErrorMessage(null);
     try {
+      const refreshedProject = await refreshCut2KitProjectQuery(queryClient, state.cwd).catch(
+        () => null,
+      );
       const nextState = await reloadCut2KitSettingsEditorState(state, {
         readFile: api.projects.readFile,
+        ...(refreshedProject
+          ? {
+              project: {
+                cwd: refreshedProject.cwd,
+                id: state.projectId,
+                name: refreshedProject.name,
+                settingsFilePath: refreshedProject.settingsFilePath,
+                resolvedPromptTemplates: refreshedProject.resolvedPromptTemplates,
+              },
+            }
+          : {}),
       });
       setState(nextState);
       syncAdvancedJsonToDraft(nextState.draft);
@@ -276,7 +313,7 @@ export function useCut2KitSettingsEditor(input: {
     } finally {
       setIsLoading(false);
     }
-  }, [state, syncAdvancedJsonToDraft]);
+  }, [queryClient, state, syncAdvancedJsonToDraft]);
 
   const saveDraft = useCallback(async () => {
     if (!state) {
@@ -297,6 +334,7 @@ export function useCut2KitSettingsEditor(input: {
     try {
       const hadExistingFile = state.hasExistingFile;
       const nextState = await saveCut2KitSettingsEditorState(state, {
+        readFile: api.projects.readFile,
         writeFile: api.projects.writeFile,
         refreshProject: (cwd) => refreshCut2KitProjectQuery(queryClient, cwd),
       });
@@ -329,6 +367,7 @@ export function useCut2KitSettingsEditor(input: {
     isAdvancedJsonDirty,
     hasUnsavedChanges,
     updateDraftAtPath,
+    updatePromptTemplate,
     setAdvancedJsonText,
     applyAdvancedJson,
     resetAdvancedJsonToDraft,

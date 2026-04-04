@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 
 import { Effect, Schema } from "effect";
 
-import type { Cut2KitPromptTemplatePaths } from "@t3tools/contracts";
+import type {
+  Cut2KitPromptTemplatePaths,
+  Cut2KitResolvedPromptTemplate,
+  Cut2KitResolvedPromptTemplates,
+} from "@t3tools/contracts";
 
 const repoRootPath = fileURLToPath(new URL("../../../../../", import.meta.url));
 
@@ -26,22 +30,45 @@ async function pathExists(absolutePath: string): Promise<boolean> {
   }
 }
 
-async function resolvePromptTemplatePath(cwd: string, configuredPath: string): Promise<string> {
+async function resolvePromptTemplatePath(
+  cwd: string,
+  configuredPath: string,
+): Promise<{
+  resolvedPath: string;
+  source: Cut2KitResolvedPromptTemplate["source"];
+}> {
   if (nodePath.isAbsolute(configuredPath)) {
-    return configuredPath;
+    return {
+      resolvedPath: configuredPath,
+      source: "external",
+    };
   }
 
   const projectRelativePath = nodePath.join(cwd, configuredPath);
   if (await pathExists(projectRelativePath)) {
-    return projectRelativePath;
+    return {
+      resolvedPath: projectRelativePath,
+      source: "workspace",
+    };
   }
 
-  return nodePath.join(repoRootPath, configuredPath);
+  return {
+    resolvedPath: nodePath.join(repoRootPath, configuredPath),
+    source: "repo_default",
+  };
 }
 
-async function readPromptFile(cwd: string, configuredPath: string): Promise<string> {
-  const resolvedPath = await resolvePromptTemplatePath(cwd, configuredPath);
-  return fsPromises.readFile(resolvedPath, "utf8");
+async function readPromptFile(
+  cwd: string,
+  configuredPath: string,
+): Promise<Cut2KitResolvedPromptTemplate> {
+  const resolved = await resolvePromptTemplatePath(cwd, configuredPath);
+  return {
+    configuredPath,
+    resolvedPath: resolved.resolvedPath,
+    source: resolved.source,
+    contents: await fsPromises.readFile(resolved.resolvedPath, "utf8"),
+  };
 }
 
 export interface Cut2KitPromptTemplateBundle {
@@ -54,26 +81,50 @@ export interface Cut2KitPromptTemplateBundle {
   readonly validationChecklist: string;
 }
 
-export const loadCut2KitPromptTemplateBundle = Effect.fn(
-  "loadCut2KitPromptTemplateBundle",
-)(function* (input: {
-  cwd: string;
-  paths: Cut2KitPromptTemplatePaths;
-}): Effect.fn.Return<Cut2KitPromptTemplateBundle, Cut2KitPromptTemplateError> {
-  return yield* Effect.tryPromise({
-    try: async () => ({
-      geometrySystem: await readPromptFile(input.cwd, input.paths.geometrySystem),
-      geometryUser: await readPromptFile(input.cwd, input.paths.geometryUser),
-      framingSystem: await readPromptFile(input.cwd, input.paths.framingSystem),
-      framingUser: await readPromptFile(input.cwd, input.paths.framingUser),
-      sheathingSystem: await readPromptFile(input.cwd, input.paths.sheathingSystem),
-      sheathingUser: await readPromptFile(input.cwd, input.paths.sheathingUser),
-      validationChecklist: await readPromptFile(input.cwd, input.paths.validationChecklist),
-    }),
-    catch: (error) =>
-      new Cut2KitPromptTemplateError({
-        operation: "loadCut2KitPromptTemplateBundle.readPromptFile",
-        detail: error instanceof Error ? error.message : String(error),
+function toPromptTemplateBundle(
+  resolvedPromptTemplates: Cut2KitResolvedPromptTemplates,
+): Cut2KitPromptTemplateBundle {
+  return {
+    geometrySystem: resolvedPromptTemplates.geometrySystem.contents,
+    geometryUser: resolvedPromptTemplates.geometryUser.contents,
+    framingSystem: resolvedPromptTemplates.framingSystem.contents,
+    framingUser: resolvedPromptTemplates.framingUser.contents,
+    sheathingSystem: resolvedPromptTemplates.sheathingSystem.contents,
+    sheathingUser: resolvedPromptTemplates.sheathingUser.contents,
+    validationChecklist: resolvedPromptTemplates.validationChecklist.contents,
+  };
+}
+
+export const loadCut2KitResolvedPromptTemplates = Effect.fn("loadCut2KitResolvedPromptTemplates")(
+  function* (input: {
+    cwd: string;
+    paths: Cut2KitPromptTemplatePaths;
+  }): Effect.fn.Return<Cut2KitResolvedPromptTemplates, Cut2KitPromptTemplateError> {
+    return yield* Effect.tryPromise({
+      try: async () => ({
+        geometrySystem: await readPromptFile(input.cwd, input.paths.geometrySystem),
+        geometryUser: await readPromptFile(input.cwd, input.paths.geometryUser),
+        framingSystem: await readPromptFile(input.cwd, input.paths.framingSystem),
+        framingUser: await readPromptFile(input.cwd, input.paths.framingUser),
+        sheathingSystem: await readPromptFile(input.cwd, input.paths.sheathingSystem),
+        sheathingUser: await readPromptFile(input.cwd, input.paths.sheathingUser),
+        validationChecklist: await readPromptFile(input.cwd, input.paths.validationChecklist),
       }),
-  });
-});
+      catch: (error) =>
+        new Cut2KitPromptTemplateError({
+          operation: "loadCut2KitResolvedPromptTemplates.readPromptFile",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+    });
+  },
+);
+
+export const loadCut2KitPromptTemplateBundle = Effect.fn("loadCut2KitPromptTemplateBundle")(
+  function* (input: {
+    cwd: string;
+    paths: Cut2KitPromptTemplatePaths;
+  }): Effect.fn.Return<Cut2KitPromptTemplateBundle, Cut2KitPromptTemplateError> {
+    const resolvedPromptTemplates = yield* loadCut2KitResolvedPromptTemplates(input);
+    return toPromptTemplateBundle(resolvedPromptTemplates);
+  },
+);

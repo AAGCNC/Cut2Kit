@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 
 import type {
+  Cut2KitPromptTemplateKey,
   Cut2KitSettingsEditorPath,
   Cut2KitSettingsEditorState,
 } from "~/lib/cut2kitSettingsEditor";
@@ -93,6 +94,48 @@ const AI_RUNTIME_GENERATION_STEPS = [
   "generate_sheathing_layout",
   "validate_and_package",
 ] as const;
+
+const PROMPT_TEMPLATE_FIELDS = [
+  {
+    key: "geometrySystem",
+    label: "Geometry system prompt",
+    description: "System instructions for wall-geometry extraction.",
+  },
+  {
+    key: "geometryUser",
+    label: "Geometry user prompt",
+    description: "Task prompt for wall-geometry extraction.",
+  },
+  {
+    key: "framingSystem",
+    label: "Framing system prompt",
+    description: "System instructions for framing-layout generation.",
+  },
+  {
+    key: "framingUser",
+    label: "Framing user prompt",
+    description: "Task prompt for framing-layout generation.",
+  },
+  {
+    key: "sheathingSystem",
+    label: "Sheathing system prompt",
+    description: "System instructions for sheathing-layout generation.",
+  },
+  {
+    key: "sheathingUser",
+    label: "Sheathing user prompt",
+    description: "Task prompt for sheathing-layout generation.",
+  },
+  {
+    key: "validationChecklist",
+    label: "Validation checklist",
+    description: "Checklist injected into geometry, framing, and sheathing prompts.",
+  },
+] as const satisfies ReadonlyArray<{
+  key: Cut2KitPromptTemplateKey;
+  label: string;
+  description: string;
+}>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -202,6 +245,150 @@ function parseNumberInput(value: string): number | string {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : value;
+}
+
+function promptSourceBadgeLabel(state: Cut2KitSettingsEditorState, key: Cut2KitPromptTemplateKey) {
+  const promptTemplate = state.promptTemplates[key];
+  const configuredPath = readStringValue(state, ["ai", "promptTemplatePaths", key]);
+
+  if (configuredPath !== promptTemplate.loadedConfiguredPath) {
+    return "Path changed";
+  }
+  if (
+    promptTemplate.loadedContents !== null &&
+    promptTemplate.contents !== promptTemplate.loadedContents
+  ) {
+    return "Modified";
+  }
+  switch (promptTemplate.source) {
+    case "workspace":
+      return "Project override";
+    case "repo_default":
+      return "Repo default";
+    case "external":
+      return "External path";
+    default:
+      return "Unresolved";
+  }
+}
+
+function promptSourceBadgeVariant(
+  state: Cut2KitSettingsEditorState,
+  key: Cut2KitPromptTemplateKey,
+) {
+  const promptTemplate = state.promptTemplates[key];
+  const configuredPath = readStringValue(state, ["ai", "promptTemplatePaths", key]);
+
+  if (configuredPath !== promptTemplate.loadedConfiguredPath) {
+    return "warning" as const;
+  }
+  if (
+    promptTemplate.loadedContents !== null &&
+    promptTemplate.contents !== promptTemplate.loadedContents
+  ) {
+    return "warning" as const;
+  }
+  if (promptTemplate.source === "workspace") {
+    return "secondary" as const;
+  }
+  if (promptTemplate.source === "repo_default") {
+    return "outline" as const;
+  }
+  if (promptTemplate.source === "external") {
+    return "outline" as const;
+  }
+  return "outline" as const;
+}
+
+function PromptTemplateEditor({
+  state,
+  templateKey,
+  label,
+  description,
+  onValueChange,
+  onPromptTemplateChange,
+}: {
+  state: Cut2KitSettingsEditorState;
+  templateKey: Cut2KitPromptTemplateKey;
+  label: string;
+  description: string;
+  onValueChange: (path: Cut2KitSettingsEditorPath, value: unknown) => void;
+  onPromptTemplateChange: (key: Cut2KitPromptTemplateKey, value: string) => void;
+}) {
+  const promptTemplate = state.promptTemplates[templateKey];
+  const configuredPath = readStringValue(state, ["ai", "promptTemplatePaths", templateKey]);
+  const promptTemplateError = state.validation.promptTemplateErrors[templateKey] ?? null;
+  const pathChanged = configuredPath !== promptTemplate.loadedConfiguredPath;
+  const contentsChanged =
+    promptTemplate.loadedContents !== null &&
+    promptTemplate.contents !== promptTemplate.loadedContents;
+  const pathError =
+    validateRequiredString(
+      readValue(state, ["ai", "promptTemplatePaths", templateKey]),
+      `${label} path`,
+    ) ?? (promptTemplateError?.includes("project-relative path") ? promptTemplateError : null);
+  const contentsError =
+    promptTemplateError && !promptTemplateError.includes("project-relative path")
+      ? promptTemplateError
+      : null;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border/70 bg-background/40 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="space-y-1">
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant={promptSourceBadgeVariant(state, templateKey)}>
+            {promptSourceBadgeLabel(state, templateKey)}
+          </Badge>
+          {contentsChanged ? <Badge variant="warning">Unsaved content</Badge> : null}
+        </div>
+      </div>
+
+      <Field
+        label="Prompt path"
+        description="Relative paths use a project-local file first, then fall back to the shared repo default."
+        error={pathError}
+      >
+        <Input
+          value={configuredPath}
+          onChange={(event) =>
+            onValueChange(["ai", "promptTemplatePaths", templateKey], event.target.value)
+          }
+        />
+      </Field>
+
+      <div className="grid gap-2 rounded-lg border border-dashed border-border/70 bg-background/50 p-3 text-xs text-muted-foreground">
+        <p>
+          Loaded from{" "}
+          <span className="font-medium text-foreground">
+            {promptTemplate.resolvedPath ?? promptTemplate.loadedConfiguredPath}
+          </span>
+        </p>
+        <p>
+          {pathChanged
+            ? "Saving will write a project-local markdown file at the new configured path."
+            : promptTemplate.source === "repo_default"
+              ? "No project-local override exists yet. Saving modified content will create one in the workspace."
+              : "Saving modified content updates the project-local markdown file."}
+        </p>
+      </div>
+
+      <Field
+        label="Prompt markdown"
+        description="Edit the actual markdown used to trigger this action."
+        error={contentsError}
+      >
+        <Textarea
+          className="min-h-52 font-mono text-xs"
+          value={promptTemplate.contents}
+          onChange={(event) => onPromptTemplateChange(templateKey, event.target.value)}
+        />
+      </Field>
+    </div>
+  );
 }
 
 function SectionCard({
@@ -505,6 +692,7 @@ export function Cut2KitSettingsForm({
   advancedJsonErrorMessage,
   isAdvancedJsonDirty,
   onValueChange,
+  onPromptTemplateChange,
   onAdvancedJsonTextChange,
   onApplyAdvancedJson,
   onResetAdvancedJsonToDraft,
@@ -514,6 +702,7 @@ export function Cut2KitSettingsForm({
   advancedJsonErrorMessage: string | null;
   isAdvancedJsonDirty: boolean;
   onValueChange: (path: Cut2KitSettingsEditorPath, value: unknown) => void;
+  onPromptTemplateChange: (key: Cut2KitPromptTemplateKey, value: string) => void;
   onAdvancedJsonTextChange: (value: string) => void;
   onApplyAdvancedJson: () => void;
   onResetAdvancedJsonToDraft: () => void;
@@ -671,7 +860,7 @@ export function Cut2KitSettingsForm({
       <SectionCard
         id="cut2kit-settings-ai"
         title="AI"
-        description="Codex/GPT-5.4 workflow controls and prompt template locations."
+        description="Codex/GPT-5.4 workflow controls, prompt template paths, and project-local prompt overrides."
         aside={
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">{readStringValue(state, ["ai", "provider"])}</Badge>
@@ -702,109 +891,27 @@ export function Cut2KitSettingsForm({
           </Field>
         </FieldGrid>
 
-        <FieldGrid>
-          <Field
-            label="Geometry system prompt"
-            error={validateRequiredString(
-              readValue(state, ["ai", "promptTemplatePaths", "geometrySystem"]),
-              "Geometry system prompt path",
-            )}
-          >
-            <Input
-              value={readStringValue(state, ["ai", "promptTemplatePaths", "geometrySystem"])}
-              onChange={(event) =>
-                onValueChange(["ai", "promptTemplatePaths", "geometrySystem"], event.target.value)
-              }
+        <div className="space-y-3">
+          <div className="space-y-1 rounded-xl border border-border/70 bg-background/50 p-3">
+            <p className="text-sm font-medium text-foreground">Prompt templates</p>
+            <p className="text-xs text-muted-foreground">
+              The app resolves these markdown prompts before each action run. Unchanged prompts
+              continue to use the shared repo defaults. Edited prompts are saved as project-local
+              markdown files and then used automatically.
+            </p>
+          </div>
+          {PROMPT_TEMPLATE_FIELDS.map((field) => (
+            <PromptTemplateEditor
+              key={field.key}
+              state={state}
+              templateKey={field.key}
+              label={field.label}
+              description={field.description}
+              onValueChange={onValueChange}
+              onPromptTemplateChange={onPromptTemplateChange}
             />
-          </Field>
-          <Field
-            label="Geometry user prompt"
-            error={validateRequiredString(
-              readValue(state, ["ai", "promptTemplatePaths", "geometryUser"]),
-              "Geometry user prompt path",
-            )}
-          >
-            <Input
-              value={readStringValue(state, ["ai", "promptTemplatePaths", "geometryUser"])}
-              onChange={(event) =>
-                onValueChange(["ai", "promptTemplatePaths", "geometryUser"], event.target.value)
-              }
-            />
-          </Field>
-          <Field
-            label="Framing system prompt"
-            error={validateRequiredString(
-              readValue(state, ["ai", "promptTemplatePaths", "framingSystem"]),
-              "Framing system prompt path",
-            )}
-          >
-            <Input
-              value={readStringValue(state, ["ai", "promptTemplatePaths", "framingSystem"])}
-              onChange={(event) =>
-                onValueChange(["ai", "promptTemplatePaths", "framingSystem"], event.target.value)
-              }
-            />
-          </Field>
-          <Field
-            label="Framing user prompt"
-            error={validateRequiredString(
-              readValue(state, ["ai", "promptTemplatePaths", "framingUser"]),
-              "Framing user prompt path",
-            )}
-          >
-            <Input
-              value={readStringValue(state, ["ai", "promptTemplatePaths", "framingUser"])}
-              onChange={(event) =>
-                onValueChange(["ai", "promptTemplatePaths", "framingUser"], event.target.value)
-              }
-            />
-          </Field>
-          <Field
-            label="Sheathing system prompt"
-            error={validateRequiredString(
-              readValue(state, ["ai", "promptTemplatePaths", "sheathingSystem"]),
-              "Sheathing system prompt path",
-            )}
-          >
-            <Input
-              value={readStringValue(state, ["ai", "promptTemplatePaths", "sheathingSystem"])}
-              onChange={(event) =>
-                onValueChange(["ai", "promptTemplatePaths", "sheathingSystem"], event.target.value)
-              }
-            />
-          </Field>
-          <Field
-            label="Sheathing user prompt"
-            error={validateRequiredString(
-              readValue(state, ["ai", "promptTemplatePaths", "sheathingUser"]),
-              "Sheathing user prompt path",
-            )}
-          >
-            <Input
-              value={readStringValue(state, ["ai", "promptTemplatePaths", "sheathingUser"])}
-              onChange={(event) =>
-                onValueChange(["ai", "promptTemplatePaths", "sheathingUser"], event.target.value)
-              }
-            />
-          </Field>
-          <Field
-            label="Validation checklist"
-            error={validateRequiredString(
-              readValue(state, ["ai", "promptTemplatePaths", "validationChecklist"]),
-              "Validation checklist path",
-            )}
-          >
-            <Input
-              value={readStringValue(state, ["ai", "promptTemplatePaths", "validationChecklist"])}
-              onChange={(event) =>
-                onValueChange(
-                  ["ai", "promptTemplatePaths", "validationChecklist"],
-                  event.target.value,
-                )
-              }
-            />
-          </Field>
-        </FieldGrid>
+          ))}
+        </div>
 
         <ReadOnlyList
           label="Runtime generation order"

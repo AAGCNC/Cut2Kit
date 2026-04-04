@@ -36,6 +36,7 @@ export function Cut2KitSettingsEditorDialog({
             cwd: snapshot.cwd,
             name: snapshot.name,
             settingsFilePath: snapshot.settingsFilePath,
+            resolvedPromptTemplates: snapshot.resolvedPromptTemplates,
           }
         : null,
     [projectId, snapshot],
@@ -134,6 +135,7 @@ export function Cut2KitSettingsEditorDialog({
               advancedJsonErrorMessage={editor.advancedJsonErrorMessage}
               isAdvancedJsonDirty={editor.isAdvancedJsonDirty}
               onValueChange={editor.updateDraftAtPath}
+              onPromptTemplateChange={editor.updatePromptTemplate}
               onAdvancedJsonTextChange={editor.setAdvancedJsonText}
               onApplyAdvancedJson={editor.applyAdvancedJson}
               onResetAdvancedJsonToDraft={editor.resetAdvancedJsonToDraft}
