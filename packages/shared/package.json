@@ -24,6 +24,10 @@
       "types": "./src/cut2kit.ts",
       "import": "./src/cut2kit.ts"
     },
+    "./cut2kitSettingsDefaults": {
+      "types": "./src/cut2kitSettingsDefaults.ts",
+      "import": "./src/cut2kitSettingsDefaults.ts"
+    },
     "./Net": {
       "types": "./src/Net.ts",
       "import": "./src/Net.ts"

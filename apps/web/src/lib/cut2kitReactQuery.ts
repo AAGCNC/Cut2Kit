@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
 import { ensureNativeApi } from "~/nativeApi";
 
@@ -24,4 +24,8 @@ export function cut2kitProjectQueryOptions(input: {
     enabled: (input.enabled ?? true) && input.cwd !== null,
     staleTime: input.staleTime ?? 5_000,
   });
+}
+
+export function refreshCut2KitProjectQuery(queryClient: QueryClient, cwd: string) {
+  return queryClient.fetchQuery(cut2kitProjectQueryOptions({ cwd, staleTime: 0 }));
 }

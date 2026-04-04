@@ -12,3 +12,10 @@ export function decodeProjectFileBytes(
 
   return bytes;
 }
+
+export function decodeProjectFileText(
+  document: Pick<ProjectReadFileResult, "contents">,
+  encoding = "utf-8",
+): string {
+  return new TextDecoder(encoding).decode(decodeProjectFileBytes(document));
+}

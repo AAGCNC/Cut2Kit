@@ -28,6 +28,7 @@ import { useProjectById } from "../storeSelectors";
 import { toastManager } from "./ui/toast";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { Cut2KitProjectExplorer } from "./sidebar/Cut2KitProjectExplorer";
+import { Cut2KitSettingsEditorDialog } from "./cut2kit-settings/Cut2KitSettingsEditorDialog";
 import {
   canRenderFramingPdfFromJson,
   didFramingJsonBecomeReady,
@@ -91,6 +92,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingWallLayout, setIsGeneratingWallLayout] = useState(false);
   const [isPreparingAgent, setIsPreparingAgent] = useState(false);
+  const [isSettingsEditorOpen, setIsSettingsEditorOpen] = useState(false);
   const [selectedSourcePdfPath, setSelectedSourcePdfPath] = useState<string | null>(null);
   const [isStartingFramingGeneration, setIsStartingFramingGeneration] = useState(false);
   const [isRenderingFramingLayout, setIsRenderingFramingLayout] = useState(false);
@@ -667,10 +669,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       setActiveFramingGeneration(null);
       return;
     }
-    if (
-      isRenderingFramingLayout ||
-      !activeFramingPdfReady
-    ) {
+    if (isRenderingFramingLayout || !activeFramingPdfReady) {
       return;
     }
     completedGenerationThreadIdsRef.current.add(activeFramingGeneration.threadId);
@@ -729,6 +728,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => setIsSettingsEditorOpen(true)}>
+              {snapshot.settingsFilePath ? "Edit Settings" : "Create Settings File"}
+            </Button>
             <Button variant="outline" onClick={() => void handleOpenInEditor()}>
               <FolderIcon className="size-4" />
               Open Folder
@@ -1024,6 +1026,23 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-background/60 p-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">
+                        {snapshot.settingsFilePath
+                          ? "Edit the active Cut2Kit settings file."
+                          : "This project does not have a settings file yet."}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {snapshot.settingsFilePath
+                          ? "Open the large settings editor to update the wall-workflow configuration and save it back to disk."
+                          : "Create cut2kit.settings.json from typed defaults, review the wall-workflow settings, and save it into the project workspace."}
+                      </p>
+                    </div>
+                    <Button onClick={() => setIsSettingsEditorOpen(true)}>
+                      {snapshot.settingsFilePath ? "Edit Settings" : "Create Settings File"}
+                    </Button>
+                  </div>
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                     <div className="rounded-xl border border-border/70 bg-background/60 p-3">
                       <p className="text-xs font-medium text-muted-foreground">Settings file</p>
@@ -1188,6 +1207,13 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
           </ScrollArea>
         </div>
       </div>
+
+      <Cut2KitSettingsEditorDialog
+        open={isSettingsEditorOpen}
+        projectId={project.id}
+        snapshot={snapshot}
+        onOpenChange={setIsSettingsEditorOpen}
+      />
     </div>
   );
 }
