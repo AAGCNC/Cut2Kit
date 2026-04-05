@@ -106,6 +106,12 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     homeDescription: "Optional custom Codex home and config directory.",
   },
   {
+    provider: "opencode",
+    title: "OpenCode",
+    binaryPlaceholder: "OpenCode binary path",
+    binaryDescription: "Path to the OpenCode CLI used when Cut2Kit starts a local OpenCode server.",
+  },
+  {
     provider: "claudeAgent",
     title: "Claude",
     binaryPlaceholder: "Claude binary path",
@@ -520,24 +526,26 @@ export function GeneralSettingsPanel() {
   const { updateSettings } = useUpdateSettings();
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
-  const [openProviderDetails, setOpenProviderDetails] = useState<Record<ProviderKind, boolean>>({
-    codex: Boolean(
-      settings.providers.codex.binaryPath !== DEFAULT_UNIFIED_SETTINGS.providers.codex.binaryPath ||
-      settings.providers.codex.homePath !== DEFAULT_UNIFIED_SETTINGS.providers.codex.homePath ||
-      settings.providers.codex.customModels.length > 0,
-    ),
-    claudeAgent: Boolean(
-      settings.providers.claudeAgent.binaryPath !==
-        DEFAULT_UNIFIED_SETTINGS.providers.claudeAgent.binaryPath ||
-      settings.providers.claudeAgent.customModels.length > 0,
-    ),
-  });
+  const [openProviderDetails, setOpenProviderDetails] = useState<Record<ProviderKind, boolean>>(
+    () =>
+      Object.fromEntries(
+        PROVIDER_SETTINGS.map((providerSettings) => [
+          providerSettings.provider,
+          !Equal.equals(
+            settings.providers[providerSettings.provider],
+            DEFAULT_UNIFIED_SETTINGS.providers[providerSettings.provider],
+          ),
+        ]),
+      ) as Record<ProviderKind, boolean>,
+  );
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Record<ProviderKind, string>
-  >({
-    codex: "",
-    claudeAgent: "",
-  });
+  >(() =>
+    Object.fromEntries(PROVIDER_SETTINGS.map((providerSettings) => [providerSettings.provider, ""])) as Record<
+      ProviderKind,
+      string
+    >,
+  );
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderKind, string | null>>
   >({});
@@ -563,6 +571,20 @@ export function GeneralSettingsPanel() {
   const availableEditors = useServerAvailableEditors();
   const serverProviders = useServerProviders();
   const codexHomePath = settings.providers.codex.homePath;
+  const updateProviderConfig = useCallback(
+    (provider: ProviderKind, patch: Record<string, unknown>) => {
+      updateSettings({
+        providers: {
+          ...settings.providers,
+          [provider]: {
+            ...settings.providers[provider],
+            ...patch,
+          },
+        } as typeof settings.providers,
+      });
+    },
+    [settings.providers, updateSettings],
+  );
 
   const textGenerationModelSelection = resolveAppModelSelectionState(settings, serverProviders);
   const textGenProvider = textGenerationModelSelection.provider;
@@ -578,6 +600,20 @@ export function GeneralSettingsPanel() {
     settings.textGenerationModelSelection ?? null,
     DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
   );
+
+  useEffect(() => {
+    if (textGenProvider !== "opencode") {
+      return;
+    }
+    setOpenProviderDetails((existing) =>
+      existing.opencode
+        ? existing
+        : {
+            ...existing,
+            opencode: true,
+          },
+    );
+  }, [textGenProvider]);
 
   const openKeybindingsFile = useCallback(() => {
     if (!keybindingsConfigPath) return;
@@ -639,14 +675,8 @@ export function GeneralSettingsPanel() {
         return;
       }
 
-      updateSettings({
-        providers: {
-          ...settings.providers,
-          [provider]: {
-            ...settings.providers[provider],
-            customModels: [...customModels, normalized],
-          },
-        },
+      updateProviderConfig(provider, {
+        customModels: [...customModels, normalized],
       });
       setCustomModelInputByProvider((existing) => ({
         ...existing,
@@ -673,16 +703,8 @@ export function GeneralSettingsPanel() {
 
   const removeCustomModel = useCallback(
     (provider: ProviderKind, slug: string) => {
-      updateSettings({
-        providers: {
-          ...settings.providers,
-          [provider]: {
-            ...settings.providers[provider],
-            customModels: settings.providers[provider].customModels.filter(
-              (model) => model !== slug,
-            ),
-          },
-        },
+      updateProviderConfig(provider, {
+        customModels: settings.providers[provider].customModels.filter((model) => model !== slug),
       });
       setCustomModelErrorByProvider((existing) => ({
         ...existing,
@@ -960,6 +982,20 @@ export function GeneralSettingsPanel() {
         <SettingsRow
           title="Text generation model"
           description="Configure the model used for generated commit messages, PR titles, and similar Git text."
+          status={
+            textGenProvider === "opencode" ? (
+              <>
+                <span className="block">
+                  Cut2Kit sends these requests through OpenCode instead of talking directly to a
+                  model API.
+                </span>
+                <span className="mt-1 block">
+                  Configure upstream providers and any local vLLM-backed OpenAI-compatible routing
+                  inside OpenCode itself.
+                </span>
+              </>
+            ) : null
+          }
           resetAction={
             isGitWritingModelDirty ? (
               <SettingResetButton
@@ -995,35 +1031,37 @@ export function GeneralSettingsPanel() {
                   });
                 }}
               />
-              <TraitsPicker
-                provider={textGenProvider}
-                models={
-                  serverProviders.find((provider) => provider.provider === textGenProvider)
-                    ?.models ?? []
-                }
-                model={textGenModel}
-                prompt=""
-                onPromptChange={() => {}}
-                modelOptions={textGenModelOptions}
-                allowPromptInjectedEffort={false}
-                triggerVariant="outline"
-                triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
-                onModelOptionsChange={(nextOptions) => {
-                  updateSettings({
-                    textGenerationModelSelection: resolveAppModelSelectionState(
-                      {
-                        ...settings,
-                        textGenerationModelSelection: {
-                          provider: textGenProvider,
-                          model: textGenModel,
-                          ...(nextOptions ? { options: nextOptions } : {}),
+              {textGenProvider === "opencode" ? null : (
+                <TraitsPicker
+                  provider={textGenProvider}
+                  models={
+                    serverProviders.find((provider) => provider.provider === textGenProvider)
+                      ?.models ?? []
+                  }
+                  model={textGenModel}
+                  prompt=""
+                  onPromptChange={() => {}}
+                  modelOptions={textGenModelOptions}
+                  allowPromptInjectedEffort={false}
+                  triggerVariant="outline"
+                  triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
+                  onModelOptionsChange={(nextOptions) => {
+                    updateSettings({
+                      textGenerationModelSelection: resolveAppModelSelectionState(
+                        {
+                          ...settings,
+                          textGenerationModelSelection: {
+                            provider: textGenProvider,
+                            model: textGenModel,
+                            ...(nextOptions ? { options: nextOptions } : {}),
+                          },
                         },
-                      },
-                      serverProviders,
-                    ),
-                  });
-                }}
-              />
+                        serverProviders,
+                      ),
+                    });
+                  }}
+                />
+              )}
             </div>
           }
         />
@@ -1063,6 +1101,13 @@ export function GeneralSettingsPanel() {
           const customModelError = customModelErrorByProvider[providerCard.provider] ?? null;
           const providerDisplayName =
             PROVIDER_DISPLAY_NAMES[providerCard.provider] ?? providerCard.title;
+          const openCodeConfig =
+            providerCard.provider === "opencode" ? settings.providers.opencode : null;
+          const openCodeServerUrl = openCodeConfig?.serverUrl.trim() ?? "";
+          const usesRemoteOpenCode = openCodeServerUrl.length > 0;
+          const showManagedOpenCodeFields = openCodeConfig
+            ? !usesRemoteOpenCode && openCodeConfig.autoStartServer
+            : true;
 
           return (
             <div key={providerCard.provider} className="border-t border-border first:border-t-0">
@@ -1164,37 +1209,210 @@ export function GeneralSettingsPanel() {
               >
                 <CollapsibleContent>
                   <div className="space-y-0">
-                    <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                      <label
-                        htmlFor={`provider-install-${providerCard.provider}-binary-path`}
-                        className="block"
-                      >
-                        <span className="text-xs font-medium text-foreground">
-                          {providerDisplayName} binary path
-                        </span>
-                        <Input
-                          id={`provider-install-${providerCard.provider}-binary-path`}
-                          className="mt-1.5"
-                          value={providerCard.binaryPathValue}
-                          onChange={(event) =>
-                            updateSettings({
-                              providers: {
-                                ...settings.providers,
-                                [providerCard.provider]: {
-                                  ...settings.providers[providerCard.provider],
-                                  binaryPath: event.target.value,
-                                },
-                              },
-                            })
-                          }
-                          placeholder={providerCard.binaryPlaceholder}
-                          spellCheck={false}
-                        />
-                        <span className="mt-1 block text-xs text-muted-foreground">
-                          {providerCard.binaryDescription}
-                        </span>
-                      </label>
-                    </div>
+                    {openCodeConfig ? (
+                      <>
+                        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                          <div className="rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5 text-xs text-muted-foreground">
+                            <span className="block text-foreground/90">
+                              Cut2Kit connects to OpenCode as its agent backend.
+                            </span>
+                            <span className="mt-1 block">
+                              Configure OpenCode itself to use local OpenAI-compatible providers
+                              such as vLLM when needed.
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                          <label
+                            htmlFor="provider-install-opencode-server-url"
+                            className="block"
+                          >
+                            <span className="text-xs font-medium text-foreground">
+                              OpenCode server URL
+                            </span>
+                            <Input
+                              id="provider-install-opencode-server-url"
+                              className="mt-1.5"
+                              value={openCodeConfig.serverUrl}
+                              onChange={(event) =>
+                                updateProviderConfig("opencode", {
+                                  serverUrl: event.target.value,
+                                })
+                              }
+                              placeholder="http://127.0.0.1:4096"
+                              spellCheck={false}
+                            />
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              Leave blank to let Cut2Kit start <code>opencode serve</code> locally.
+                            </span>
+                          </label>
+                        </div>
+
+                        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-medium text-foreground">
+                                Start local OpenCode automatically
+                              </div>
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                Used only when no server URL is set. This keeps the CLI fallback
+                                available without taking over a configured remote endpoint.
+                              </div>
+                            </div>
+                            <Switch
+                              checked={openCodeConfig.autoStartServer}
+                              onCheckedChange={(checked) =>
+                                updateProviderConfig("opencode", {
+                                  autoStartServer: Boolean(checked),
+                                })
+                              }
+                              aria-label="Automatically start local OpenCode"
+                            />
+                          </div>
+                        </div>
+
+                        {usesRemoteOpenCode ? (
+                          <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                            <label
+                              htmlFor="provider-install-opencode-auth-token"
+                              className="block"
+                            >
+                              <span className="text-xs font-medium text-foreground">
+                                Bearer token
+                              </span>
+                              <Input
+                                id="provider-install-opencode-auth-token"
+                                type="password"
+                                className="mt-1.5"
+                                value={openCodeConfig.authToken}
+                                onChange={(event) =>
+                                  updateProviderConfig("opencode", {
+                                    authToken: event.target.value,
+                                  })
+                                }
+                                placeholder="Optional"
+                                spellCheck={false}
+                              />
+                              <span className="mt-1 block text-xs text-muted-foreground">
+                                Optional bearer token for an authenticated OpenCode server or
+                                reverse proxy.
+                              </span>
+                            </label>
+                          </div>
+                        ) : null}
+
+                        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                          <label
+                            htmlFor="provider-install-opencode-default-agent"
+                            className="block"
+                          >
+                            <span className="text-xs font-medium text-foreground">
+                              Default agent
+                            </span>
+                            <Input
+                              id="provider-install-opencode-default-agent"
+                              className="mt-1.5"
+                              value={openCodeConfig.defaultAgent}
+                              onChange={(event) =>
+                                updateProviderConfig("opencode", {
+                                  defaultAgent: event.target.value,
+                                })
+                              }
+                              placeholder="general"
+                              spellCheck={false}
+                            />
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              Optional OpenCode agent identifier for chat sessions and Git text
+                              generation.
+                            </span>
+                          </label>
+                        </div>
+
+                        {showManagedOpenCodeFields ? (
+                          <>
+                            <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                              <label
+                                htmlFor="provider-install-opencode-binary-path"
+                                className="block"
+                              >
+                                <span className="text-xs font-medium text-foreground">
+                                  OpenCode CLI path
+                                </span>
+                                <Input
+                                  id="provider-install-opencode-binary-path"
+                                  className="mt-1.5"
+                                  value={providerCard.binaryPathValue}
+                                  onChange={(event) =>
+                                    updateProviderConfig("opencode", {
+                                      binaryPath: event.target.value,
+                                    })
+                                  }
+                                  placeholder={providerCard.binaryPlaceholder}
+                                  spellCheck={false}
+                                />
+                                <span className="mt-1 block text-xs text-muted-foreground">
+                                  {providerCard.binaryDescription}
+                                </span>
+                              </label>
+                            </div>
+
+                            <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                              <label
+                                htmlFor="provider-install-opencode-config-path"
+                                className="block"
+                              >
+                                <span className="text-xs font-medium text-foreground">
+                                  OpenCode config path
+                                </span>
+                                <Input
+                                  id="provider-install-opencode-config-path"
+                                  className="mt-1.5"
+                                  value={openCodeConfig.configPath}
+                                  onChange={(event) =>
+                                    updateProviderConfig("opencode", {
+                                      configPath: event.target.value,
+                                    })
+                                  }
+                                  placeholder="OPENCODE_CONFIG"
+                                  spellCheck={false}
+                                />
+                                <span className="mt-1 block text-xs text-muted-foreground">
+                                  Optional path to a specific OpenCode config file for the managed
+                                  local server.
+                                </span>
+                              </label>
+                            </div>
+                          </>
+                        ) : null}
+                      </>
+                    ) : (
+                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+                        <label
+                          htmlFor={`provider-install-${providerCard.provider}-binary-path`}
+                          className="block"
+                        >
+                          <span className="text-xs font-medium text-foreground">
+                            {providerDisplayName} binary path
+                          </span>
+                          <Input
+                            id={`provider-install-${providerCard.provider}-binary-path`}
+                            className="mt-1.5"
+                            value={providerCard.binaryPathValue}
+                            onChange={(event) =>
+                              updateProviderConfig(providerCard.provider, {
+                                binaryPath: event.target.value,
+                              })
+                            }
+                            placeholder={providerCard.binaryPlaceholder}
+                            spellCheck={false}
+                          />
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {providerCard.binaryDescription}
+                          </span>
+                        </label>
+                      </div>
+                    )}
 
                     {providerCard.homePathKey ? (
                       <div className="border-t border-border/60 px-4 py-3 sm:px-5">
@@ -1210,14 +1428,8 @@ export function GeneralSettingsPanel() {
                             className="mt-1.5"
                             value={codexHomePath}
                             onChange={(event) =>
-                              updateSettings({
-                                providers: {
-                                  ...settings.providers,
-                                  codex: {
-                                    ...settings.providers.codex,
-                                    homePath: event.target.value,
-                                  },
-                                },
+                              updateProviderConfig("codex", {
+                                homePath: event.target.value,
                               })
                             }
                             placeholder={providerCard.homePlaceholder}
@@ -1344,7 +1556,9 @@ export function GeneralSettingsPanel() {
                           placeholder={
                             providerCard.provider === "codex"
                               ? "gpt-6.7-codex-ultra-preview"
-                              : "claude-sonnet-5-0"
+                              : providerCard.provider === "opencode"
+                                ? "openai/gpt-5-codex"
+                                : "claude-sonnet-5-0"
                           }
                           spellCheck={false}
                         />

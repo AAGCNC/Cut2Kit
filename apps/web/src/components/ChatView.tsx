@@ -1204,11 +1204,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const branchesQuery = useQuery(gitBranchesQueryOptions(gitCwd));
   const keybindings = useServerKeybindings();
   const availableEditors = useServerAvailableEditors();
-  const modelOptionsByProvider = useMemo(
+  const modelOptionsByProvider = useMemo<
+    Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>>
+  >(
     () => ({
-      codex: providerStatuses.find((provider) => provider.provider === "codex")?.models ?? [],
-      claudeAgent:
-        providerStatuses.find((provider) => provider.provider === "claudeAgent")?.models ?? [],
+      codex: getProviderModels(providerStatuses, "codex"),
+      opencode: getProviderModels(providerStatuses, "opencode"),
+      claudeAgent: getProviderModels(providerStatuses, "claudeAgent"),
     }),
     [providerStatuses],
   );

@@ -28,6 +28,7 @@ export const PROVIDER_OPTIONS: Array<{
   available: boolean;
 }> = [
   { value: "codex", label: "Codex", available: true },
+  { value: "opencode", label: "OpenCode", available: true },
   { value: "claudeAgent", label: "Claude", available: true },
   { value: "cursor", label: "Cursor", available: false },
 ];

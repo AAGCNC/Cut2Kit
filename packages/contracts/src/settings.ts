@@ -6,6 +6,7 @@ import {
   ClaudeModelOptions,
   CodexModelOptions,
   DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER,
+  OpenCodeModelOptions,
 } from "./model";
 import { ModelSelection } from "./orchestration";
 
@@ -64,6 +65,18 @@ export const CodexSettings = Schema.Struct({
 });
 export type CodexSettings = typeof CodexSettings.Type;
 
+export const OpenCodeSettings = Schema.Struct({
+  enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(() => true)),
+  serverUrl: TrimmedString.pipe(Schema.withDecodingDefault(() => "")),
+  authToken: TrimmedString.pipe(Schema.withDecodingDefault(() => "")),
+  autoStartServer: Schema.Boolean.pipe(Schema.withDecodingDefault(() => true)),
+  binaryPath: makeBinaryPathSetting("opencode"),
+  configPath: TrimmedString.pipe(Schema.withDecodingDefault(() => "")),
+  defaultAgent: TrimmedString.pipe(Schema.withDecodingDefault(() => "")),
+  customModels: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(() => [])),
+});
+export type OpenCodeSettings = typeof OpenCodeSettings.Type;
+
 export const ClaudeSettings = Schema.Struct({
   enabled: Schema.Boolean.pipe(Schema.withDecodingDefault(() => true)),
   binaryPath: makeBinaryPathSetting("claude"),
@@ -86,6 +99,7 @@ export const ServerSettings = Schema.Struct({
   // Provider specific settings
   providers: Schema.Struct({
     codex: CodexSettings.pipe(Schema.withDecodingDefault(() => ({}))),
+    opencode: OpenCodeSettings.pipe(Schema.withDecodingDefault(() => ({}))),
     claudeAgent: ClaudeSettings.pipe(Schema.withDecodingDefault(() => ({}))),
   }).pipe(Schema.withDecodingDefault(() => ({}))),
 });
@@ -135,6 +149,11 @@ const ModelSelectionPatch = Schema.Union([
     options: Schema.optionalKey(CodexModelOptionsPatch),
   }),
   Schema.Struct({
+    provider: Schema.optionalKey(Schema.Literal("opencode")),
+    model: Schema.optionalKey(TrimmedNonEmptyString),
+    options: Schema.optionalKey(OpenCodeModelOptions),
+  }),
+  Schema.Struct({
     provider: Schema.optionalKey(Schema.Literal("claudeAgent")),
     model: Schema.optionalKey(TrimmedNonEmptyString),
     options: Schema.optionalKey(ClaudeModelOptionsPatch),
@@ -145,6 +164,17 @@ const CodexSettingsPatch = Schema.Struct({
   enabled: Schema.optionalKey(Schema.Boolean),
   binaryPath: Schema.optionalKey(Schema.String),
   homePath: Schema.optionalKey(Schema.String),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
+const OpenCodeSettingsPatch = Schema.Struct({
+  enabled: Schema.optionalKey(Schema.Boolean),
+  serverUrl: Schema.optionalKey(Schema.String),
+  authToken: Schema.optionalKey(Schema.String),
+  autoStartServer: Schema.optionalKey(Schema.Boolean),
+  binaryPath: Schema.optionalKey(Schema.String),
+  configPath: Schema.optionalKey(Schema.String),
+  defaultAgent: Schema.optionalKey(Schema.String),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
@@ -161,6 +191,7 @@ export const ServerSettingsPatch = Schema.Struct({
   providers: Schema.optionalKey(
     Schema.Struct({
       codex: Schema.optionalKey(CodexSettingsPatch),
+      opencode: Schema.optionalKey(OpenCodeSettingsPatch),
       claudeAgent: Schema.optionalKey(ClaudeSettingsPatch),
     }),
   ),

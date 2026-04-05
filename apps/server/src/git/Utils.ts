@@ -23,6 +23,23 @@ export function toJsonSchemaObject(schema: Schema.Top): unknown {
   return document.schema;
 }
 
+/** Extract a likely JSON payload from plain text or fenced markdown. */
+export function extractStructuredJsonText(raw: string): string {
+  const trimmed = raw.trim();
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    return fencedMatch[1].trim();
+  }
+
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    return trimmed.slice(firstBrace, lastBrace + 1).trim();
+  }
+
+  return trimmed;
+}
+
 /** Truncate a text section to `maxChars`, appending a `[truncated]` marker when needed. */
 export function limitSection(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value;

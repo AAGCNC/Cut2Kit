@@ -6,6 +6,7 @@ import {
   type CodexModelOptions,
   type ModelCapabilities,
   type ModelSelection,
+  type OpenCodeModelOptions,
   type ProviderKind,
 } from "@t3tools/contracts";
 
@@ -98,6 +99,13 @@ export function normalizeCodexModelOptionsWithCapabilities(
     ...(fastMode !== undefined ? { fastMode } : {}),
   };
   return Object.keys(nextOptions).length > 0 ? nextOptions : undefined;
+}
+
+export function normalizeOpenCodeModelOptionsWithCapabilities(
+  _caps: ModelCapabilities,
+  _modelOptions: OpenCodeModelOptions | null | undefined,
+): OpenCodeModelOptions | undefined {
+  return undefined;
 }
 
 export function normalizeClaudeModelOptionsWithCapabilities(
