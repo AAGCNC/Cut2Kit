@@ -123,6 +123,19 @@ function buildCodexProvider(models: ServerProvider["models"]): ServerProvider {
   };
 }
 
+function buildOpenCodeProvider(models: ServerProvider["models"]): ServerProvider {
+  return {
+    provider: "opencode",
+    enabled: true,
+    installed: true,
+    version: "1.0.0",
+    status: "ready",
+    auth: { status: "unknown" },
+    checkedAt: new Date().toISOString(),
+    models,
+  };
+}
+
 async function mountPicker(props: {
   provider: ProviderKind;
   model: string;
@@ -356,6 +369,36 @@ describe("ProviderModelPicker", () => {
         "claudeAgent",
         "claude-sonnet-4-6",
       );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("allows selecting OpenCode models for live agent use", async () => {
+    const mounted = await mountPicker({
+      provider: "codex",
+      model: "gpt-5-codex",
+      lockedProvider: null,
+      providers: [
+        TEST_PROVIDERS[0]!,
+        buildOpenCodeProvider([
+          {
+            slug: "local/qwen3-32b",
+            name: "Local · Qwen3 32B",
+            isCustom: false,
+            capabilities: null,
+          },
+        ]),
+        TEST_PROVIDERS[1]!,
+      ],
+    });
+
+    try {
+      await page.getByRole("button").click();
+      await page.getByRole("menuitem", { name: "OpenCode" }).hover();
+      await page.getByRole("menuitemradio", { name: "Local · Qwen3 32B" }).click();
+
+      expect(mounted.onProviderModelChange).toHaveBeenCalledWith("opencode", "local/qwen3-32b");
     } finally {
       await mounted.cleanup();
     }

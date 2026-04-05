@@ -19,7 +19,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+import { isValidCustomModelSlug, normalizeModelSlug } from "@t3tools/shared/model";
 import { Equal } from "effect";
 import { APP_VERSION } from "../../branding";
 import {
@@ -646,6 +646,16 @@ export function GeneralSettingsPanel() {
         setCustomModelErrorByProvider((existing) => ({
           ...existing,
           [provider]: "Enter a model slug.",
+        }));
+        return;
+      }
+      if (!isValidCustomModelSlug(provider, normalized)) {
+        setCustomModelErrorByProvider((existing) => ({
+          ...existing,
+          [provider]:
+            provider === "opencode"
+              ? "Enter an OpenCode model slug in provider/model format."
+              : "Enter a valid model slug.",
         }));
         return;
       }

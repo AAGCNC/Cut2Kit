@@ -4,7 +4,11 @@ import {
   type ProviderKind,
   type ServerProvider,
 } from "@t3tools/contracts";
-import { normalizeModelSlug, resolveSelectableModel } from "@t3tools/shared/model";
+import {
+  isValidCustomModelSlug,
+  normalizeModelSlug,
+  resolveSelectableModel,
+} from "@t3tools/shared/model";
 import { getComposerProviderState } from "./components/chat/composerProviderRegistry";
 import { UnifiedSettings } from "@t3tools/contracts/settings";
 import {
@@ -69,6 +73,7 @@ export function normalizeCustomModelSlugs(
     const normalized = normalizeModelSlug(candidate, provider);
     if (
       !normalized ||
+      !isValidCustomModelSlug(provider, normalized) ||
       normalized.length > MAX_CUSTOM_MODEL_LENGTH ||
       builtInModelSlugs.has(normalized) ||
       seen.has(normalized)
@@ -127,6 +132,7 @@ export function getAppModelOptions(
     options.some((option) => option.name.toLowerCase() === trimmedSelectedModel);
   if (
     normalizedSelectedModel &&
+    isValidCustomModelSlug(provider, normalizedSelectedModel) &&
     !seen.has(normalizedSelectedModel) &&
     !selectedModelMatchesExistingName
   ) {
@@ -148,8 +154,11 @@ export function resolveAppModelSelection(
 ): string {
   const resolvedProvider = resolveSelectableProvider(providers, provider);
   const options = getAppModelOptions(settings, providers, resolvedProvider, selectedModel);
+  const defaultOption =
+    options.find((option) => !option.isCustom)?.slug ?? options[0]?.slug ?? null;
   return (
     resolveSelectableModel(resolvedProvider, selectedModel, options) ??
+    defaultOption ??
     getDefaultServerModel(providers, resolvedProvider)
   );
 }

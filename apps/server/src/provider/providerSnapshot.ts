@@ -6,7 +6,7 @@ import type {
 } from "@t3tools/contracts";
 import { Effect, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+import { isValidCustomModelSlug, normalizeModelSlug } from "@t3tools/shared/model";
 import { isWindowsCommandNotFound } from "../processRunner";
 
 export const DEFAULT_TIMEOUT_MS = 4_000;
@@ -109,7 +109,7 @@ export function providerModelsFromSettings(
 
   for (const candidate of customModels) {
     const normalized = normalizeModelSlug(candidate, provider);
-    if (!normalized || seen.has(normalized)) {
+    if (!normalized || !isValidCustomModelSlug(provider, normalized) || seen.has(normalized)) {
       continue;
     }
     seen.add(normalized);

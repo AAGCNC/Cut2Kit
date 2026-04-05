@@ -7,6 +7,8 @@ import {
   getDefaultEffort,
   hasContextWindowOption,
   hasEffortLevel,
+  isOpenCodeModelSlug,
+  isValidCustomModelSlug,
   isClaudeUltrathinkPrompt,
   normalizeClaudeModelOptionsWithCapabilities,
   normalizeCodexModelOptionsWithCapabilities,
@@ -57,6 +59,21 @@ describe("normalizeModelSlug", () => {
     expect(normalizeModelSlug("   ")).toBeNull();
     expect(normalizeModelSlug(null)).toBeNull();
     expect(normalizeModelSlug(undefined)).toBeNull();
+  });
+});
+
+describe("OpenCode slug validation", () => {
+  it("accepts provider/model slugs for OpenCode", () => {
+    expect(isOpenCodeModelSlug("openai/gpt-5-codex")).toBe(true);
+    expect(isOpenCodeModelSlug(" local/model ")).toBe(true);
+    expect(isValidCustomModelSlug("opencode", "gpt-5-codex")).toBe(true);
+  });
+
+  it("rejects invalid OpenCode custom model slugs", () => {
+    expect(isOpenCodeModelSlug("missing-slash")).toBe(false);
+    expect(isOpenCodeModelSlug("/model")).toBe(false);
+    expect(isOpenCodeModelSlug("provider/")).toBe(false);
+    expect(isValidCustomModelSlug("opencode", "missing-slash")).toBe(false);
   });
 });
 

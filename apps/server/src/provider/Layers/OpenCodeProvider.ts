@@ -34,7 +34,7 @@ const EMPTY_CAPABILITIES: ModelCapabilities = {
   promptInjectedEffortLevels: [],
 };
 
-type OpenCodeProviderList = {
+export type OpenCodeProviderList = {
   readonly all: ReadonlyArray<{
     readonly id: string;
     readonly name: string;
@@ -65,7 +65,9 @@ function buildOpenCodeModelName(input: {
   return `${input.providerName} · ${input.modelName}`;
 }
 
-function buildOpenCodeModels(providerList: OpenCodeProviderList): ReadonlyArray<ServerProviderModel> {
+export function buildOpenCodeModels(
+  providerList: OpenCodeProviderList,
+): ReadonlyArray<ServerProviderModel> {
   const defaults = new Set(
     Object.entries(providerList.default).map(([providerID, modelID]) =>
       buildOpenCodeModelSlug(providerID, modelID),
@@ -73,7 +75,7 @@ function buildOpenCodeModels(providerList: OpenCodeProviderList): ReadonlyArray<
   );
 
   return providerList.all
-    .filter((provider) => providerList.connected.includes(provider.id))
+    .filter((provider) => Object.keys(provider.models ?? {}).length > 0)
     .flatMap((provider) =>
       Object.values(provider.models ?? {}).map((model) => ({
         slug: buildOpenCodeModelSlug(provider.id, model.id),
@@ -113,6 +115,73 @@ function buildOpenCodeAuth(input: {
     status: "authenticated",
     type: "multi",
     label: `${input.connectedProviders.length} providers connected`,
+  };
+}
+
+export function summarizeOpenCodeAvailability(
+  input:
+    | {
+        readonly mode: "remote";
+        readonly baseUrl: string;
+        readonly connectedProviders: ReadonlyArray<{ id: string; name: string }>;
+        readonly discoveredModelCount: number;
+        readonly customModelCount: number;
+      }
+    | {
+        readonly mode: "managed";
+        readonly connectedProviders: ReadonlyArray<{ id: string; name: string }>;
+        readonly discoveredModelCount: number;
+        readonly customModelCount: number;
+      },
+): {
+  readonly status: "ready" | "error";
+  readonly auth: ServerProviderAuth;
+  readonly message: string;
+} {
+  if (input.connectedProviders.length > 0) {
+    return {
+      status: "ready",
+      auth: buildOpenCodeAuth({ connectedProviders: input.connectedProviders }),
+      message:
+        input.connectedProviders.length === 1
+          ? input.mode === "remote"
+            ? `Connected to ${input.connectedProviders[0]!.name} through OpenCode at ${input.baseUrl}.`
+            : `Using ${input.connectedProviders[0]!.name} through OpenCode.`
+          : input.mode === "remote"
+            ? `Connected to ${input.connectedProviders.length} authenticated providers through OpenCode at ${input.baseUrl}.`
+            : `Using ${input.connectedProviders.length} authenticated providers through OpenCode.`,
+    };
+  }
+
+  if (input.discoveredModelCount > 0) {
+    return {
+      status: "ready",
+      auth: { status: "unknown" },
+      message:
+        input.mode === "remote"
+          ? `Connected to OpenCode at ${input.baseUrl}. ${input.discoveredModelCount} model${input.discoveredModelCount === 1 ? " is" : "s are"} available for local or self-hosted routing.`
+          : `${input.discoveredModelCount} model${input.discoveredModelCount === 1 ? " is" : "s are"} available through local OpenCode routing.`,
+    };
+  }
+
+  if (input.customModelCount > 0) {
+    return {
+      status: "ready",
+      auth: { status: "unknown" },
+      message:
+        input.mode === "remote"
+          ? `Connected to OpenCode at ${input.baseUrl}. Using ${input.customModelCount} manual provider/model slug${input.customModelCount === 1 ? "" : "s"} from Cut2Kit settings.`
+          : `Using ${input.customModelCount} manual provider/model slug${input.customModelCount === 1 ? "" : "s"} through local OpenCode routing.`,
+    };
+  }
+
+  return {
+    status: "error",
+    auth: { status: "unknown" },
+    message:
+      input.mode === "remote"
+        ? `Connected to OpenCode at ${input.baseUrl}, but no usable models were discovered. Configure a local or hosted provider inside OpenCode, or save a manual provider/model slug in Settings.`
+        : "OpenCode is installed, but no usable models were discovered. Configure a local or hosted provider inside OpenCode, or save a manual provider/model slug in Settings.",
   };
 }
 
@@ -261,22 +330,13 @@ export const checkOpenCodeProviderStatus = (): Effect.Effect<
         PROVIDER,
         openCodeSettings.customModels,
       );
-
-      if (connectedProviders.length === 0) {
-        return buildServerProvider({
-          provider: PROVIDER,
-          enabled: true,
-          checkedAt,
-          models,
-          probe: {
-            installed: true,
-            version: null,
-            status: "error",
-            auth: { status: "unauthenticated" },
-            message: `Connected to OpenCode at ${configuredServer.baseUrl}, but no model providers are authenticated there.`,
-          },
-        });
-      }
+      const availability = summarizeOpenCodeAvailability({
+        mode: "remote",
+        baseUrl: configuredServer.baseUrl,
+        connectedProviders,
+        discoveredModelCount: builtInModels.length,
+        customModelCount: models.filter((model) => model.isCustom).length,
+      });
 
       return buildServerProvider({
         provider: PROVIDER,
@@ -286,12 +346,9 @@ export const checkOpenCodeProviderStatus = (): Effect.Effect<
         probe: {
           installed: true,
           version: null,
-          status: "ready",
-          auth: buildOpenCodeAuth({ connectedProviders }),
-          message:
-            connectedProviders.length === 1
-              ? `Connected to ${connectedProviders[0]!.name} through OpenCode at ${configuredServer.baseUrl}.`
-              : `Connected to ${connectedProviders.length} authenticated providers through OpenCode at ${configuredServer.baseUrl}.`,
+          status: availability.status,
+          auth: availability.auth,
+          message: availability.message,
         },
       });
     }
@@ -403,23 +460,12 @@ export const checkOpenCodeProviderStatus = (): Effect.Effect<
       .map((provider) => ({ id: provider.id, name: provider.name }));
     const builtInModels = buildOpenCodeModels(providerProbe.success);
     const models = providerModelsFromSettings(builtInModels, PROVIDER, openCodeSettings.customModels);
-
-    if (connectedProviders.length === 0) {
-      return buildServerProvider({
-        provider: PROVIDER,
-        enabled: true,
-        checkedAt,
-        models,
-        probe: {
-          installed: true,
-          version: parsedVersion,
-          status: "error",
-          auth: { status: "unauthenticated" },
-          message:
-            "OpenCode is installed, but no model providers are authenticated. Run `opencode auth login` and refresh.",
-        },
-      });
-    }
+    const availability = summarizeOpenCodeAvailability({
+      mode: "managed",
+      connectedProviders,
+      discoveredModelCount: builtInModels.length,
+      customModelCount: models.filter((model) => model.isCustom).length,
+    });
 
     return buildServerProvider({
       provider: PROVIDER,
@@ -429,12 +475,9 @@ export const checkOpenCodeProviderStatus = (): Effect.Effect<
       probe: {
         installed: true,
         version: parsedVersion,
-        status: "ready",
-        auth: buildOpenCodeAuth({ connectedProviders }),
-        message:
-          connectedProviders.length === 1
-            ? `Using ${connectedProviders[0]!.name} through OpenCode.`
-            : `Using ${connectedProviders.length} authenticated providers through OpenCode.`,
+        status: availability.status,
+        auth: availability.auth,
+        message: availability.message,
       },
     });
   });

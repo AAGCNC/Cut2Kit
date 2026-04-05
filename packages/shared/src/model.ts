@@ -149,6 +149,39 @@ export function normalizeModelSlug(
   return typeof aliased === "string" ? aliased : trimmed;
 }
 
+export function isOpenCodeModelSlug(model: string | null | undefined): boolean {
+  const normalized = normalizeModelSlug(model, "opencode");
+  if (!normalized) {
+    return false;
+  }
+
+  const separatorIndex = normalized.indexOf("/");
+  if (separatorIndex <= 0 || separatorIndex >= normalized.length - 1) {
+    return false;
+  }
+
+  return (
+    normalized.slice(0, separatorIndex).trim().length > 0 &&
+    normalized.slice(separatorIndex + 1).trim().length > 0
+  );
+}
+
+export function isValidCustomModelSlug(
+  provider: ProviderKind,
+  model: string | null | undefined,
+): boolean {
+  const normalized = normalizeModelSlug(model, provider);
+  if (!normalized) {
+    return false;
+  }
+
+  if (provider === "opencode") {
+    return isOpenCodeModelSlug(normalized);
+  }
+
+  return true;
+}
+
 export function resolveSelectableModel(
   provider: ProviderKind,
   value: string | null | undefined,
