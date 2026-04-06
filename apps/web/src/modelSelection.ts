@@ -44,11 +44,11 @@ const PROVIDER_CUSTOM_MODEL_CONFIG: Record<ProviderKind, ProviderCustomModelConf
   },
   opencode: {
     provider: "opencode",
-    title: "OpenCode",
+    title: "OpenCode (vLLM)",
     description:
-      "Save additional OpenCode model slugs in `provider/model` format for the picker and `/model` command.",
-    placeholder: "provider/model",
-    example: "openai/gpt-5-codex",
+      "Save additional OpenCode model slugs in `provider/model` format for the picker and `/model` command. Only vLLM models are displayed by default.",
+    placeholder: "provider/model (e.g., vllm/qwen3-coder-next)",
+    example: "vllm/qwen3-coder-next",
   },
   claudeAgent: {
     provider: "claudeAgent",

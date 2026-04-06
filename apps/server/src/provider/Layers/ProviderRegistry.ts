@@ -22,9 +22,12 @@ const loadProviders = (
   openCodeProvider: OpenCodeProviderShape,
   claudeProvider: ClaudeProviderShape,
 ): Effect.Effect<readonly [ServerProvider, ServerProvider, ServerProvider]> =>
-  Effect.all([codexProvider.getSnapshot, openCodeProvider.getSnapshot, claudeProvider.getSnapshot], {
-    concurrency: "unbounded",
-  });
+  Effect.all(
+    [codexProvider.getSnapshot, openCodeProvider.getSnapshot, claudeProvider.getSnapshot],
+    {
+      concurrency: "unbounded",
+    },
+  );
 
 export const haveProvidersChanged = (
   previousProviders: ReadonlyArray<ServerProvider>,
@@ -81,9 +84,12 @@ export const ProviderRegistryLive = Layer.effect(
           yield* claudeProvider.refresh;
           break;
         default:
-          yield* Effect.all([codexProvider.refresh, openCodeProvider.refresh, claudeProvider.refresh], {
-            concurrency: "unbounded",
-          });
+          yield* Effect.all(
+            [codexProvider.refresh, openCodeProvider.refresh, claudeProvider.refresh],
+            {
+              concurrency: "unbounded",
+            },
+          );
           break;
       }
       return yield* syncProviders();

@@ -74,6 +74,15 @@ export const OpenCodeSettings = Schema.Struct({
   configPath: TrimmedString.pipe(Schema.withDecodingDefault(() => "")),
   defaultAgent: TrimmedString.pipe(Schema.withDecodingDefault(() => "")),
   customModels: Schema.Array(Schema.String).pipe(Schema.withDecodingDefault(() => [])),
+  providerFilter: Schema.Union([
+    Schema.Literal("all"),
+    Schema.Literal("vllm"),
+    Schema.Literal("local"),
+    Schema.Struct({
+      include: Schema.Array(TrimmedNonEmptyString),
+      exclude: Schema.Array(TrimmedNonEmptyString),
+    }),
+  ]).pipe(Schema.withDecodingDefault(() => "vllm")),
 });
 export type OpenCodeSettings = typeof OpenCodeSettings.Type;
 
@@ -176,6 +185,17 @@ const OpenCodeSettingsPatch = Schema.Struct({
   configPath: Schema.optionalKey(Schema.String),
   defaultAgent: Schema.optionalKey(Schema.String),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+  providerFilter: Schema.optionalKey(
+    Schema.Union([
+      Schema.Literal("all"),
+      Schema.Literal("vllm"),
+      Schema.Literal("local"),
+      Schema.Struct({
+        include: Schema.Array(TrimmedNonEmptyString),
+        exclude: Schema.Array(TrimmedNonEmptyString),
+      }),
+    ]),
+  ),
 });
 
 const ClaudeSettingsPatch = Schema.Struct({

@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  buildOpenCodeAuthHeaders,
-  parseOpenCodeServerUrl,
-} from "./opencodeServer";
+import { buildOpenCodeAuthHeaders, parseOpenCodeServerUrl } from "./opencodeServer";
 
 describe("parseOpenCodeServerUrl", () => {
   it("normalizes valid http and https endpoints", () => {

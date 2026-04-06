@@ -71,6 +71,7 @@ function createBaseServerConfig(): ServerConfig {
           configPath: "",
           defaultAgent: "",
           customModels: [],
+          providerFilter: "vllm",
         },
         claudeAgent: { enabled: true, binaryPath: "", customModels: [] },
       },

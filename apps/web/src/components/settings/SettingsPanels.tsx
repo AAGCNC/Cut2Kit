@@ -540,11 +540,11 @@ export function GeneralSettingsPanel() {
   );
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Record<ProviderKind, string>
-  >(() =>
-    Object.fromEntries(PROVIDER_SETTINGS.map((providerSettings) => [providerSettings.provider, ""])) as Record<
-      ProviderKind,
-      string
-    >,
+  >(
+    () =>
+      Object.fromEntries(
+        PROVIDER_SETTINGS.map((providerSettings) => [providerSettings.provider, ""]),
+      ) as Record<ProviderKind, string>,
   );
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderKind, string | null>>
@@ -1234,10 +1234,7 @@ export function GeneralSettingsPanel() {
                         </div>
 
                         <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                          <label
-                            htmlFor="provider-install-opencode-server-url"
-                            className="block"
-                          >
+                          <label htmlFor="provider-install-opencode-server-url" className="block">
                             <span className="text-xs font-medium text-foreground">
                               OpenCode server URL
                             </span>
@@ -1284,10 +1281,7 @@ export function GeneralSettingsPanel() {
 
                         {usesRemoteOpenCode ? (
                           <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                            <label
-                              htmlFor="provider-install-opencode-auth-token"
-                              className="block"
-                            >
+                            <label htmlFor="provider-install-opencode-auth-token" className="block">
                               <span className="text-xs font-medium text-foreground">
                                 Bearer token
                               </span>

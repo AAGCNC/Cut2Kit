@@ -182,19 +182,15 @@ export async function startManagedOpenCodeServer(input: {
   const port = await reserveOpenCodePort(hostname);
   const baseUrl = `http://${hostname}:${port}`;
   const outputRef = { value: "" };
-  const child = spawn(
-    input.binaryPath,
-    ["serve", `--hostname=${hostname}`, `--port=${port}`],
-    {
-      cwd: input.cwd ?? process.cwd(),
-      env: {
-        ...process.env,
-        OPENCODE_DISABLE_AUTOUPDATE: "1",
-        ...(input.configPath ? { OPENCODE_CONFIG: input.configPath } : {}),
-      },
-      stdio: ["ignore", "pipe", "pipe"],
+  const child = spawn(input.binaryPath, ["serve", `--hostname=${hostname}`, `--port=${port}`], {
+    cwd: input.cwd ?? process.cwd(),
+    env: {
+      ...process.env,
+      OPENCODE_DISABLE_AUTOUPDATE: "1",
+      ...(input.configPath ? { OPENCODE_CONFIG: input.configPath } : {}),
     },
-  );
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 
   child.stdout.on("data", (chunk: Buffer | string) => {
     outputRef.value += chunk.toString();

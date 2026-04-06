@@ -1,4 +1,10 @@
-import type { ModelCapabilities, ServerProvider, ServerProviderAuth, ServerProviderModel } from "@t3tools/contracts";
+import type {
+  ModelCapabilities,
+  OpenCodeSettings,
+  ServerProvider,
+  ServerProviderAuth,
+  ServerProviderModel,
+} from "@t3tools/contracts";
 import { Duration, Effect, Equal, Layer, Option, Result, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
@@ -20,6 +26,7 @@ import {
   buildOpenCodeModelSlug,
   createScopedOpenCodeClient,
   openCodeErrorMessage,
+  parseOpenCodeModelRef,
   parseOpenCodeServerUrl,
   startManagedOpenCodeServer,
   trimToUndefined,
@@ -67,6 +74,7 @@ function buildOpenCodeModelName(input: {
 
 export function buildOpenCodeModels(
   providerList: OpenCodeProviderList,
+  providerFilter: OpenCodeSettings["providerFilter"] = "vllm",
 ): ReadonlyArray<ServerProviderModel> {
   const defaults = new Set(
     Object.entries(providerList.default).map(([providerID, modelID]) =>
@@ -74,18 +82,54 @@ export function buildOpenCodeModels(
     ),
   );
 
-  return providerList.all
+  let providerIdsToInclude: Set<string> | null = null;
+
+  if (typeof providerFilter === "string") {
+    if (providerFilter === "all") {
+      providerIdsToInclude = null;
+    } else {
+      providerIdsToInclude = new Set([providerFilter]);
+    }
+  } else if (Array.isArray(providerFilter.include)) {
+    providerIdsToInclude = new Set(providerFilter.include);
+  }
+
+  const filteredProviders = providerList.all.filter((provider) => {
+    if (providerIdsToInclude === null) return true;
+    return providerIdsToInclude.has(provider.id);
+  });
+
+  if (typeof providerFilter === "object" && Array.isArray(providerFilter.exclude)) {
+    const excludePatterns = providerFilter.exclude.map((pattern) => new RegExp(pattern, "i"));
+    filteredProviders.forEach((provider) => {
+      if (provider.models) {
+        for (const modelId of Object.keys(provider.models)) {
+          for (const pattern of excludePatterns) {
+            if (pattern.test(modelId)) {
+              delete provider.models[modelId];
+            }
+          }
+        }
+      }
+    });
+  }
+
+  return filteredProviders
     .filter((provider) => Object.keys(provider.models ?? {}).length > 0)
     .flatMap((provider) =>
-      Object.values(provider.models ?? {}).map((model) => ({
-        slug: buildOpenCodeModelSlug(provider.id, model.id),
-        name: buildOpenCodeModelName({
-          providerName: provider.name,
-          modelName: trimToUndefined(model.name) ?? model.id,
-        }),
-        isCustom: false,
-        capabilities: EMPTY_CAPABILITIES,
-      })),
+      Object.values(provider.models ?? {}).map((model) => {
+        const slug = buildOpenCodeModelSlug(provider.id, model.id);
+        const parsed = parseOpenCodeModelRef(slug);
+        return {
+          slug: slug,
+          name: buildOpenCodeModelName({
+            providerName: provider.name,
+            modelName: trimToUndefined(model.name) ?? model.id,
+          }),
+          isCustom: parsed !== null && !isValidModelRefForDiscovery(parsed),
+          capabilities: EMPTY_CAPABILITIES,
+        };
+      }),
     )
     .toSorted((left, right) => {
       const leftDefault = defaults.has(left.slug);
@@ -95,6 +139,14 @@ export function buildOpenCodeModels(
       }
       return left.name.localeCompare(right.name);
     });
+}
+
+function isValidModelRefForDiscovery(ref: {
+  readonly providerID: string;
+  readonly modelID: string;
+}): boolean {
+  const knownProviderIds = ["vllm", "local", "openai-codex", "claude"];
+  return knownProviderIds.includes(ref.providerID);
 }
 
 function buildOpenCodeAuth(input: {
@@ -203,17 +255,19 @@ const runOpenCodeCommand = (
     return yield* spawnAndCollect(openCodeSettings.binaryPath, command);
   });
 
-const probeOpenCodeProviders = (input:
-  | {
-      readonly mode: "managed";
-      readonly binaryPath: string;
-      readonly configPath?: string;
-    }
-  | {
-      readonly mode: "remote";
-      readonly baseUrl: string;
-      readonly authToken?: string;
-    }): Effect.Effect<OpenCodeProviderList, OpenCodeProviderProbeError> =>
+const probeOpenCodeProviders = (
+  input:
+    | {
+        readonly mode: "managed";
+        readonly binaryPath: string;
+        readonly configPath?: string;
+      }
+    | {
+        readonly mode: "remote";
+        readonly baseUrl: string;
+        readonly authToken?: string;
+      },
+): Effect.Effect<OpenCodeProviderList, OpenCodeProviderProbeError> =>
   Effect.tryPromise({
     try: async () => {
       if (input.mode === "remote") {
@@ -324,7 +378,10 @@ export const checkOpenCodeProviderStatus = (): Effect.Effect<
       const connectedProviders = providerProbe.success.all
         .filter((provider) => providerProbe.success.connected.includes(provider.id))
         .map((provider) => ({ id: provider.id, name: provider.name }));
-      const builtInModels = buildOpenCodeModels(providerProbe.success);
+      const builtInModels = buildOpenCodeModels(
+        providerProbe.success,
+        openCodeSettings.providerFilter,
+      );
       const models = providerModelsFromSettings(
         builtInModels,
         PROVIDER,
@@ -458,8 +515,15 @@ export const checkOpenCodeProviderStatus = (): Effect.Effect<
     const connectedProviders = providerProbe.success.all
       .filter((provider) => providerProbe.success.connected.includes(provider.id))
       .map((provider) => ({ id: provider.id, name: provider.name }));
-    const builtInModels = buildOpenCodeModels(providerProbe.success);
-    const models = providerModelsFromSettings(builtInModels, PROVIDER, openCodeSettings.customModels);
+    const builtInModels = buildOpenCodeModels(
+      providerProbe.success,
+      openCodeSettings.providerFilter,
+    );
+    const models = providerModelsFromSettings(
+      builtInModels,
+      PROVIDER,
+      openCodeSettings.customModels,
+    );
     const availability = summarizeOpenCodeAvailability({
       mode: "managed",
       connectedProviders,

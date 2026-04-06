@@ -64,7 +64,12 @@ describe("resolveAppModelSelection", () => {
     };
 
     expect(
-      resolveAppModelSelection("opencode", settings, OPENCODE_PROVIDER_WITH_DISCOVERED_MODELS, null),
+      resolveAppModelSelection(
+        "opencode",
+        settings,
+        OPENCODE_PROVIDER_WITH_DISCOVERED_MODELS,
+        null,
+      ),
     ).toBe("local/qwen3-32b");
   });
 

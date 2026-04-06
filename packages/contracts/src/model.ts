@@ -57,7 +57,7 @@ export type ModelCapabilities = typeof ModelCapabilities.Type;
 
 export const DEFAULT_MODEL_BY_PROVIDER: Record<ProviderKind, string> = {
   codex: "gpt-5.4",
-  opencode: "openai/gpt-5-codex",
+  opencode: "vllm/qwen3-coder-next",
   claudeAgent: "claude-sonnet-4-6",
 };
 
@@ -66,7 +66,7 @@ export const DEFAULT_MODEL = DEFAULT_MODEL_BY_PROVIDER.codex;
 /** Per-provider text generation model defaults. */
 export const DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER: Record<ProviderKind, string> = {
   codex: "gpt-5.4-mini",
-  opencode: "openai/gpt-5.4",
+  opencode: "vllm/qwen3-coder-next",
   claudeAgent: "claude-haiku-4-5",
 };
 

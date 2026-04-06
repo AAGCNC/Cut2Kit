@@ -9,7 +9,12 @@ import type {
 import { computeFitScale, formatDistance, resolvePageDimensions } from "./pageGeometry.ts";
 
 function sourceLabel(sourcePdfPath: string): string {
-  return sourcePdfPath.split("/").at(-1)?.replace(/\.pdf$/i, "") ?? sourcePdfPath;
+  return (
+    sourcePdfPath
+      .split("/")
+      .at(-1)
+      ?.replace(/\.pdf$/i, "") ?? sourcePdfPath
+  );
 }
 
 function collectPdf(doc: PDFKit.PDFDocument): Promise<Uint8Array> {
@@ -62,9 +67,7 @@ function drawTitleBlock(
 }
 
 function openingLabel(id: string): string {
-  return id
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+  return id.replace(/-/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function drawOverallLayoutPage(
@@ -100,7 +103,14 @@ function drawOverallLayoutPage(
   doc.save();
   doc.lineWidth(1);
   doc.strokeColor("#6a5b49");
-  doc.rect(wallLeft, wallBottom - layout.wall.height * scale, layout.wall.width * scale, layout.wall.height * scale).stroke();
+  doc
+    .rect(
+      wallLeft,
+      wallBottom - layout.wall.height * scale,
+      layout.wall.width * scale,
+      layout.wall.height * scale,
+    )
+    .stroke();
   doc.restore();
 
   for (const sheet of layout.sheets) {
@@ -109,12 +119,7 @@ function drawOverallLayoutPage(
     doc.strokeColor(sheet.isTerminalRip ? "#58738a" : "#5d4a36");
     doc.lineWidth(1);
     doc
-      .rect(
-        xToPt(sheet.left),
-        yToPt(sheet.top),
-        sheet.width * scale,
-        sheet.height * scale,
-      )
+      .rect(xToPt(sheet.left), yToPt(sheet.top), sheet.width * scale, sheet.height * scale)
       .fillAndStroke();
     doc
       .font("Helvetica-Bold")
@@ -129,12 +134,7 @@ function drawOverallLayoutPage(
       doc.strokeColor("#7d6755");
       doc.dash(4, { space: 2 });
       doc
-        .rect(
-          xToPt(cutout.left),
-          yToPt(cutout.top),
-          cutout.width * scale,
-          cutout.height * scale,
-        )
+        .rect(xToPt(cutout.left), yToPt(cutout.top), cutout.width * scale, cutout.height * scale)
         .fillAndStroke();
       doc.undash();
       doc
@@ -191,7 +191,8 @@ function drawCutoutPage(
   const page = addPage(doc, rendering);
   drawTitleBlock(doc, page, {
     title: `${sourceLabel(layout.sourcePdfPath)} - OSB Cutout Details (Page ${pageIndex} of ${totalPages})`,
-    subtitle: "Each diagram shows one OSB sheet before installation, viewed from the wall exterior side.",
+    subtitle:
+      "Each diagram shows one OSB sheet before installation, viewed from the wall exterior side.",
   });
 
   const columns = 2;
@@ -215,11 +216,7 @@ function drawCutoutPage(
     const yToPt = (value: number) => sheetTop + (sheet.height - value) * scale;
     const xToPt = (value: number) => sheetX + value * scale;
 
-    doc
-      .rect(cardX, cardY, cardWidth, cardHeight)
-      .lineWidth(1)
-      .strokeColor("#ccb99f")
-      .stroke();
+    doc.rect(cardX, cardY, cardWidth, cardHeight).lineWidth(1).strokeColor("#ccb99f").stroke();
     doc
       .font("Helvetica-Bold")
       .fontSize(10)
@@ -298,11 +295,7 @@ function drawFasteningPage(
     });
   });
 
-  doc
-    .font("Helvetica-Bold")
-    .fontSize(11)
-    .fillColor("#1f160d")
-    .text("Quick schedule", 42, 286);
+  doc.font("Helvetica-Bold").fontSize(11).fillColor("#1f160d").text("Quick schedule", 42, 286);
   doc
     .font("Helvetica")
     .fontSize(10)

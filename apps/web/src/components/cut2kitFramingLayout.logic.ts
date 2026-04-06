@@ -44,8 +44,6 @@ export function canRenderFramingPdfFromJson(input: {
   isRenderingFramingLayout: boolean;
 }): boolean {
   return (
-    input.framingJsonPath !== null &&
-    input.framingJsonReady &&
-    !input.isRenderingFramingLayout
+    input.framingJsonPath !== null && input.framingJsonReady && !input.isRenderingFramingLayout
   );
 }

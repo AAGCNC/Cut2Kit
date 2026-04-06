@@ -1,11 +1,5 @@
 import { pathToFileURL } from "node:url";
-import type {
-  AssistantMessage,
-  GlobalEvent,
-  Message,
-  Part,
-  Permission,
-} from "@opencode-ai/sdk";
+import type { AssistantMessage, GlobalEvent, Message, Part, Permission } from "@opencode-ai/sdk";
 import {
   DEFAULT_MODEL_BY_PROVIDER,
   type CanonicalItemType,
@@ -125,7 +119,11 @@ function toSessionError(threadId: ThreadId, cause: unknown): ProviderAdapterSess
   });
 }
 
-function toProcessError(threadId: ThreadId, detail: string, cause: unknown): ProviderAdapterProcessError {
+function toProcessError(
+  threadId: ThreadId,
+  detail: string,
+  cause: unknown,
+): ProviderAdapterProcessError {
   return new ProviderAdapterProcessError({
     provider: PROVIDER,
     threadId,
@@ -134,10 +132,7 @@ function toProcessError(threadId: ThreadId, detail: string, cause: unknown): Pro
   });
 }
 
-function toRequestError(
-  method: string,
-  cause: unknown,
-): ProviderAdapterRequestError {
+function toRequestError(method: string, cause: unknown): ProviderAdapterRequestError {
   return new ProviderAdapterRequestError({
     provider: PROVIDER,
     method,
@@ -168,7 +163,11 @@ function requestTypeFromPermission(permission: Permission): CanonicalRequestType
 
 function itemTypeFromToolName(toolName: string): CanonicalItemType {
   const normalized = toolName.toLowerCase();
-  if (normalized.includes("bash") || normalized.includes("command") || normalized.includes("shell")) {
+  if (
+    normalized.includes("bash") ||
+    normalized.includes("command") ||
+    normalized.includes("shell")
+  ) {
     return "command_execution";
   }
   if (
@@ -245,7 +244,11 @@ function sessionIdFromGlobalEvent(event: GlobalEvent): string | undefined {
   }
 }
 
-function promptTextDelta(previousText: string, nextText: string, explicitDelta?: string): string | undefined {
+function promptTextDelta(
+  previousText: string,
+  nextText: string,
+  explicitDelta?: string,
+): string | undefined {
   const normalizedExplicitDelta = trimToUndefined(explicitDelta);
   if (normalizedExplicitDelta) {
     return normalizedExplicitDelta;
@@ -259,7 +262,9 @@ function promptTextDelta(previousText: string, nextText: string, explicitDelta?:
 
 function toolStateTitle(part: Extract<Part, { type: "tool" }>): string {
   const title =
-    "title" in part.state && typeof part.state.title === "string" ? trimToUndefined(part.state.title) : undefined;
+    "title" in part.state && typeof part.state.title === "string"
+      ? trimToUndefined(part.state.title)
+      : undefined;
   return title ?? part.tool;
 }
 
@@ -338,11 +343,11 @@ function updateContextSession(
     readonly lastError?: string | null;
   },
 ): void {
-  const model = patch.model === null ? undefined : patch.model ?? context.session.model;
+  const model = patch.model === null ? undefined : (patch.model ?? context.session.model);
   const activeTurnId =
-    patch.activeTurnId === null ? undefined : patch.activeTurnId ?? context.session.activeTurnId;
+    patch.activeTurnId === null ? undefined : (patch.activeTurnId ?? context.session.activeTurnId);
   const lastError =
-    patch.lastError === null ? undefined : patch.lastError ?? context.session.lastError;
+    patch.lastError === null ? undefined : (patch.lastError ?? context.session.lastError);
 
   context.session = {
     provider: context.session.provider,
@@ -392,9 +397,13 @@ export const makeOpenCodeAdapter = Effect.gen(function* () {
     runningServer = null;
   };
 
-  const resolveContext = (threadId: ThreadId): Effect.Effect<OpenCodeSessionContext, ProviderAdapterError> => {
+  const resolveContext = (
+    threadId: ThreadId,
+  ): Effect.Effect<OpenCodeSessionContext, ProviderAdapterError> => {
     const context = sessions.get(threadId);
-    return context ? Effect.succeed(context) : Effect.fail(toSessionError(threadId, "Unknown thread"));
+    return context
+      ? Effect.succeed(context)
+      : Effect.fail(toSessionError(threadId, "Unknown thread"));
   };
 
   const fetchSessionMessage = (
@@ -456,7 +465,8 @@ export const makeOpenCodeAdapter = Effect.gen(function* () {
       if (!context.activeTurn) {
         return;
       }
-      const itemType: CanonicalItemType = part.type === "reasoning" ? "reasoning" : "assistant_message";
+      const itemType: CanonicalItemType =
+        part.type === "reasoning" ? "reasoning" : "assistant_message";
       const streamKind = part.type === "reasoning" ? "reasoning_text" : "assistant_text";
       let itemState = context.activeTurn.itemsByPartId.get(part.id);
       if (!itemState) {
@@ -514,10 +524,7 @@ export const makeOpenCodeAdapter = Effect.gen(function* () {
       }
     });
 
-  const syncToolPart = (
-    context: OpenCodeSessionContext,
-    part: Extract<Part, { type: "tool" }>,
-  ) =>
+  const syncToolPart = (context: OpenCodeSessionContext, part: Extract<Part, { type: "tool" }>) =>
     Effect.gen(function* () {
       if (!context.activeTurn) {
         return;
@@ -577,10 +584,7 @@ export const makeOpenCodeAdapter = Effect.gen(function* () {
       }
     });
 
-  const syncPatchPart = (
-    context: OpenCodeSessionContext,
-    part: Extract<Part, { type: "patch" }>,
-  ) =>
+  const syncPatchPart = (context: OpenCodeSessionContext, part: Extract<Part, { type: "patch" }>) =>
     Effect.gen(function* () {
       if (!context.activeTurn || context.activeTurn.itemsByPartId.has(part.id)) {
         return;
@@ -919,7 +923,9 @@ export const makeOpenCodeAdapter = Effect.gen(function* () {
       }
     });
 
-  const ensureServer = (threadId: ThreadId = SERVER_THREAD_ID): Effect.Effect<RunningOpenCodeServer, ProviderAdapterError> =>
+  const ensureServer = (
+    threadId: ThreadId = SERVER_THREAD_ID,
+  ): Effect.Effect<RunningOpenCodeServer, ProviderAdapterError> =>
     Effect.gen(function* () {
       const settings = yield* getOpenCodeSettings(threadId);
       const configuredServer = parseOpenCodeServerUrl(settings.serverUrl);
@@ -933,7 +939,8 @@ export const makeOpenCodeAdapter = Effect.gen(function* () {
 
       const authToken = trimToUndefined(settings.authToken);
       const signature = sessionSettingsSignature({
-        serverUrl: configuredServer && "baseUrl" in configuredServer ? configuredServer.baseUrl : "",
+        serverUrl:
+          configuredServer && "baseUrl" in configuredServer ? configuredServer.baseUrl : "",
         authToken: authToken ?? "",
         autoStartServer: settings.autoStartServer,
         binaryPath: settings.binaryPath,
@@ -1014,7 +1021,11 @@ export const makeOpenCodeAdapter = Effect.gen(function* () {
             timeoutMs: 8_000,
           }),
         catch: (cause) =>
-          toProcessError(threadId, `Failed to start OpenCode server: ${openCodeErrorMessage(cause)}`, cause),
+          toProcessError(
+            threadId,
+            `Failed to start OpenCode server: ${openCodeErrorMessage(cause)}`,
+            cause,
+          ),
       });
 
       const nextRunningServer: RunningOpenCodeServer = {
@@ -1057,9 +1068,7 @@ export const makeOpenCodeAdapter = Effect.gen(function* () {
           if (nextRunningServer.eventsAbortController.signal.aborted) {
             return Effect.void;
           }
-          return Effect.logError(
-            `OpenCode event stream failed: ${openCodeErrorMessage(cause)}`,
-          );
+          return Effect.logError(`OpenCode event stream failed: ${openCodeErrorMessage(cause)}`);
         }),
         Effect.asVoid,
       );
@@ -1132,7 +1141,8 @@ export const makeOpenCodeAdapter = Effect.gen(function* () {
       }
 
       const startedAt = nowIso();
-      const modelSelection = input.modelSelection?.provider === PROVIDER ? input.modelSelection : undefined;
+      const modelSelection =
+        input.modelSelection?.provider === PROVIDER ? input.modelSelection : undefined;
       const session: ProviderSession = {
         provider: PROVIDER,
         status: "ready",

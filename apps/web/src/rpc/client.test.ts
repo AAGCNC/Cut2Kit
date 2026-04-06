@@ -130,6 +130,10 @@ describe("WsRpcAtomClient", () => {
           ...DEFAULT_SERVER_SETTINGS.providers.codex,
           homePath: "/tmp/codex-home",
         },
+        opencode: {
+          ...DEFAULT_SERVER_SETTINGS.providers.opencode,
+          serverUrl: "http://127.0.0.1:8000/v1",
+        },
         claudeAgent: {
           ...DEFAULT_SERVER_SETTINGS.providers.claudeAgent,
           enabled: false,
@@ -179,6 +183,9 @@ describe("WsRpcAtomClient", () => {
         codex: {
           ...DEFAULT_SERVER_SETTINGS.providers.codex,
           homePath: "/tmp/codex-home",
+        },
+        opencode: {
+          ...DEFAULT_SERVER_SETTINGS.providers.opencode,
         },
         claudeAgent: {
           ...DEFAULT_SERVER_SETTINGS.providers.claudeAgent,

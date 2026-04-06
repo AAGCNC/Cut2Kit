@@ -87,11 +87,14 @@ function schemaAlreadyAllowsNull(schema: unknown): boolean {
   if (Array.isArray(type) && type.includes("null")) {
     return true;
   }
-  return ["anyOf", "oneOf"].some((key) =>
-    Array.isArray(schema[key]) &&
-    schema[key].some(
-      (entry) => isRecord(entry) && (entry.type === "null" || (Array.isArray(entry.type) && entry.type.includes("null"))),
-    ),
+  return ["anyOf", "oneOf"].some(
+    (key) =>
+      Array.isArray(schema[key]) &&
+      schema[key].some(
+        (entry) =>
+          isRecord(entry) &&
+          (entry.type === "null" || (Array.isArray(entry.type) && entry.type.includes("null"))),
+      ),
   );
 }
 
@@ -151,7 +154,9 @@ function stripNullValues(value: unknown): unknown {
   );
 }
 
-export const runCut2KitCodexJson = Effect.fn("runCut2KitCodexJson")(function* <S extends Schema.Top>(input: {
+export const runCut2KitCodexJson = Effect.fn("runCut2KitCodexJson")(function* <
+  S extends Schema.Top,
+>(input: {
   operation: string;
   cwd: string;
   prompt: string;
@@ -204,19 +209,18 @@ export const runCut2KitCodexJson = Effect.fn("runCut2KitCodexJson")(function* <S
     getCodexModelCapabilities(input.modelSelection.model),
     input.modelSelection.options,
   );
-  const reasoningEffort =
-    input.modelSelection.options?.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
+  const reasoningEffort = input.modelSelection.options?.reasoningEffort ?? DEFAULT_REASONING_EFFORT;
 
   const runCodexCommand = Effect.fn("runCut2KitCodexJson.runCodexCommand")(function* () {
-      const command = ChildProcess.make(
-        codexSettings?.binaryPath || "codex",
-        [
-          "exec",
-          "--ephemeral",
-          "--skip-git-repo-check",
-          "-s",
-          "read-only",
-          "--model",
+    const command = ChildProcess.make(
+      codexSettings?.binaryPath || "codex",
+      [
+        "exec",
+        "--ephemeral",
+        "--skip-git-repo-check",
+        "-s",
+        "read-only",
+        "--model",
         input.modelSelection.model,
         "--config",
         `model_reasoning_effort="${reasoningEffort}"`,

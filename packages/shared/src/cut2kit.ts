@@ -146,14 +146,13 @@ export function resolveCut2KitAutomationModelSelection(
   const provider = "codex";
   const model = ai?.model ?? fallbackModelSelection?.model ?? DEFAULT_MODEL_BY_PROVIDER[provider];
 
-  const options =
-    ai?.reasoningEffort
-      ? {
-          reasoningEffort: ai.reasoningEffort as never,
-        }
-      : fallbackModelSelection?.provider === "codex"
-        ? fallbackModelSelection.options
-        : undefined;
+  const options = ai?.reasoningEffort
+    ? {
+        reasoningEffort: ai.reasoningEffort as never,
+      }
+    : fallbackModelSelection?.provider === "codex"
+      ? fallbackModelSelection.options
+      : undefined;
   return {
     provider,
     model,

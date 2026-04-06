@@ -165,70 +165,74 @@ function withFakeCodexEnv<A, E, R>(
 }
 
 it.layer(Cut2KitCodexGenerationTestLayer)("runCut2KitCodexJson", (it) => {
-  it.effect("passes --skip-git-repo-check so Cut2Kit wall runs can execute in non-repo project folders", () =>
-    withFakeCodexEnv(
-      {
-        output: JSON.stringify({ ok: true }),
-        requireSkipGitRepoCheck: true,
-        requireReasoningEffort: "xhigh",
-        stdinMustContain: "Return a JSON object with ok=true.",
-      },
-      Effect.gen(function* () {
-        const fs = yield* FileSystem.FileSystem;
-        const projectDir = yield* fs.makeTempDirectoryScoped({
-          prefix: "cut2kit-non-repo-project-",
-        });
+  it.effect(
+    "passes --skip-git-repo-check so Cut2Kit wall runs can execute in non-repo project folders",
+    () =>
+      withFakeCodexEnv(
+        {
+          output: JSON.stringify({ ok: true }),
+          requireSkipGitRepoCheck: true,
+          requireReasoningEffort: "xhigh",
+          stdinMustContain: "Return a JSON object with ok=true.",
+        },
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const projectDir = yield* fs.makeTempDirectoryScoped({
+            prefix: "cut2kit-non-repo-project-",
+          });
 
-        const result = yield* runCut2KitCodexJson({
-          operation: "cut2kit.testStructuredGeneration",
-          cwd: projectDir,
-          prompt: "Return a JSON object with ok=true.",
-          outputSchema: TestOutputSchema,
-          modelSelection: {
-            provider: "codex",
-            model: "gpt-5.4",
-            options: {
-              reasoningEffort: "xhigh",
+          const result = yield* runCut2KitCodexJson({
+            operation: "cut2kit.testStructuredGeneration",
+            cwd: projectDir,
+            prompt: "Return a JSON object with ok=true.",
+            outputSchema: TestOutputSchema,
+            modelSelection: {
+              provider: "codex",
+              model: "gpt-5.4",
+              options: {
+                reasoningEffort: "xhigh",
+              },
             },
-          },
-        });
+          });
 
-        expect(result).toEqual({ ok: true });
-      }),
-    ),
+          expect(result).toEqual({ ok: true });
+        }),
+      ),
   );
 
-  it.effect("normalizes optional fields into an OpenAI-compatible required+nullable schema and strips nulls before decode", () =>
-    withFakeCodexEnv(
-      {
-        output: JSON.stringify({
-          requiredValue: 7,
-          optionalValue: null,
-        }),
-        schemaMustContain: '"required":["requiredValue","optionalValue"]',
-      },
-      Effect.gen(function* () {
-        const fs = yield* FileSystem.FileSystem;
-        const projectDir = yield* fs.makeTempDirectoryScoped({
-          prefix: "cut2kit-optional-schema-project-",
-        });
+  it.effect(
+    "normalizes optional fields into an OpenAI-compatible required+nullable schema and strips nulls before decode",
+    () =>
+      withFakeCodexEnv(
+        {
+          output: JSON.stringify({
+            requiredValue: 7,
+            optionalValue: null,
+          }),
+          schemaMustContain: '"required":["requiredValue","optionalValue"]',
+        },
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const projectDir = yield* fs.makeTempDirectoryScoped({
+            prefix: "cut2kit-optional-schema-project-",
+          });
 
-        const result = yield* runCut2KitCodexJson({
-          operation: "cut2kit.testOptionalSchema",
-          cwd: projectDir,
-          prompt: "Return requiredValue=7 and optionalValue=null.",
-          outputSchema: OptionalFieldSchema,
-          modelSelection: {
-            provider: "codex",
-            model: "gpt-5.4",
-            options: {
-              reasoningEffort: "xhigh",
+          const result = yield* runCut2KitCodexJson({
+            operation: "cut2kit.testOptionalSchema",
+            cwd: projectDir,
+            prompt: "Return requiredValue=7 and optionalValue=null.",
+            outputSchema: OptionalFieldSchema,
+            modelSelection: {
+              provider: "codex",
+              model: "gpt-5.4",
+              options: {
+                reasoningEffort: "xhigh",
+              },
             },
-          },
-        });
+          });
 
-        expect(result).toEqual({ requiredValue: 7 });
-      }),
-    ),
+          expect(result).toEqual({ requiredValue: 7 });
+        }),
+      ),
   );
 });
