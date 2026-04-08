@@ -11,6 +11,7 @@ const DEFAULT_REPORTS_DIR = "output/reports";
 const WALL_LAYOUT_OUTPUT_DIR = "wall-layouts";
 const FRAMING_LAYOUT_OUTPUT_DIR = "framing-layouts";
 const SHEATHING_LAYOUT_OUTPUT_DIR = "sheathing-layouts";
+const DEFAULT_CUT2KIT_CODEX_REASONING_EFFORT = "xhigh";
 const DEFAULT_PROMPT_REFERENCE_PATHS = {
   reusableSummaryPdf: ".docs/reusable_prompt_summary_framing_osb.pdf",
   framingExamplePdf: "examples/elevation3_framing_layout.pdf",
@@ -143,20 +144,33 @@ export function resolveCut2KitAutomationModelSelection(
   fallbackModelSelection: ModelSelection | null | undefined,
 ): ModelSelection {
   const ai = project.settings?.ai ?? null;
-  const provider = "codex";
-  const model = ai?.model ?? fallbackModelSelection?.model ?? DEFAULT_MODEL_BY_PROVIDER[provider];
-
-  const options = ai?.reasoningEffort
-    ? {
-        reasoningEffort: ai.reasoningEffort as never,
-      }
-    : fallbackModelSelection?.provider === "codex"
-      ? fallbackModelSelection.options
+  const provider =
+    ai?.provider ?? (fallbackModelSelection?.provider === "opencode" ? "opencode" : "codex");
+  const fallbackModel =
+    fallbackModelSelection && fallbackModelSelection.provider === provider
+      ? fallbackModelSelection.model
       : undefined;
+  const model = ai?.model ?? fallbackModel ?? DEFAULT_MODEL_BY_PROVIDER[provider];
+
+  if (provider === "codex") {
+    const reasoningEffort =
+      ai?.reasoningEffort ??
+      (fallbackModelSelection?.provider === "codex"
+        ? fallbackModelSelection.options?.reasoningEffort
+        : undefined) ??
+      DEFAULT_CUT2KIT_CODEX_REASONING_EFFORT;
+    return {
+      provider,
+      model,
+      options: {
+        reasoningEffort,
+      },
+    };
+  }
+
   return {
     provider,
     model,
-    ...(options ? { options } : {}),
   };
 }
 

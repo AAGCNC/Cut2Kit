@@ -37,7 +37,7 @@
 
 ## Runtime Notes
 
-- The current wall workflow is AI-first and Codex-driven.
+- The current wall workflow is AI-first and runtime-provider-driven via either Codex OAuth or OpenCode/vLLM, depending on `cut2kit.settings.json`.
 - The prompt surface lives under `.docs/`.
 - The deterministic A2MC output path is separate from the wall-layout flow.
 - Release/signing guidance lives in [`release.md`](./release.md).

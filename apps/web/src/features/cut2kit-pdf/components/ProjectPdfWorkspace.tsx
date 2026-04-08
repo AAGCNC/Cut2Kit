@@ -248,7 +248,7 @@ export function ProjectPdfWorkspace({
         <CardTitle>Elevation to Framing Workspace</CardTitle>
         <CardDescription>
           Select the wall elevation PDF on the left and review the generated framing-layout PDF on
-          the right once Cut2Kit has rendered it from the Codex-authored framing JSON.
+          the right once Cut2Kit has rendered it from the AI-authored framing JSON.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col p-0">

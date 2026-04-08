@@ -170,6 +170,14 @@ export function useCut2KitSettingsEditor(input: {
     shouldBlockFn: async () => !(await confirmDiscardChanges()),
   });
 
+  useEffect(() => {
+    if (!state || isAdvancedJsonDirty) {
+      return;
+    }
+
+    syncAdvancedJsonToDraft(state.draft);
+  }, [isAdvancedJsonDirty, state, syncAdvancedJsonToDraft]);
+
   const requestClose = useCallback(async () => {
     if (isSaving) {
       return false;
@@ -182,23 +190,22 @@ export function useCut2KitSettingsEditor(input: {
 
   const updateDraftAtPath = useCallback(
     (path: Cut2KitSettingsEditorPath, value: unknown) => {
-      if (!state) {
-        return;
-      }
+      setState((currentState) => {
+        if (!currentState) {
+          return currentState;
+        }
 
-      const updatedState = replaceCut2KitSettingsEditorDraft(
-        state,
-        setCut2KitDraftValue(state.draft, path, value),
-      );
-      setState(updatedState);
+        return replaceCut2KitSettingsEditorDraft(
+          currentState,
+          setCut2KitDraftValue(currentState.draft, path, value),
+        );
+      });
 
-      if (!isAdvancedJsonDirty) {
-        syncAdvancedJsonToDraft(updatedState.draft);
-      } else {
+      if (isAdvancedJsonDirty) {
         setAdvancedJsonErrorMessage(null);
       }
     },
-    [isAdvancedJsonDirty, state, syncAdvancedJsonToDraft],
+    [isAdvancedJsonDirty],
   );
 
   const setAdvancedJsonText = useCallback((value: string) => {
@@ -209,20 +216,19 @@ export function useCut2KitSettingsEditor(input: {
 
   const updatePromptTemplate = useCallback(
     (key: Cut2KitPromptTemplateKey, value: string) => {
-      if (!state) {
-        return;
-      }
+      setState((currentState) => {
+        if (!currentState) {
+          return currentState;
+        }
 
-      const updatedState = replaceCut2KitPromptTemplateDraft(state, key, value);
-      setState(updatedState);
+        return replaceCut2KitPromptTemplateDraft(currentState, key, value);
+      });
 
-      if (!isAdvancedJsonDirty) {
-        syncAdvancedJsonToDraft(updatedState.draft);
-      } else {
+      if (isAdvancedJsonDirty) {
         setAdvancedJsonErrorMessage(null);
       }
     },
-    [isAdvancedJsonDirty, state, syncAdvancedJsonToDraft],
+    [isAdvancedJsonDirty],
   );
 
   const applyAdvancedJson = useCallback(() => {

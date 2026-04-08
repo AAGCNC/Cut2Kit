@@ -2530,29 +2530,18 @@ export const makeCut2KitProjects = Effect.gen(function* () {
     }
 
     const modelSelection = resolveCut2KitAutomationModelSelection(project, null);
-    if (modelSelection.provider !== "codex") {
+    if (modelSelection.provider !== "codex" && modelSelection.provider !== "opencode") {
       return yield* new Cut2KitProjectsError({
         cwd: project.cwd,
         operation: "generateWallLayout.validateProvider",
-        detail:
-          "The AI-first wall workflow currently runs only through the Codex/OpenAI GPT-5.4 harness.",
+        detail: `The AI-first wall workflow does not support provider '${modelSelection.provider}'. Supported providers: codex, opencode.`,
       });
     }
-    if (modelSelection.model !== "gpt-5.4") {
+    if (modelSelection.provider === "opencode" && !modelSelection.model.startsWith("vllm/")) {
       return yield* new Cut2KitProjectsError({
         cwd: project.cwd,
         operation: "generateWallLayout.validateModel",
-        detail: "The wall workflow requires GPT-5.4 as the runtime reasoning model.",
-      });
-    }
-    if (
-      (modelSelection.options as { reasoningEffort?: string } | undefined)?.reasoningEffort !==
-      "xhigh"
-    ) {
-      return yield* new Cut2KitProjectsError({
-        cwd: project.cwd,
-        operation: "generateWallLayout.validateReasoningEffort",
-        detail: "The wall workflow requires xhigh reasoning effort for GPT-5.4 runs.",
+        detail: "OpenCode wall generation requires a vLLM model in the format 'vllm/model-name'.",
       });
     }
     const { promptTemplatePaths, promptTemplateBundle } = yield* loadPromptTemplateBundleForProject(

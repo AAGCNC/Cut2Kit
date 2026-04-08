@@ -5,7 +5,12 @@ import {
   resolveCut2KitAutomationModelSelection,
   summarizeCut2KitProjectHealth,
 } from "@t3tools/shared/cut2kit";
-import type { Cut2KitProject, ProjectId, ThreadId } from "@t3tools/contracts";
+import {
+  PROVIDER_DISPLAY_NAMES,
+  type Cut2KitProject,
+  type ProjectId,
+  type ThreadId,
+} from "@t3tools/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { BotIcon, CheckIcon, FolderIcon, HammerIcon, TriangleAlertIcon } from "lucide-react";
@@ -121,6 +126,19 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
 
   const snapshot = snapshotQuery.data ?? null;
   const hasWallWorkflowSettings = snapshot?.settings !== null && snapshot?.settings !== undefined;
+  const automationModelSelection = useMemo(
+    () =>
+      snapshot && project
+        ? resolveCut2KitAutomationModelSelection(snapshot, project.defaultModelSelection)
+        : null,
+    [project, snapshot],
+  );
+  const automationProviderLabel = automationModelSelection
+    ? PROVIDER_DISPLAY_NAMES[automationModelSelection.provider]
+    : "AI";
+  const automationRuntimeLabel = automationModelSelection
+    ? `${automationProviderLabel}/${automationModelSelection.model}`
+    : "the configured AI runtime";
   const issueSummary = useMemo(() => {
     if (!snapshot) {
       return { warnings: 0, errors: 0 };
@@ -420,6 +438,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         throw new Error("Unable to open a draft thread for this project.");
       }
 
+      if (automationModelSelection) {
+        draftStore.setModelSelection(draftThread.threadId, automationModelSelection);
+      }
       draftStore.setPrompt(draftThread.threadId, agentPrompt);
       draftStore.setDraftThreadContext(draftThread.threadId, {
         runtimeMode: "approval-required",
@@ -430,7 +451,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         type: "success",
         title: "Cut to Kit Agent prepared",
         description:
-          "Opened a supervised Codex thread with the current project snapshot and A2MC manufacturing-plan guidance. Review the prompt and send when ready.",
+          `Opened a supervised ${automationProviderLabel} thread with the current project snapshot and A2MC manufacturing-plan guidance. Review the prompt and send when ready.`,
       });
     } catch (error) {
       toastManager.add({
@@ -441,7 +462,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     } finally {
       setIsPreparingAgent(false);
     }
-  }, [agentPrompt, handleNewThread, project, snapshot]);
+  }, [agentPrompt, automationModelSelection, automationProviderLabel, handleNewThread, project, snapshot]);
 
   const handleGenerateFramingLayout = useCallback(async () => {
     if (!project || !snapshot || !selectedSourcePdfPath || !framingArtifacts) {
@@ -472,10 +493,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
 
     const createdAt = new Date().toISOString();
     const threadId = newThreadId();
-    const modelSelection = resolveCut2KitAutomationModelSelection(
-      snapshot,
-      project.defaultModelSelection,
-    );
+    const modelSelection =
+      automationModelSelection ??
+      resolveCut2KitAutomationModelSelection(snapshot, project.defaultModelSelection);
 
     setIsStartingFramingGeneration(true);
     try {
@@ -528,7 +548,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       toastManager.add({
         type: "success",
         title: "Framing layout generation started",
-        description: `Codex is generating ${framingArtifacts.jsonPath} from ${selectedSourcePdfPath}.`,
+        description: `${PROVIDER_DISPLAY_NAMES[modelSelection.provider]} is generating ${framingArtifacts.jsonPath} from ${selectedSourcePdfPath}.`,
       });
     } catch (error) {
       toastManager.add({
@@ -542,6 +562,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   }, [
     framingArtifacts,
     framingPromptQuery.data,
+    automationModelSelection,
     project,
     selectedElevationOption?.classification,
     selectedSourcePdfPath,
@@ -648,7 +669,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         title: "Framing layout generation failed",
         description:
           framingGenerationThread?.session?.lastError ??
-          "Codex finished without producing the framing layout JSON artifact.",
+          `${automationProviderLabel} finished without producing the framing layout JSON artifact.`,
       });
       setActiveFramingGeneration(null);
       return;
@@ -664,7 +685,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         type: "error",
         title: "Framing layout JSON not found",
         description:
-          "Codex finished the framing-layout thread without writing the expected JSON artifact.",
+          `${automationProviderLabel} finished the framing-layout thread without writing the expected JSON artifact.`,
       });
       setActiveFramingGeneration(null);
       return;
@@ -676,6 +697,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     setActiveFramingGeneration(null);
   }, [
     activeFramingGeneration,
+    automationProviderLabel,
     framingGenerationThread?.session?.lastError,
     activeFramingJsonReady,
     activeFramingPdfReady,
@@ -795,7 +817,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
               <CardTitle>AI-First Wall Automation</CardTitle>
               <CardDescription>
                 The primary wall workflow runs geometry extraction, framing generation, and OSB
-                generation through Codex/GPT-5.4, then validates and renders the PDFs
+                generation through {automationRuntimeLabel}, then validates and renders the PDFs
                 deterministically. The framing-only thread below remains available as an advanced
                 prompt/debug path, and its prompt preview is compiled server-side from the
                 configured templates and current wall artifacts.
@@ -883,8 +905,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {activeFramingGeneration
-                      ? `Codex thread ${activeFramingGeneration.threadId} is handling the current framing-layout run.`
-                      : "Starting a framing run creates a dedicated full-access Codex thread for the selected elevation PDF."}
+                      ? `${automationProviderLabel} thread ${activeFramingGeneration.threadId} is handling the current framing-layout run.`
+                      : `Starting a framing run creates a dedicated full-access ${automationProviderLabel} thread for the selected elevation PDF.`}
                   </p>
                 </div>
 
@@ -992,8 +1014,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 <CardHeader>
                   <CardTitle>Framing Layout Status</CardTitle>
                   <CardDescription>
-                    Selected elevation, expected artifact paths, and the current Codex-run status
-                    for the framing-layout workflow.
+                    Selected elevation, expected artifact paths, and the current AI-run status for
+                    the framing-layout workflow.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">

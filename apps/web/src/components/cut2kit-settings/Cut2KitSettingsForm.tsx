@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+import { DEFAULT_MODEL_BY_PROVIDER } from "@t3tools/contracts";
 
 import type {
   Cut2KitPromptTemplateKey,
@@ -22,6 +23,7 @@ import {
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
+import { Toggle as ToggleButton } from "~/components/ui/toggle";
 import { CheckIcon, ChevronDownIcon, PlusIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 
 const PROJECT_UNIT_OPTIONS = [
@@ -86,6 +88,32 @@ const OVERWRITE_POLICY_OPTIONS = [
   { value: "overwrite", label: "Overwrite" },
   { value: "skip_if_exists", label: "Skip if exists" },
   { value: "version_if_exists", label: "Version if exists" },
+] as const;
+
+const AI_PROVIDER_OPTIONS = [
+  { value: "codex", label: "OpenAI Codex OAuth" },
+  { value: "opencode", label: "OpenCode via vLLM" },
+] as const;
+
+const CODEX_WALL_MODEL_OPTIONS = [
+  { value: "gpt-5.4", label: "GPT-5.4" },
+  { value: "gpt-5.4-mini", label: "GPT-5.4 Mini" },
+  { value: "gpt-5.3-codex", label: "GPT-5.3 Codex" },
+  { value: "gpt-5.3-codex-spark", label: "GPT-5.3 Codex Spark" },
+] as const;
+
+const OPENCODE_WALL_MODEL_OPTIONS = [
+  {
+    value: DEFAULT_MODEL_BY_PROVIDER.opencode,
+    label: "vLLM / qwen3-coder-next",
+  },
+] as const;
+
+const CODEX_REASONING_EFFORT_OPTIONS = [
+  { value: "xhigh", label: "Extra high" },
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
 ] as const;
 
 const AI_RUNTIME_GENERATION_STEPS = [
@@ -212,6 +240,21 @@ function validateOptionalStringList(values: string[]) {
     }
   }
   return null;
+}
+
+function buildAiModelOptions(provider: "codex" | "opencode", currentModel: string) {
+  const baseOptions: Array<{ value: string; label: string }> =
+    provider === "codex" ? [...CODEX_WALL_MODEL_OPTIONS] : [...OPENCODE_WALL_MODEL_OPTIONS];
+  if (
+    currentModel.trim().length > 0 &&
+    !baseOptions.some((option) => option.value === currentModel.trim())
+  ) {
+    baseOptions.push({
+      value: currentModel.trim(),
+      label: `${currentModel.trim()} (Current value)`,
+    });
+  }
+  return baseOptions;
 }
 
 function validateEnumValue(
@@ -483,6 +526,48 @@ function ToggleField({
   );
 }
 
+function OptionToggleGroup({
+  ariaLabel,
+  value,
+  options,
+  onChange,
+}: {
+  ariaLabel: string;
+  value: string;
+  options: ReadonlyArray<{
+    value: string;
+    label: string;
+  }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={ariaLabel}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <ToggleButton
+            key={option.value}
+            aria-label={`${ariaLabel}: ${option.label}`}
+            variant="outline"
+            pressed={selected}
+            onPressedChange={(pressed) => {
+              if (pressed) {
+                onChange(option.value);
+              }
+            }}
+            className={cn(
+              "h-auto min-h-9 min-w-0 justify-start px-3 py-2 text-left text-sm",
+              selected && "border-primary/60 bg-accent text-accent-foreground",
+            )}
+          >
+            {option.label}
+          </ToggleButton>
+        );
+      })}
+    </div>
+  );
+}
+
 function ReadOnlyList({
   label,
   items,
@@ -749,6 +834,18 @@ export function Cut2KitSettingsForm({
   const noteLines = readStringArrayValue(state, ["fastening", "noteLines"]);
   const fileAssignments = readObjectArrayValue(state, ["input", "fileAssignments"]);
   const runtimeGenerationOrder = readStringArrayValue(state, ["ai", "runtimeGenerationOrder"]);
+  const aiProvider =
+    readSelectValue(state, ["ai", "provider"], AI_PROVIDER_OPTIONS) === "opencode"
+      ? "opencode"
+      : "codex";
+  const aiModel = readStringValue(state, ["ai", "model"]);
+  const aiModelOptions = buildAiModelOptions(aiProvider, aiModel);
+  const selectedAiModel = readSelectValue(state, ["ai", "model"], aiModelOptions);
+  const selectedReasoningEffort = readSelectValue(
+    state,
+    ["ai", "reasoningEffort"],
+    CODEX_REASONING_EFFORT_OPTIONS,
+  );
   const geometrySourcePriority = readStringArrayValue(state, [
     "input",
     "elevationIntake",
@@ -860,18 +957,20 @@ export function Cut2KitSettingsForm({
       <SectionCard
         id="cut2kit-settings-ai"
         title="AI"
-        description="Codex/GPT-5.4 workflow controls, prompt template paths, and project-local prompt overrides."
+        description="Runtime provider, model, prompt template paths, and project-local overrides for the AI-first wall workflow."
         aside={
           <div className="flex flex-wrap gap-2">
             <Badge variant="outline">{readStringValue(state, ["ai", "provider"])}</Badge>
             <Badge variant="outline">{readStringValue(state, ["ai", "model"])}</Badge>
-            <Badge variant="outline">{readStringValue(state, ["ai", "reasoningEffort"])}</Badge>
+            {readOptionalStringValue(state, ["ai", "reasoningEffort"]) ? (
+              <Badge variant="outline">{readStringValue(state, ["ai", "reasoningEffort"])}</Badge>
+            ) : null}
           </div>
         }
       >
         <ToggleField
           label="Enable AI-first wall workflow"
-          description="Turns the Codex-driven wall geometry, framing, and sheathing pipeline on or off."
+          description="Turns the configured Codex/OpenCode wall geometry, framing, and sheathing pipeline on or off."
           checked={readBooleanValue(state, ["ai", "enabled"])}
           onCheckedChange={(checked) => onValueChange(["ai", "enabled"], checked)}
         />
@@ -889,6 +988,80 @@ export function Cut2KitSettingsForm({
           <Field label="Primary workflow">
             <Input value={readStringValue(state, ["ai", "primaryWorkflow"])} disabled />
           </Field>
+        </FieldGrid>
+
+        <FieldGrid>
+          <Field
+            label="Provider"
+            description="Generate Framing Layout and Generate Wall Package use this runtime."
+            error={validateEnumValue(
+              readValue(state, ["ai", "provider"]),
+              "provider",
+              AI_PROVIDER_OPTIONS,
+            )}
+          >
+            <OptionToggleGroup
+              ariaLabel="Wall workflow provider"
+              value={aiProvider}
+              options={AI_PROVIDER_OPTIONS}
+              onChange={(value) => {
+                const nextProvider = value === "opencode" ? "opencode" : "codex";
+                const nextModel =
+                  nextProvider === "opencode"
+                    ? OPENCODE_WALL_MODEL_OPTIONS[0].value
+                    : CODEX_WALL_MODEL_OPTIONS[0].value;
+                onValueChange(["ai", "provider"], nextProvider);
+                onValueChange(["ai", "model"], nextModel);
+                onValueChange(
+                  ["ai", "reasoningEffort"],
+                  nextProvider === "codex" ? "xhigh" : undefined,
+                );
+              }}
+            />
+          </Field>
+
+          <Field
+            label="Model"
+            description={
+              aiProvider === "codex"
+                ? "Choose the OpenAI model used for Cut2Kit wall reasoning."
+                : "OpenCode wall runs currently target the single local vLLM model configured for this machine."
+            }
+            error={validateRequiredString(readValue(state, ["ai", "model"]), "Model")}
+          >
+            <OptionToggleGroup
+              ariaLabel="Wall workflow model"
+              value={selectedAiModel || aiModel}
+              options={aiModelOptions}
+              onChange={(value) => onValueChange(["ai", "model"], value)}
+            />
+          </Field>
+
+          {aiProvider === "codex" ? (
+            <Field
+              label="Reasoning effort"
+              description="Applied only to Codex wall runs."
+              error={validateEnumValue(
+                readValue(state, ["ai", "reasoningEffort"]) ?? "xhigh",
+                "reasoning effort",
+                CODEX_REASONING_EFFORT_OPTIONS,
+              )}
+            >
+              <OptionToggleGroup
+                ariaLabel="Codex wall reasoning effort"
+                value={selectedReasoningEffort || "xhigh"}
+                options={CODEX_REASONING_EFFORT_OPTIONS}
+                onChange={(value) => onValueChange(["ai", "reasoningEffort"], value)}
+              />
+            </Field>
+          ) : (
+            <Field
+              label="Reasoning effort"
+              description="OpenCode wall runs do not use a Codex reasoning-effort parameter."
+            >
+              <Input value="Managed by OpenCode/vLLM" disabled />
+            </Field>
+          )}
         </FieldGrid>
 
         <div className="space-y-3">

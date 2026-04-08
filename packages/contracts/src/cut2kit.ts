@@ -1,5 +1,6 @@
 import { Schema } from "effect";
 import { IsoDateTime, NonNegativeInt, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas";
+import { CODEX_REASONING_EFFORT_OPTIONS } from "./model";
 
 export const CUT2KIT_SETTINGS_SCHEMA_VERSIONS = ["0.3.0"] as const;
 
@@ -491,9 +492,9 @@ export type Cut2KitResolvedPromptTemplates = typeof Cut2KitResolvedPromptTemplat
 export const Cut2KitAiSettings = Schema.Struct({
   enabled: Schema.Boolean,
   agentName: TrimmedNonEmptyString,
-  provider: Schema.Literal("codex"),
-  model: Schema.Literal("gpt-5.4"),
-  reasoningEffort: Schema.Literal("xhigh"),
+  provider: Schema.Literals(["codex", "opencode"]),
+  model: TrimmedNonEmptyString,
+  reasoningEffort: Schema.optionalKey(Schema.Literals(CODEX_REASONING_EFFORT_OPTIONS)),
   primaryWorkflow: Schema.Literal("ai-first-wall-layout"),
   runtimeGenerationOrder: Schema.Array(Cut2KitAiGenerationStep),
   promptTemplatePaths: Cut2KitPromptTemplatePaths,

@@ -11,15 +11,15 @@ The current wall workflow is a single-wall, selected-elevation flow:
 1. Inspect the project directory and validate `cut2kit.settings.json`.
 2. Select one elevation PDF as the wall source.
 3. Load the prompt templates from `.docs/`.
-4. Extract wall geometry with GPT-5.4 using:
+4. Extract wall geometry with the configured AI runtime using:
    - PDF text extraction
    - a rendered preview image of the selected elevation
 5. Normalize and write:
    - `output/reports/wall-layouts/*.extracted-elevation.json`
    - `output/reports/wall-layouts/*.validation-report.json`
 6. If the geometry is ambiguous and settings require confirmation, stop there and require user confirmation.
-7. Generate framing JSON with GPT-5.4.
-8. Generate sheathing JSON with GPT-5.4.
+7. Generate framing JSON with the configured AI runtime.
+8. Generate sheathing JSON with the configured AI runtime.
 9. Deterministically validate framing and sheathing.
 10. Render PDFs only after validation passes.
 
@@ -34,9 +34,12 @@ The current artifact set is:
 
 Current implementation constraints:
 
-- The wall flow is Codex-only today.
-- The required model is `gpt-5.4`.
-- The required reasoning effort is `xhigh`.
+- The wall flow supports `ai.provider = "codex"` or `ai.provider = "opencode"`.
+- `codex` runs through the Codex OAuth CLI path. The recommended Cut2Kit default is `model = "gpt-5.4"` with `reasoningEffort = "xhigh"`.
+- `opencode` runs through the OpenCode runtime and requires a vLLM-backed model slug in the form `vllm/model-name`.
+- Switching runtimes is a settings change only. Example:
+  - `codex`: `"provider": "codex", "model": "gpt-5.4", "reasoningEffort": "xhigh"`
+  - `opencode`: `"provider": "opencode", "model": "vllm/qwen3-coder-next"`
 - Geometry ambiguity can block the run and require confirmation.
 - Framing and sheathing logic are settings-driven, but generation is still AI-first.
 - Deterministic code handles validation, rendering, and packaging after model output.

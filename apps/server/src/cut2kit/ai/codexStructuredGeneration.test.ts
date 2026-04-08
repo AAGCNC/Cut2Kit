@@ -1,11 +1,67 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Path, Schema } from "effect";
-import { expect } from "vitest";
+import { afterEach, expect, vi } from "vitest";
+
+const {
+  opencodeClientFactoryMock,
+  opencodeSessionCreateMock,
+  opencodeSessionPromptMock,
+  opencodeSessionDeleteMock,
+} = vi.hoisted(() => ({
+  opencodeClientFactoryMock: vi.fn(),
+  opencodeSessionCreateMock: vi.fn(),
+  opencodeSessionPromptMock: vi.fn(),
+  opencodeSessionDeleteMock: vi.fn(),
+}));
+
+vi.mock("@opencode-ai/sdk", () => ({
+  createOpencodeClient: opencodeClientFactoryMock,
+}));
 
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { runCut2KitCodexJson } from "./codexStructuredGeneration.ts";
+
+function resetOpenCodeClientMocks() {
+  opencodeSessionCreateMock.mockReset();
+  opencodeSessionPromptMock.mockReset();
+  opencodeSessionDeleteMock.mockReset();
+  opencodeClientFactoryMock.mockReset();
+
+  opencodeSessionCreateMock.mockResolvedValue({
+    data: {
+      id: "cut2kit-open-session",
+    },
+  });
+  opencodeSessionPromptMock.mockResolvedValue({
+    data: {
+      info: {
+        error: null,
+      },
+      parts: [
+        {
+          type: "text",
+          text: JSON.stringify({ ok: true }),
+        },
+      ],
+    },
+  });
+  opencodeSessionDeleteMock.mockResolvedValue(undefined);
+  opencodeClientFactoryMock.mockImplementation(() => ({
+    session: {
+      create: opencodeSessionCreateMock,
+      prompt: opencodeSessionPromptMock,
+      delete: opencodeSessionDeleteMock,
+    },
+  }));
+}
+
+resetOpenCodeClientMocks();
+
+afterEach(() => {
+  resetOpenCodeClientMocks();
+});
 
 const Cut2KitCodexGenerationTestLayer = Layer.empty.pipe(
   Layer.provideMerge(ServerSettingsService.layerTest()),
@@ -164,6 +220,33 @@ function withFakeCodexEnv<A, E, R>(
   );
 }
 
+function withOpenCodeServerSettings<A, E, R>(effect: Effect.Effect<A, E, R>) {
+  return Effect.acquireUseRelease(
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsService;
+      const previousSettings = yield* serverSettings.getSettings;
+      yield* serverSettings.updateSettings({
+        providers: {
+          opencode: {
+            serverUrl: "http://127.0.0.1:4318",
+            autoStartServer: false,
+          },
+        },
+      });
+      return { previousSettings, serverSettings };
+    }),
+    () => effect,
+    ({ previousSettings, serverSettings }) =>
+      serverSettings
+        .updateSettings({
+          providers: {
+            opencode: previousSettings.providers.opencode,
+          },
+        })
+        .pipe(Effect.asVoid),
+  );
+}
+
 it.layer(Cut2KitCodexGenerationTestLayer)("runCut2KitCodexJson", (it) => {
   it.effect(
     "passes --skip-git-repo-check so Cut2Kit wall runs can execute in non-repo project folders",
@@ -234,5 +317,71 @@ it.layer(Cut2KitCodexGenerationTestLayer)("runCut2KitCodexJson", (it) => {
           expect(result).toEqual({ requiredValue: 7 });
         }),
       ),
+  );
+
+  it.effect("routes Cut2Kit structured generation through OpenCode when the model selection uses opencode", () =>
+    withOpenCodeServerSettings(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const projectDir = yield* fs.makeTempDirectoryScoped({
+          prefix: "cut2kit-opencode-structured-generation-",
+        });
+
+        const result = yield* runCut2KitCodexJson({
+          operation: "cut2kit.testOpenCodeStructuredGeneration",
+          cwd: projectDir,
+          prompt: "Return a JSON object with ok=true.",
+          outputSchema: TestOutputSchema,
+          modelSelection: {
+            provider: "opencode",
+            model: "vllm/qwen3-coder-next",
+          },
+        });
+
+        expect(result).toEqual({ ok: true });
+        expect(opencodeClientFactoryMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            baseUrl: "http://127.0.0.1:4318",
+            directory: projectDir,
+            throwOnError: true,
+          }),
+        );
+        expect(opencodeSessionCreateMock).toHaveBeenCalledWith({
+          body: {
+            title: "Cut2Kit cut2kit.testOpenCodeStructuredGeneration",
+          },
+        });
+        expect(opencodeSessionPromptMock).toHaveBeenCalledTimes(1);
+        expect(opencodeSessionPromptMock.mock.calls[0]?.[0]).toEqual(
+          expect.objectContaining({
+            path: {
+              id: "cut2kit-open-session",
+            },
+            body: expect.objectContaining({
+              model: {
+                providerID: "vllm",
+                modelID: "qwen3-coder-next",
+              },
+            }),
+          }),
+        );
+        const promptParts = opencodeSessionPromptMock.mock.calls[0]?.[0]?.body?.parts;
+        expect(promptParts).toHaveLength(1);
+        expect(promptParts?.[0]).toEqual(
+          expect.objectContaining({
+            type: "text",
+          }),
+        );
+        expect(promptParts?.[0]?.text).toContain("Return a JSON object with ok=true.");
+        expect(promptParts?.[0]?.text).toContain(
+          "Return only a JSON object that matches this schema.",
+        );
+        expect(opencodeSessionDeleteMock).toHaveBeenCalledWith({
+          path: {
+            id: "cut2kit-open-session",
+          },
+        });
+      }),
+    ),
   );
 });

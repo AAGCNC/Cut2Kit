@@ -1234,6 +1234,159 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         }),
     );
 
+    it.effect("uses OpenCode vLLM model selection from project settings when configured", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const projectDir = yield* makeTempDir("cut2kit-ai-wall-opencode-project-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
+
+        yield* Effect.tryPromise({
+          try: async () => {
+            const settingsPath = `${projectDir}/cut2kit.settings.json`;
+            const settings = JSON.parse(await fsPromises.readFile(settingsPath, "utf8")) as {
+              ai?: Record<string, unknown>;
+            };
+            if (!settings.ai || typeof settings.ai !== "object") {
+              throw new Error("Missing ai settings section.");
+            }
+            settings.ai.provider = "opencode";
+            settings.ai.model = "vllm/qwen3-coder-next";
+            delete settings.ai.reasoningEffort;
+            await fsPromises.writeFile(
+              settingsPath,
+              `${JSON.stringify(settings, null, 2)}\n`,
+              "utf8",
+            );
+          },
+          catch: (error) =>
+            new FixtureCopyError({
+              message: `Failed to set OpenCode model selection in project settings: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            }),
+        });
+
+        const geometryDraft = makeGeometryDraft();
+        const framingDraft = makeFramingDraft(geometryDraft);
+        const sheathingDraft = makeSheathingDraft(geometryDraft);
+        runCut2KitCodexJsonMock
+          .mockReturnValueOnce(Effect.succeed(geometryDraft))
+          .mockReturnValueOnce(Effect.succeed(framingDraft))
+          .mockReturnValueOnce(Effect.succeed(sheathingDraft));
+
+        yield* cut2kitProjects.generateWallLayout({
+          cwd: projectDir,
+          sourcePdfPath: "examples/elevation3.pdf",
+        });
+
+        expect(runCut2KitCodexJsonMock).toHaveBeenCalledTimes(3);
+        expect(runCut2KitCodexJsonMock.mock.calls[0]?.[0]?.modelSelection).toEqual({
+          provider: "opencode",
+          model: "vllm/qwen3-coder-next",
+        });
+      }),
+    );
+
+    it.effect("defaults Codex wall generation to xhigh reasoning when the setting is omitted", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const projectDir = yield* makeTempDir("cut2kit-ai-wall-codex-default-effort-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
+
+        yield* Effect.tryPromise({
+          try: async () => {
+            const settingsPath = `${projectDir}/cut2kit.settings.json`;
+            const settings = JSON.parse(await fsPromises.readFile(settingsPath, "utf8")) as {
+              ai?: Record<string, unknown>;
+            };
+            if (!settings.ai || typeof settings.ai !== "object") {
+              throw new Error("Missing ai settings section.");
+            }
+            delete settings.ai.reasoningEffort;
+            await fsPromises.writeFile(
+              settingsPath,
+              `${JSON.stringify(settings, null, 2)}\n`,
+              "utf8",
+            );
+          },
+          catch: (error) =>
+            new FixtureCopyError({
+              message: `Failed to clear Cut2Kit Codex reasoning effort in project settings: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            }),
+        });
+
+        const geometryDraft = makeGeometryDraft();
+        const framingDraft = makeFramingDraft(geometryDraft);
+        const sheathingDraft = makeSheathingDraft(geometryDraft);
+        runCut2KitCodexJsonMock
+          .mockReturnValueOnce(Effect.succeed(geometryDraft))
+          .mockReturnValueOnce(Effect.succeed(framingDraft))
+          .mockReturnValueOnce(Effect.succeed(sheathingDraft));
+
+        yield* cut2kitProjects.generateWallLayout({
+          cwd: projectDir,
+          sourcePdfPath: "examples/elevation3.pdf",
+        });
+
+        expect(runCut2KitCodexJsonMock.mock.calls[0]?.[0]?.modelSelection).toEqual({
+          provider: "codex",
+          model: "gpt-5.4",
+          options: {
+            reasoningEffort: "xhigh",
+          },
+        });
+      }),
+    );
+
+    it.effect("rejects OpenCode model selections that are not vLLM models", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const projectDir = yield* makeTempDir("cut2kit-ai-wall-opencode-invalid-model-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
+
+        yield* Effect.tryPromise({
+          try: async () => {
+            const settingsPath = `${projectDir}/cut2kit.settings.json`;
+            const settings = JSON.parse(await fsPromises.readFile(settingsPath, "utf8")) as {
+              ai?: Record<string, unknown>;
+            };
+            if (!settings.ai || typeof settings.ai !== "object") {
+              throw new Error("Missing ai settings section.");
+            }
+            settings.ai.provider = "opencode";
+            settings.ai.model = "openai/gpt-5.4";
+            await fsPromises.writeFile(
+              settingsPath,
+              `${JSON.stringify(settings, null, 2)}\n`,
+              "utf8",
+            );
+          },
+          catch: (error) =>
+            new FixtureCopyError({
+              message: `Failed to set invalid OpenCode model selection in project settings: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            }),
+        });
+
+        const error = yield* cut2kitProjects
+          .generateWallLayout({
+            cwd: projectDir,
+            sourcePdfPath: "examples/elevation3.pdf",
+          })
+          .pipe(Effect.flip);
+
+        expect(error.operation).toBe("generateWallLayout.validateModel");
+        expect(error.detail).toContain("vLLM model");
+        expect(runCut2KitCodexJsonMock).not.toHaveBeenCalled();
+      }),
+    );
+
     it.effect("uses the project-local prompt markdown override during wall generation", () =>
       Effect.gen(function* () {
         const cut2kitProjects = yield* Cut2KitProjects;
