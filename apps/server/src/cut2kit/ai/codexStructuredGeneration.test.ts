@@ -319,69 +319,71 @@ it.layer(Cut2KitCodexGenerationTestLayer)("runCut2KitCodexJson", (it) => {
       ),
   );
 
-  it.effect("routes Cut2Kit structured generation through OpenCode when the model selection uses opencode", () =>
-    withOpenCodeServerSettings(
-      Effect.gen(function* () {
-        const fs = yield* FileSystem.FileSystem;
-        const projectDir = yield* fs.makeTempDirectoryScoped({
-          prefix: "cut2kit-opencode-structured-generation-",
-        });
+  it.effect(
+    "routes Cut2Kit structured generation through OpenCode when the model selection uses opencode",
+    () =>
+      withOpenCodeServerSettings(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const projectDir = yield* fs.makeTempDirectoryScoped({
+            prefix: "cut2kit-opencode-structured-generation-",
+          });
 
-        const result = yield* runCut2KitCodexJson({
-          operation: "cut2kit.testOpenCodeStructuredGeneration",
-          cwd: projectDir,
-          prompt: "Return a JSON object with ok=true.",
-          outputSchema: TestOutputSchema,
-          modelSelection: {
-            provider: "opencode",
-            model: "vllm/qwen3-coder-next",
-          },
-        });
+          const result = yield* runCut2KitCodexJson({
+            operation: "cut2kit.testOpenCodeStructuredGeneration",
+            cwd: projectDir,
+            prompt: "Return a JSON object with ok=true.",
+            outputSchema: TestOutputSchema,
+            modelSelection: {
+              provider: "opencode",
+              model: "vllm/qwen3-coder-next",
+            },
+          });
 
-        expect(result).toEqual({ ok: true });
-        expect(opencodeClientFactoryMock).toHaveBeenCalledWith(
-          expect.objectContaining({
-            baseUrl: "http://127.0.0.1:4318",
-            directory: projectDir,
-            throwOnError: true,
-          }),
-        );
-        expect(opencodeSessionCreateMock).toHaveBeenCalledWith({
-          body: {
-            title: "Cut2Kit cut2kit.testOpenCodeStructuredGeneration",
-          },
-        });
-        expect(opencodeSessionPromptMock).toHaveBeenCalledTimes(1);
-        expect(opencodeSessionPromptMock.mock.calls[0]?.[0]).toEqual(
-          expect.objectContaining({
+          expect(result).toEqual({ ok: true });
+          expect(opencodeClientFactoryMock).toHaveBeenCalledWith(
+            expect.objectContaining({
+              baseUrl: "http://127.0.0.1:4318",
+              directory: projectDir,
+              throwOnError: true,
+            }),
+          );
+          expect(opencodeSessionCreateMock).toHaveBeenCalledWith({
+            body: {
+              title: "Cut2Kit cut2kit.testOpenCodeStructuredGeneration",
+            },
+          });
+          expect(opencodeSessionPromptMock).toHaveBeenCalledTimes(1);
+          expect(opencodeSessionPromptMock.mock.calls[0]?.[0]).toEqual(
+            expect.objectContaining({
+              path: {
+                id: "cut2kit-open-session",
+              },
+              body: expect.objectContaining({
+                model: {
+                  providerID: "vllm",
+                  modelID: "qwen3-coder-next",
+                },
+              }),
+            }),
+          );
+          const promptParts = opencodeSessionPromptMock.mock.calls[0]?.[0]?.body?.parts;
+          expect(promptParts).toHaveLength(1);
+          expect(promptParts?.[0]).toEqual(
+            expect.objectContaining({
+              type: "text",
+            }),
+          );
+          expect(promptParts?.[0]?.text).toContain("Return a JSON object with ok=true.");
+          expect(promptParts?.[0]?.text).toContain(
+            "Return only a JSON object that matches this schema.",
+          );
+          expect(opencodeSessionDeleteMock).toHaveBeenCalledWith({
             path: {
               id: "cut2kit-open-session",
             },
-            body: expect.objectContaining({
-              model: {
-                providerID: "vllm",
-                modelID: "qwen3-coder-next",
-              },
-            }),
-          }),
-        );
-        const promptParts = opencodeSessionPromptMock.mock.calls[0]?.[0]?.body?.parts;
-        expect(promptParts).toHaveLength(1);
-        expect(promptParts?.[0]).toEqual(
-          expect.objectContaining({
-            type: "text",
-          }),
-        );
-        expect(promptParts?.[0]?.text).toContain("Return a JSON object with ok=true.");
-        expect(promptParts?.[0]?.text).toContain(
-          "Return only a JSON object that matches this schema.",
-        );
-        expect(opencodeSessionDeleteMock).toHaveBeenCalledWith({
-          path: {
-            id: "cut2kit-open-session",
-          },
-        });
-      }),
-    ),
+          });
+        }),
+      ),
   );
 });

@@ -13,6 +13,8 @@ import type { Effect } from "effect";
 import type {
   Cut2KitCompileFramingPromptInput,
   Cut2KitCompileFramingPromptResult,
+  Cut2KitCompileSheathingPromptInput,
+  Cut2KitCompileSheathingPromptResult,
   Cut2KitGenerateOutputsInput,
   Cut2KitGenerateOutputsResult,
   Cut2KitGenerateWallLayoutInput,
@@ -21,6 +23,8 @@ import type {
   Cut2KitProject,
   Cut2KitRenderFramingLayoutInput,
   Cut2KitRenderFramingLayoutResult,
+  Cut2KitRenderSheathingLayoutInput,
+  Cut2KitRenderSheathingLayoutResult,
 } from "@t3tools/contracts";
 
 export class Cut2KitProjectsError extends Schema.TaggedErrorClass<Cut2KitProjectsError>()(
@@ -40,6 +44,9 @@ export interface Cut2KitProjectsShape {
   readonly compileFramingPrompt: (
     input: Cut2KitCompileFramingPromptInput,
   ) => Effect.Effect<Cut2KitCompileFramingPromptResult, Cut2KitProjectsError>;
+  readonly compileSheathingPrompt: (
+    input: Cut2KitCompileSheathingPromptInput,
+  ) => Effect.Effect<Cut2KitCompileSheathingPromptResult, Cut2KitProjectsError>;
   readonly generateOutputs: (
     input: Cut2KitGenerateOutputsInput,
   ) => Effect.Effect<Cut2KitGenerateOutputsResult, Cut2KitProjectsError>;
@@ -49,6 +56,9 @@ export interface Cut2KitProjectsShape {
   readonly renderFramingLayout: (
     input: Cut2KitRenderFramingLayoutInput,
   ) => Effect.Effect<Cut2KitRenderFramingLayoutResult, Cut2KitProjectsError>;
+  readonly renderSheathingLayout: (
+    input: Cut2KitRenderSheathingLayoutInput,
+  ) => Effect.Effect<Cut2KitRenderSheathingLayoutResult, Cut2KitProjectsError>;
 }
 
 export class Cut2KitProjects extends ServiceMap.Service<Cut2KitProjects, Cut2KitProjectsShape>()(

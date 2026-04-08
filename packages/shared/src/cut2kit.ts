@@ -135,8 +135,26 @@ export function buildFramingLayoutArtifactPaths(
   };
 }
 
+export function buildSheathingLayoutArtifactPaths(
+  project: Pick<Cut2KitProject, "settings">,
+  sourcePdfPath: string,
+) {
+  const artifacts = buildWallLayoutArtifactPaths(project, sourcePdfPath);
+  return {
+    stem: artifacts.stem,
+    relativeDir: artifacts.sheathingRelativeDir,
+    jsonPath: artifacts.sheathingJsonPath,
+    pdfPath: artifacts.sheathingPdfPath,
+    validationReportJsonPath: artifacts.validationReportJsonPath,
+  };
+}
+
 export function buildFramingLayoutThreadTitle(sourcePdfPath: string): string {
   return `Framing layout · ${fileStem(sourcePdfPath)}`;
+}
+
+export function buildWallPackageThreadTitle(sourcePdfPath: string): string {
+  return `Wall package · ${fileStem(sourcePdfPath)}`;
 }
 
 export function resolveCut2KitAutomationModelSelection(

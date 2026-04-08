@@ -836,6 +836,39 @@ function makeSheathingDraft(geometry = makeGeometryDraft()) {
   };
 }
 
+function makeCompatibleSheathingDraft(geometry = makeGeometryDraft()) {
+  const strictDraft = makeSheathingDraft(geometry);
+  const draftWithoutFastening = { ...strictDraft };
+  delete (draftWithoutFastening as { fastening?: unknown }).fastening;
+  const sheets = [];
+
+  for (const sheet of strictDraft.sheets) {
+    const cutouts = [];
+    for (const cutout of sheet.cutouts) {
+      cutouts.push({
+        id: cutout.id,
+        openingId: cutout.sourceOpeningId,
+        left: cutout.left,
+        right: cutout.right,
+        bottom: cutout.bottom,
+        top: cutout.top,
+        width: cutout.width,
+        height: cutout.height,
+      });
+    }
+
+    sheets.push({
+      ...sheet,
+      cutouts,
+    });
+  }
+
+  return {
+    ...draftWithoutFastening,
+    sheets,
+  };
+}
+
 it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
   describe("inspectProject", () => {
     it.effect("loads a valid Cut2Kit sample project and derives manifests", () =>
@@ -1039,6 +1072,34 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         const projectDir = yield* makeTempDir("cut2kit-framing-layout-project-");
         yield* copyFixtureProject(projectDir);
 
+        yield* Effect.tryPromise({
+          try: async () => {
+            const draft = makeFramingDraft();
+            await fsPromises.writeFile(
+              `${projectDir}/output/reports/framing-layouts/elevations-front-wall.framing-layout.json`,
+              JSON.stringify(
+                {
+                  ...draft,
+                  sourcePdfPath: "elevations/front-wall.pdf",
+                  geometry: {
+                    ...draft.geometry,
+                    sourcePdfPath: "elevations/front-wall.pdf",
+                  },
+                },
+                null,
+                2,
+              ),
+              "utf8",
+            );
+          },
+          catch: (error) =>
+            new FixtureCopyError({
+              message: `Failed to seed framing-layout JSON artifact: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            }),
+        });
+
         yield* fileSystem.remove(
           path.join(
             projectDir,
@@ -1107,6 +1168,195 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
     );
   });
 
+  describe("renderSheathingLayout", () => {
+    it.effect(
+      "renders a wall-package PDF and validation report from the sheathing JSON artifact",
+      () =>
+        Effect.gen(function* () {
+          const cut2kitProjects = yield* Cut2KitProjects;
+          const fileSystem = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const projectDir = yield* makeTempDir("cut2kit-sheathing-layout-project-");
+          yield* copyExampleSettings(projectDir);
+          yield* copyExampleElevation(projectDir);
+
+          yield* Effect.tryPromise({
+            try: async () => {
+              await fsPromises.mkdir(`${projectDir}/output/reports/framing-layouts`, {
+                recursive: true,
+              });
+              await fsPromises.mkdir(`${projectDir}/output/reports/sheathing-layouts`, {
+                recursive: true,
+              });
+              await fsPromises.writeFile(
+                `${projectDir}/output/reports/framing-layouts/examples-elevation3.framing-layout.json`,
+                JSON.stringify(makeFramingDraft(), null, 2),
+                "utf8",
+              );
+              await fsPromises.writeFile(
+                `${projectDir}/output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.json`,
+                JSON.stringify(makeSheathingDraft(), null, 2),
+                "utf8",
+              );
+            },
+            catch: (error) =>
+              new FixtureCopyError({
+                message: `Failed to seed sheathing-layout test artifacts: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              }),
+          });
+
+          const result = yield* cut2kitProjects.renderSheathingLayout({
+            cwd: projectDir,
+            relativePath:
+              "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.json",
+          });
+
+          expect(result.status).toBe("completed");
+          expect(result.pdfPath).toBe(
+            "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.pdf",
+          );
+          expect(result.validationReportJsonPath).toBe(
+            "output/reports/wall-layouts/examples-elevation3.validation-report.json",
+          );
+          expect(result.project.files.some((file) => file.relativePath === result.pdfPath)).toBe(
+            true,
+          );
+
+          const renderedPdf = yield* fileSystem.readFile(path.join(projectDir, result.pdfPath));
+          const validationReport = yield* fileSystem.readFileString(
+            path.join(projectDir, result.validationReportJsonPath),
+          );
+          expect(renderedPdf.byteLength).toBeGreaterThan(1000);
+          expect(validationReport).toContain('"readyForPackaging": true');
+        }),
+    );
+
+    it.effect(
+      "writes the validation report and blocks PDF rendering when deterministic checks fail",
+      () =>
+        Effect.gen(function* () {
+          const cut2kitProjects = yield* Cut2KitProjects;
+          const fileSystem = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const projectDir = yield* makeTempDir("cut2kit-sheathing-layout-blocked-");
+          yield* copyExampleSettings(projectDir);
+          yield* copyExampleElevation(projectDir);
+
+          const invalidSheathingDraft = {
+            ...makeSheathingDraft(),
+            sheets: makeSheathingDraft().sheets.map((sheet, index) =>
+              index === 0
+                ? {
+                    ...sheet,
+                    cutouts: [
+                      {
+                        ...sheet.cutouts[0]!,
+                        right: 60,
+                      },
+                    ],
+                  }
+                : sheet,
+            ),
+          };
+
+          yield* Effect.tryPromise({
+            try: async () => {
+              await fsPromises.mkdir(`${projectDir}/output/reports/framing-layouts`, {
+                recursive: true,
+              });
+              await fsPromises.mkdir(`${projectDir}/output/reports/sheathing-layouts`, {
+                recursive: true,
+              });
+              await fsPromises.writeFile(
+                `${projectDir}/output/reports/framing-layouts/examples-elevation3.framing-layout.json`,
+                JSON.stringify(makeFramingDraft(), null, 2),
+                "utf8",
+              );
+              await fsPromises.writeFile(
+                `${projectDir}/output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.json`,
+                JSON.stringify(invalidSheathingDraft, null, 2),
+                "utf8",
+              );
+            },
+            catch: (error) =>
+              new FixtureCopyError({
+                message: `Failed to seed blocked sheathing-layout artifacts: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              }),
+          });
+
+          const result = yield* cut2kitProjects.renderSheathingLayout({
+            cwd: projectDir,
+            relativePath:
+              "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.json",
+          });
+
+          expect(result.status).toBe("validation_blocked");
+          expect(result.writtenPaths).toContain(result.validationReportJsonPath);
+          expect(result.writtenPaths).not.toContain(result.pdfPath);
+
+          const validationReport = yield* fileSystem.readFileString(
+            path.join(projectDir, result.validationReportJsonPath),
+          );
+          expect(validationReport).toContain('"readyForPackaging": false');
+        }),
+    );
+
+    it.effect(
+      "accepts agent-authored sheathing JSON that aliases cutout openingId to sourceOpeningId",
+      () =>
+        Effect.gen(function* () {
+          const cut2kitProjects = yield* Cut2KitProjects;
+          const fileSystem = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const projectDir = yield* makeTempDir("cut2kit-sheathing-layout-compatible-");
+          yield* copyExampleSettings(projectDir);
+          yield* copyExampleElevation(projectDir);
+
+          yield* Effect.tryPromise({
+            try: async () => {
+              await fsPromises.mkdir(`${projectDir}/output/reports/framing-layouts`, {
+                recursive: true,
+              });
+              await fsPromises.mkdir(`${projectDir}/output/reports/sheathing-layouts`, {
+                recursive: true,
+              });
+              await fsPromises.writeFile(
+                `${projectDir}/output/reports/framing-layouts/examples-elevation3.framing-layout.json`,
+                JSON.stringify(makeFramingDraft(), null, 2),
+                "utf8",
+              );
+              await fsPromises.writeFile(
+                `${projectDir}/output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.json`,
+                JSON.stringify(makeCompatibleSheathingDraft(), null, 2),
+                "utf8",
+              );
+            },
+            catch: (error) =>
+              new FixtureCopyError({
+                message: `Failed to seed compatible sheathing-layout artifacts: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              }),
+          });
+
+          const result = yield* cut2kitProjects.renderSheathingLayout({
+            cwd: projectDir,
+            relativePath:
+              "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.json",
+          });
+
+          expect(result.status).toBe("completed");
+
+          const renderedPdf = yield* fileSystem.readFile(path.join(projectDir, result.pdfPath));
+          expect(renderedPdf.byteLength).toBeGreaterThan(1000);
+        }),
+    );
+  });
+
   describe("compileFramingPrompt", () => {
     it.effect(
       "compiles the framing-thread prompt on the server from loaded templates and staged geometry",
@@ -1149,6 +1399,52 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
           expect(result.prompt).not.toContain(
             "Load and follow these prompt files before solving the wall layout:",
           );
+          expect(result.prompt).toContain('"sourcePdfPath": "examples/elevation3.pdf"');
+        }),
+    );
+  });
+
+  describe("compileSheathingPrompt", () => {
+    it.effect(
+      "compiles the wall-package prompt on the server from loaded templates and staged framing",
+      () =>
+        Effect.gen(function* () {
+          const cut2kitProjects = yield* Cut2KitProjects;
+          const projectDir = yield* makeTempDir("cut2kit-compile-sheathing-prompt-");
+          yield* copyExampleSettings(projectDir);
+          yield* copyExampleElevation(projectDir);
+
+          yield* Effect.tryPromise({
+            try: async () => {
+              await fsPromises.mkdir(`${projectDir}/output/reports/framing-layouts`, {
+                recursive: true,
+              });
+              await fsPromises.writeFile(
+                `${projectDir}/output/reports/framing-layouts/examples-elevation3.framing-layout.json`,
+                JSON.stringify(makeFramingDraft(), null, 2),
+                "utf8",
+              );
+            },
+            catch: (error) =>
+              new FixtureCopyError({
+                message: `Failed to seed staged framing artifact: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              }),
+          });
+
+          const result = yield* cut2kitProjects.compileSheathingPrompt({
+            cwd: projectDir,
+            sourcePdfPath: "examples/elevation3.pdf",
+          });
+
+          expect(result.framingJsonPath).toBe(
+            "output/reports/framing-layouts/examples-elevation3.framing-layout.json",
+          );
+          expect(result.sheathingJsonPath).toBe(
+            "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.json",
+          );
+          expect(result.prompt).toContain("You are the sheathing-planning agent for Cut2Kit.");
           expect(result.prompt).toContain('"sourcePdfPath": "examples/elevation3.pdf"');
         }),
     );

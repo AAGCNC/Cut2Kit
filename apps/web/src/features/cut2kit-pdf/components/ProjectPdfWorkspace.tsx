@@ -1,5 +1,8 @@
 import type { Cut2KitProject } from "@t3tools/contracts";
-import { buildFramingLayoutArtifactPaths } from "@t3tools/shared/cut2kit";
+import {
+  buildFramingLayoutArtifactPaths,
+  buildSheathingLayoutArtifactPaths,
+} from "@t3tools/shared/cut2kit";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -341,6 +344,197 @@ export function ProjectPdfWorkspace({
                   {generatedLayoutPdfPath ? "rendered" : "pending"}
                 </Badge>
                 {generatedLayoutJsonPath ? <Badge variant="outline">json ready</Badge> : null}
+              </>
+            }
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function SheathingPdfWorkspace({
+  project,
+  selectedSourcePdfPath,
+  onRenderSheathingLayoutPdf,
+  canRenderSheathingLayoutPdf,
+  isRenderingSheathingLayoutPdf,
+}: {
+  project: Cut2KitProject;
+  selectedSourcePdfPath: string | null;
+  onRenderSheathingLayoutPdf?: () => void;
+  canRenderSheathingLayoutPdf?: boolean;
+  isRenderingSheathingLayoutPdf?: boolean;
+}) {
+  const options = useMemo(
+    () => buildProjectPdfOptions(project).filter(isFramingWorkspacePdfOption),
+    [project],
+  );
+
+  const selectedOption = useMemo(
+    () => findProjectPdfOption(options, selectedSourcePdfPath),
+    [options, selectedSourcePdfPath],
+  );
+  const framingArtifacts = useMemo(
+    () =>
+      selectedSourcePdfPath
+        ? buildFramingLayoutArtifactPaths(project, selectedSourcePdfPath)
+        : null,
+    [project, selectedSourcePdfPath],
+  );
+  const sheathingArtifacts = useMemo(
+    () =>
+      selectedSourcePdfPath
+        ? buildSheathingLayoutArtifactPaths(project, selectedSourcePdfPath)
+        : null,
+    [project, selectedSourcePdfPath],
+  );
+  const framingLayoutPdfPath =
+    framingArtifacts &&
+    project.files.some(
+      (file) =>
+        file.kind === "file" &&
+        file.relativePath === framingArtifacts.pdfPath &&
+        file.classification === "pdf",
+    )
+      ? framingArtifacts.pdfPath
+      : null;
+  const framingLayoutJsonPath =
+    framingArtifacts &&
+    project.files.some(
+      (file) =>
+        file.kind === "file" &&
+        file.relativePath === framingArtifacts.jsonPath &&
+        file.classification === "json",
+    )
+      ? framingArtifacts.jsonPath
+      : null;
+  const sheathingLayoutPdfPath =
+    sheathingArtifacts &&
+    project.files.some(
+      (file) =>
+        file.kind === "file" &&
+        file.relativePath === sheathingArtifacts.pdfPath &&
+        file.classification === "pdf",
+    )
+      ? sheathingArtifacts.pdfPath
+      : null;
+  const sheathingLayoutJsonPath =
+    sheathingArtifacts &&
+    project.files.some(
+      (file) =>
+        file.kind === "file" &&
+        file.relativePath === sheathingArtifacts.jsonPath &&
+        file.classification === "json",
+    )
+      ? sheathingArtifacts.jsonPath
+      : null;
+
+  return (
+    <Card className="flex min-h-0 flex-1 overflow-hidden">
+      <CardHeader className="border-b border-border/70">
+        <CardTitle>Framing to Sheathing Workspace</CardTitle>
+        <CardDescription>
+          Review the generated framing-layout PDF on the left and render or inspect the
+          sheathing-layout PDF on the right once Cut2Kit has a sheathing-layout JSON artifact.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <Badge variant={selectedOption ? "secondary" : "outline"}>
+              {selectedOption?.relativePath ?? "No elevation selected"}
+            </Badge>
+            {selectedOption?.side ? <Badge variant="outline">{selectedOption.side}</Badge> : null}
+            <Badge variant={framingLayoutJsonPath ? "success" : "outline"}>
+              {framingLayoutJsonPath ? "framing json ready" : "framing json pending"}
+            </Badge>
+            <Badge variant={sheathingLayoutJsonPath ? "success" : "outline"}>
+              {sheathingLayoutJsonPath ? "sheathing json ready" : "sheathing json pending"}
+            </Badge>
+          </div>
+          <Badge variant="outline">shared elevation context</Badge>
+        </div>
+
+        <div className="grid min-h-0 flex-1 gap-4 p-4 xl:grid-cols-2">
+          <PdfPreviewPane
+            cwd={project.cwd}
+            title="Framing Layout PDF"
+            subtitle={
+              framingLayoutPdfPath ??
+              framingArtifacts?.pdfPath ??
+              "Generate a framing layout to populate this pane."
+            }
+            relativePath={framingLayoutPdfPath}
+            emptyTitle="No framing layout PDF yet"
+            emptyDescription={
+              framingArtifacts
+                ? framingLayoutJsonPath
+                  ? `Framing-layout JSON is ready. Render the framing PDF above to write ${framingArtifacts.pdfPath}.`
+                  : `Generate the framing layout first so Cut2Kit can write ${framingArtifacts.pdfPath}.`
+                : "Select an elevation PDF in the workspace above to determine the framing-layout output path."
+            }
+            loadingTitle="Loading framing-layout PDF"
+            loadingDescription={
+              framingLayoutPdfPath
+                ? `Decoding ${framingLayoutPdfPath} for inline review.`
+                : "Waiting for a generated framing-layout PDF."
+            }
+            errorTitle="Could not load framing-layout PDF"
+            badges={
+              <>
+                <Badge variant={framingLayoutPdfPath ? "success" : "outline"}>
+                  {framingLayoutPdfPath ? "rendered" : "pending"}
+                </Badge>
+                {framingLayoutJsonPath ? <Badge variant="outline">json ready</Badge> : null}
+              </>
+            }
+          />
+
+          <PdfPreviewPane
+            cwd={project.cwd}
+            title="Sheathing Layout PDF"
+            subtitle={
+              sheathingLayoutPdfPath ??
+              sheathingArtifacts?.pdfPath ??
+              "Generate a wall package to populate this pane."
+            }
+            relativePath={sheathingLayoutPdfPath}
+            emptyTitle="No sheathing layout PDF yet"
+            emptyDescription={
+              sheathingArtifacts
+                ? sheathingLayoutJsonPath
+                  ? `Sheathing-layout JSON is ready. Render the PDF to write ${sheathingArtifacts.pdfPath}.`
+                  : `When rendered, Cut2Kit writes the sheathing-layout PDF to ${sheathingArtifacts.pdfPath}.`
+                : "Select an elevation PDF in the workspace above to determine the sheathing-layout output path."
+            }
+            loadingTitle="Loading sheathing-layout PDF"
+            loadingDescription={
+              sheathingLayoutPdfPath
+                ? `Decoding ${sheathingLayoutPdfPath} for inline review.`
+                : "Waiting for a generated sheathing-layout PDF."
+            }
+            errorTitle="Could not load sheathing-layout PDF"
+            badges={
+              <>
+                {sheathingLayoutJsonPath ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onRenderSheathingLayoutPdf?.()}
+                    disabled={!canRenderSheathingLayoutPdf}
+                  >
+                    {isRenderingSheathingLayoutPdf
+                      ? "Rendering PDF..."
+                      : sheathingLayoutPdfPath
+                        ? "Regenerate PDF"
+                        : "Generate PDF"}
+                  </Button>
+                ) : null}
+                <Badge variant={sheathingLayoutPdfPath ? "success" : "outline"}>
+                  {sheathingLayoutPdfPath ? "rendered" : "pending"}
+                </Badge>
+                {sheathingLayoutJsonPath ? <Badge variant="outline">json ready</Badge> : null}
               </>
             }
           />

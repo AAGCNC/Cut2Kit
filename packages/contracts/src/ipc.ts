@@ -27,6 +27,8 @@ import type {
 import type {
   Cut2KitCompileFramingPromptInput,
   Cut2KitCompileFramingPromptResult,
+  Cut2KitCompileSheathingPromptInput,
+  Cut2KitCompileSheathingPromptResult,
   Cut2KitGenerateOutputsInput,
   Cut2KitGenerateOutputsResult,
   Cut2KitGenerateWallLayoutInput,
@@ -35,6 +37,8 @@ import type {
   Cut2KitProject,
   Cut2KitRenderFramingLayoutInput,
   Cut2KitRenderFramingLayoutResult,
+  Cut2KitRenderSheathingLayoutInput,
+  Cut2KitRenderSheathingLayoutResult,
 } from "./cut2kit";
 import type {
   ServerConfig,
@@ -156,6 +160,9 @@ export interface NativeApi {
   };
   cut2kit: {
     inspectProject: (input: Cut2KitInspectProjectInput) => Promise<Cut2KitProject>;
+    compileSheathingPrompt: (
+      input: Cut2KitCompileSheathingPromptInput,
+    ) => Promise<Cut2KitCompileSheathingPromptResult>;
     compileFramingPrompt: (
       input: Cut2KitCompileFramingPromptInput,
     ) => Promise<Cut2KitCompileFramingPromptResult>;
@@ -166,6 +173,9 @@ export interface NativeApi {
     renderFramingLayout: (
       input: Cut2KitRenderFramingLayoutInput,
     ) => Promise<Cut2KitRenderFramingLayoutResult>;
+    renderSheathingLayout: (
+      input: Cut2KitRenderSheathingLayoutInput,
+    ) => Promise<Cut2KitRenderSheathingLayoutResult>;
   };
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;

@@ -1170,6 +1170,20 @@ export const Cut2KitRenderFramingLayoutResult = Schema.Struct({
 });
 export type Cut2KitRenderFramingLayoutResult = typeof Cut2KitRenderFramingLayoutResult.Type;
 
+export const Cut2KitCompileSheathingPromptInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  sourcePdfPath: TrimmedNonEmptyString,
+});
+export type Cut2KitCompileSheathingPromptInput = typeof Cut2KitCompileSheathingPromptInput.Type;
+
+export const Cut2KitCompileSheathingPromptResult = Schema.Struct({
+  sourcePdfPath: TrimmedNonEmptyString,
+  prompt: TrimmedNonEmptyString,
+  framingJsonPath: TrimmedNonEmptyString,
+  sheathingJsonPath: TrimmedNonEmptyString,
+});
+export type Cut2KitCompileSheathingPromptResult = typeof Cut2KitCompileSheathingPromptResult.Type;
+
 export const Cut2KitCompileFramingPromptInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   sourcePdfPath: TrimmedNonEmptyString,
@@ -1183,6 +1197,29 @@ export const Cut2KitCompileFramingPromptResult = Schema.Struct({
   geometryLoaded: Schema.Boolean,
 });
 export type Cut2KitCompileFramingPromptResult = typeof Cut2KitCompileFramingPromptResult.Type;
+
+export const Cut2KitRenderSheathingLayoutStatus = Schema.Literals([
+  "completed",
+  "validation_blocked",
+]);
+export type Cut2KitRenderSheathingLayoutStatus = typeof Cut2KitRenderSheathingLayoutStatus.Type;
+
+export const Cut2KitRenderSheathingLayoutInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  relativePath: TrimmedNonEmptyString,
+});
+export type Cut2KitRenderSheathingLayoutInput = typeof Cut2KitRenderSheathingLayoutInput.Type;
+
+export const Cut2KitRenderSheathingLayoutResult = Schema.Struct({
+  status: Cut2KitRenderSheathingLayoutStatus,
+  statusMessage: Schema.NullOr(TrimmedNonEmptyString),
+  project: Cut2KitProject,
+  jsonPath: TrimmedNonEmptyString,
+  pdfPath: TrimmedNonEmptyString,
+  validationReportJsonPath: TrimmedNonEmptyString,
+  writtenPaths: Schema.Array(TrimmedNonEmptyString),
+});
+export type Cut2KitRenderSheathingLayoutResult = typeof Cut2KitRenderSheathingLayoutResult.Type;
 
 export class Cut2KitProjectError extends Schema.TaggedErrorClass<Cut2KitProjectError>()(
   "Cut2KitProjectError",

@@ -48,10 +48,12 @@ export function createWsNativeApi(): NativeApi {
     },
     cut2kit: {
       inspectProject: rpcClient.cut2kit.inspectProject,
+      compileSheathingPrompt: rpcClient.cut2kit.compileSheathingPrompt,
       compileFramingPrompt: rpcClient.cut2kit.compileFramingPrompt,
       generateOutputs: rpcClient.cut2kit.generateOutputs,
       generateWallLayout: rpcClient.cut2kit.generateWallLayout,
       renderFramingLayout: rpcClient.cut2kit.renderFramingLayout,
+      renderSheathingLayout: rpcClient.cut2kit.renderSheathingLayout,
     },
     shell: {
       openInEditor: (cwd, editor) => rpcClient.shell.openInEditor({ cwd, editor }),

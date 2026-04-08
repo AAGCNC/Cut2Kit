@@ -2,6 +2,8 @@ import {
   buildCut2KitAgentPrompt,
   buildFramingLayoutArtifactPaths,
   buildFramingLayoutThreadTitle,
+  buildSheathingLayoutArtifactPaths,
+  buildWallPackageThreadTitle,
   resolveCut2KitAutomationModelSelection,
   summarizeCut2KitProjectHealth,
 } from "@t3tools/shared/cut2kit";
@@ -16,7 +18,10 @@ import { useNavigate } from "@tanstack/react-router";
 import { BotIcon, CheckIcon, FolderIcon, HammerIcon, TriangleAlertIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { ProjectPdfWorkspace } from "../features/cut2kit-pdf/components/ProjectPdfWorkspace";
+import {
+  ProjectPdfWorkspace,
+  SheathingPdfWorkspace,
+} from "../features/cut2kit-pdf/components/ProjectPdfWorkspace";
 import { cut2kitPdfQueryKeys } from "../features/cut2kit-pdf/hooks/usePdfDocument";
 import {
   buildProjectPdfOptions,
@@ -35,8 +40,11 @@ import { useComposerDraftStore } from "../composerDraftStore";
 import { Cut2KitProjectExplorer } from "./sidebar/Cut2KitProjectExplorer";
 import { Cut2KitSettingsEditorDialog } from "./cut2kit-settings/Cut2KitSettingsEditorDialog";
 import {
+  canRenderLayoutPdfFromJson,
   canRenderFramingPdfFromJson,
+  didLayoutJsonBecomeReady,
   didFramingJsonBecomeReady,
+  shouldAutoRenderLayoutPdf,
   shouldAutoRenderFramingPdf,
 } from "./cut2kitFramingLayout.logic";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
@@ -95,21 +103,37 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   const queryClient = useQueryClient();
   const { handleNewThread } = useHandleNewThread();
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isGeneratingWallLayout, setIsGeneratingWallLayout] = useState(false);
+  const [isStartingWallPackageGeneration, setIsStartingWallPackageGeneration] = useState(false);
   const [isPreparingAgent, setIsPreparingAgent] = useState(false);
   const [isSettingsEditorOpen, setIsSettingsEditorOpen] = useState(false);
   const [selectedSourcePdfPath, setSelectedSourcePdfPath] = useState<string | null>(null);
   const [isStartingFramingGeneration, setIsStartingFramingGeneration] = useState(false);
   const [isRenderingFramingLayout, setIsRenderingFramingLayout] = useState(false);
+  const [isRenderingWallPackage, setIsRenderingWallPackage] = useState(false);
   const [activeFramingGeneration, setActiveFramingGeneration] = useState<{
     threadId: ThreadId;
     sourcePdfPath: string;
     jsonPath: string;
     pdfPath: string;
   } | null>(null);
+  const [activeWallPackageGeneration, setActiveWallPackageGeneration] = useState<{
+    threadId: ThreadId;
+    sourcePdfPath: string;
+    jsonPath: string;
+    pdfPath: string;
+  } | null>(null);
   const completedGenerationThreadIdsRef = useRef(new Set<ThreadId>());
+  const completedWallPackageThreadIdsRef = useRef(new Set<ThreadId>());
   const autoRenderedFramingJsonPathsRef = useRef(new Set<string>());
+  const autoRenderedWallPackageJsonPathsRef = useRef(new Set<string>());
   const previousSelectedFramingJsonRef = useRef<{
+    jsonPath: string | null;
+    jsonReady: boolean;
+  }>({
+    jsonPath: null,
+    jsonReady: false,
+  });
+  const previousSelectedWallPackageJsonRef = useRef<{
     jsonPath: string | null;
     jsonReady: boolean;
   }>({
@@ -167,6 +191,13 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         : null,
     [snapshot, selectedSourcePdfPath],
   );
+  const wallPackageArtifacts = useMemo(
+    () =>
+      snapshot && selectedSourcePdfPath
+        ? buildSheathingLayoutArtifactPaths(snapshot, selectedSourcePdfPath)
+        : null,
+    [snapshot, selectedSourcePdfPath],
+  );
   const framingPromptQuery = useQuery({
     queryKey: [
       "cut2kit",
@@ -197,6 +228,11 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       ? (store.threads.find((thread) => thread.id === activeFramingGeneration.threadId) ?? null)
       : null,
   );
+  const wallPackageGenerationThread = useStore((store) =>
+    activeWallPackageGeneration
+      ? (store.threads.find((thread) => thread.id === activeWallPackageGeneration.threadId) ?? null)
+      : null,
+  );
   const framingJsonReady = useMemo(
     () =>
       Boolean(
@@ -222,6 +258,32 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         ),
       ),
     [framingArtifacts, snapshot],
+  );
+  const wallPackageJsonReady = useMemo(
+    () =>
+      Boolean(
+        wallPackageArtifacts &&
+        snapshot?.files.some(
+          (file) =>
+            file.kind === "file" &&
+            file.relativePath === wallPackageArtifacts.jsonPath &&
+            file.classification === "json",
+        ),
+      ),
+    [wallPackageArtifacts, snapshot],
+  );
+  const wallPackagePdfReady = useMemo(
+    () =>
+      Boolean(
+        wallPackageArtifacts &&
+        snapshot?.files.some(
+          (file) =>
+            file.kind === "file" &&
+            file.relativePath === wallPackageArtifacts.pdfPath &&
+            file.classification === "pdf",
+        ),
+      ),
+    [wallPackageArtifacts, snapshot],
   );
   const activeFramingJsonReady = useMemo(
     () =>
@@ -249,7 +311,34 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       ),
     [activeFramingGeneration, snapshot],
   );
+  const activeWallPackageJsonReady = useMemo(
+    () =>
+      Boolean(
+        activeWallPackageGeneration &&
+        snapshot?.files.some(
+          (file) =>
+            file.kind === "file" &&
+            file.relativePath === activeWallPackageGeneration.jsonPath &&
+            file.classification === "json",
+        ),
+      ),
+    [activeWallPackageGeneration, snapshot],
+  );
+  const activeWallPackagePdfReady = useMemo(
+    () =>
+      Boolean(
+        activeWallPackageGeneration &&
+        snapshot?.files.some(
+          (file) =>
+            file.kind === "file" &&
+            file.relativePath === activeWallPackageGeneration.pdfPath &&
+            file.classification === "pdf",
+        ),
+      ),
+    [activeWallPackageGeneration, snapshot],
+  );
   const framingThreadStatus = framingGenerationThread?.session?.orchestrationStatus ?? null;
+  const wallPackageThreadStatus = wallPackageGenerationThread?.session?.orchestrationStatus ?? null;
   const canRenderSelectedFramingLayoutPdf = useMemo(
     () =>
       canRenderFramingPdfFromJson({
@@ -258,6 +347,15 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         isRenderingFramingLayout,
       }),
     [framingArtifacts?.jsonPath, framingJsonReady, isRenderingFramingLayout],
+  );
+  const canRenderSelectedWallPackagePdf = useMemo(
+    () =>
+      canRenderLayoutPdfFromJson({
+        layoutJsonPath: wallPackageArtifacts?.jsonPath ?? null,
+        layoutJsonReady: wallPackageJsonReady,
+        isRenderingLayout: isRenderingWallPackage,
+      }),
+    [isRenderingWallPackage, wallPackageArtifacts?.jsonPath, wallPackageJsonReady],
   );
 
   const handleGenerateOutputs = useCallback(async () => {
@@ -322,95 +420,172 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     [project, queryClient],
   );
 
-  const handleGenerateWallLayout = useCallback(async () => {
-    if (!project || !selectedSourcePdfPath) return;
-    const api = readNativeApi();
-    if (!api) return;
-    if (!snapshot?.settings) {
+  const renderWallPackageFromJson = useCallback(
+    async (relativePath: string, options?: { auto?: boolean }) => {
+      if (!project) return;
+      const api = readNativeApi();
+      if (!api) return;
+
+      setIsRenderingWallPackage(true);
+      try {
+        const result = await api.cut2kit.renderSheathingLayout({
+          cwd: project.cwd,
+          relativePath,
+        });
+        queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), result.project);
+        if (result.status === "completed") {
+          await queryClient.invalidateQueries({
+            queryKey: cut2kitPdfQueryKeys.document(project.cwd, result.pdfPath),
+          });
+          toastManager.add({
+            type: "success",
+            title: "Wall package PDF rendered",
+            description: options?.auto
+              ? `Detected ${result.jsonPath} and wrote ${result.pdfPath} automatically.`
+              : `Wrote ${result.pdfPath} from ${result.jsonPath}.`,
+          });
+        } else {
+          toastManager.add({
+            type: "error",
+            title: "Wall package validation blocked packaging",
+            description:
+              result.statusMessage ??
+              "Cut2Kit saved the validation report, but did not render the wall package PDF.",
+          });
+        }
+        return result;
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Could not render wall package PDF",
+          description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        });
+        throw error;
+      } finally {
+        setIsRenderingWallPackage(false);
+      }
+    },
+    [project, queryClient],
+  );
+
+  const handleGenerateWallPackage = useCallback(async () => {
+    if (
+      !project ||
+      !snapshot ||
+      !selectedSourcePdfPath ||
+      !wallPackageArtifacts ||
+      !framingArtifacts
+    ) {
+      return;
+    }
+
+    if (selectedElevationOption?.classification !== "elevation") {
       toastManager.add({
         type: "error",
-        title: "Cut2Kit settings are required",
+        title: "Select an elevation PDF first",
         description:
-          "Add a valid cut2kit.settings.json file to this project before running the wall workflow.",
+          "Wall package generation only runs from a source document classified as an elevation PDF.",
       });
       return;
     }
 
-    setIsGeneratingWallLayout(true);
+    const api = readNativeApi();
+    if (!api) return;
+    if (!snapshot.settings) {
+      toastManager.add({
+        type: "error",
+        title: "Cut2Kit settings are required",
+        description:
+          "Add a valid cut2kit.settings.json file to this project before starting wall package generation.",
+      });
+      return;
+    }
+    if (!framingJsonReady) {
+      toastManager.add({
+        type: "error",
+        title: "Framing layout JSON not found",
+        description:
+          "Generate the framing layout first. The wall package flow uses the framing JSON as its AI input.",
+      });
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+    const threadId = newThreadId();
+    const modelSelection =
+      automationModelSelection ??
+      resolveCut2KitAutomationModelSelection(snapshot, project.defaultModelSelection);
+
+    setIsStartingWallPackageGeneration(true);
     try {
-      const result = await api.cut2kit.generateWallLayout({
-        cwd: project.cwd,
+      const compiledPrompt = await api.cut2kit.compileSheathingPrompt({
+        cwd: snapshot.cwd,
         sourcePdfPath: selectedSourcePdfPath,
       });
-      queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), result.project);
 
-      if (result.status === "needs_confirmation") {
-        const confirmed = await api.dialogs.confirm(
-          `${result.statusMessage ?? "The extracted elevation geometry is ambiguous."}\n\nReview the extracted-elevation and validation-report artifacts, then choose OK to continue anyway or Cancel to stop.`,
-        );
-        if (!confirmed) {
-          toastManager.add({
-            type: "warning",
-            title: "Wall layout is waiting for confirmation",
-            description:
-              result.statusMessage ??
-              "Cut2Kit saved the extracted geometry and validation report and stopped before framing/sheathing generation.",
-          });
-          return;
-        }
+      await api.orchestration.dispatchCommand({
+        type: "thread.create",
+        commandId: newCommandId(),
+        threadId,
+        projectId: project.id,
+        title: buildWallPackageThreadTitle(selectedSourcePdfPath),
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      });
 
-        const confirmedResult = await api.cut2kit.generateWallLayout({
-          cwd: project.cwd,
-          sourcePdfPath: selectedSourcePdfPath,
-          confirmedAmbiguityProceeding: true,
-        });
-        queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), confirmedResult.project);
+      await api.orchestration.dispatchCommand({
+        type: "thread.turn.start",
+        commandId: newCommandId(),
+        threadId,
+        message: {
+          messageId: newMessageId(),
+          role: "user",
+          text: compiledPrompt.prompt,
+          attachments: [],
+        },
+        modelSelection,
+        titleSeed: buildWallPackageThreadTitle(selectedSourcePdfPath),
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdAt,
+      });
 
-        if (confirmedResult.status === "completed") {
-          toastManager.add({
-            type: "success",
-            title: "Wall layout package generated",
-            description: `${confirmedResult.writtenPaths.length} wall-layout artifacts written for ${selectedSourcePdfPath}.`,
-          });
-          return;
-        }
-
-        toastManager.add({
-          type: "error",
-          title: "Wall layout validation blocked packaging",
-          description:
-            confirmedResult.statusMessage ??
-            "Cut2Kit saved the staged JSON artifacts and validation report, but did not render the final PDFs.",
-        });
-        return;
-      }
-
-      if (result.status === "validation_blocked") {
-        toastManager.add({
-          type: "error",
-          title: "Wall layout validation blocked packaging",
-          description:
-            result.statusMessage ??
-            "Cut2Kit saved the staged JSON artifacts and validation report, but did not render the final PDFs.",
-        });
-        return;
-      }
-
+      completedWallPackageThreadIdsRef.current.delete(threadId);
+      autoRenderedWallPackageJsonPathsRef.current.delete(wallPackageArtifacts.jsonPath);
+      setActiveWallPackageGeneration({
+        threadId,
+        sourcePdfPath: selectedSourcePdfPath,
+        jsonPath: wallPackageArtifacts.jsonPath,
+        pdfPath: wallPackageArtifacts.pdfPath,
+      });
       toastManager.add({
         type: "success",
-        title: "Wall layout package generated",
-        description: `${result.writtenPaths.length} wall-layout artifacts written for ${selectedSourcePdfPath}.`,
+        title: "Wall package generation started",
+        description: `${PROVIDER_DISPLAY_NAMES[modelSelection.provider]} is generating ${wallPackageArtifacts.jsonPath} from ${framingArtifacts.jsonPath}.`,
       });
     } catch (error) {
       toastManager.add({
         type: "error",
-        title: "Could not generate wall layout package",
+        title: "Could not start wall package generation",
         description: error instanceof Error ? error.message : "An unexpected error occurred.",
       });
     } finally {
-      setIsGeneratingWallLayout(false);
+      setIsStartingWallPackageGeneration(false);
     }
-  }, [project, queryClient, selectedSourcePdfPath, snapshot?.settings]);
+  }, [
+    automationModelSelection,
+    framingArtifacts,
+    framingJsonReady,
+    project,
+    selectedElevationOption?.classification,
+    selectedSourcePdfPath,
+    snapshot,
+    wallPackageArtifacts,
+  ]);
 
   const handleOpenInEditor = useCallback(async () => {
     if (!project) return;
@@ -450,8 +625,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       toastManager.add({
         type: "success",
         title: "Cut to Kit Agent prepared",
-        description:
-          `Opened a supervised ${automationProviderLabel} thread with the current project snapshot and A2MC manufacturing-plan guidance. Review the prompt and send when ready.`,
+        description: `Opened a supervised ${automationProviderLabel} thread with the current project snapshot and A2MC manufacturing-plan guidance. Review the prompt and send when ready.`,
       });
     } catch (error) {
       toastManager.add({
@@ -462,7 +636,14 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     } finally {
       setIsPreparingAgent(false);
     }
-  }, [agentPrompt, automationModelSelection, automationProviderLabel, handleNewThread, project, snapshot]);
+  }, [
+    agentPrompt,
+    automationModelSelection,
+    automationProviderLabel,
+    handleNewThread,
+    project,
+    snapshot,
+  ]);
 
   const handleGenerateFramingLayout = useCallback(async () => {
     if (!project || !snapshot || !selectedSourcePdfPath || !framingArtifacts) {
@@ -591,8 +772,30 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     });
   }, [activeFramingGeneration, navigate]);
 
+  const handleOpenWallPackageThread = useCallback(async () => {
+    if (!activeWallPackageGeneration) return;
+    await navigate({
+      to: "/$threadId",
+      params: { threadId: activeWallPackageGeneration.threadId },
+    });
+  }, [activeWallPackageGeneration, navigate]);
+
+  const handleRenderSelectedWallPackagePdf = useCallback(async () => {
+    if (!project || !wallPackageArtifacts || !wallPackageJsonReady) {
+      toastManager.add({
+        type: "error",
+        title: "Sheathing layout JSON not found",
+        description:
+          "Generate or write the sheathing layout JSON first, then render the wall package PDF from that artifact.",
+      });
+      return;
+    }
+
+    await renderWallPackageFromJson(wallPackageArtifacts.jsonPath);
+  }, [project, renderWallPackageFromJson, wallPackageArtifacts, wallPackageJsonReady]);
+
   useEffect(() => {
-    if (!project || !selectedSourcePdfPath || framingPdfReady) {
+    if (!project || !activeFramingGeneration || activeFramingPdfReady) {
       return;
     }
     const intervalId = globalThis.setInterval(() => {
@@ -603,7 +806,21 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     return () => {
       globalThis.clearInterval(intervalId);
     };
-  }, [framingPdfReady, project, queryClient, selectedSourcePdfPath]);
+  }, [activeFramingGeneration, activeFramingPdfReady, project, queryClient]);
+
+  useEffect(() => {
+    if (!project || !activeWallPackageGeneration || activeWallPackagePdfReady) {
+      return;
+    }
+    const intervalId = globalThis.setInterval(() => {
+      void queryClient.invalidateQueries({
+        queryKey: cut2kitQueryKeys.project(project.cwd),
+      });
+    }, 3_000);
+    return () => {
+      globalThis.clearInterval(intervalId);
+    };
+  }, [activeWallPackageGeneration, activeWallPackagePdfReady, project, queryClient]);
 
   useEffect(() => {
     const nextJsonPath = framingArtifacts?.jsonPath ?? null;
@@ -656,6 +873,56 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   ]);
 
   useEffect(() => {
+    const nextJsonPath = wallPackageArtifacts?.jsonPath ?? null;
+    const previousJsonState = previousSelectedWallPackageJsonRef.current;
+    const jsonJustBecameReady = didLayoutJsonBecomeReady({
+      previousJsonPath: previousJsonState.jsonPath,
+      previousJsonReady: previousJsonState.jsonReady,
+      nextJsonPath,
+      nextJsonReady: wallPackageJsonReady,
+    });
+    previousSelectedWallPackageJsonRef.current = {
+      jsonPath: nextJsonPath,
+      jsonReady: wallPackageJsonReady,
+    };
+
+    if (
+      !project ||
+      !shouldAutoRenderLayoutPdf({
+        layoutJsonPath: nextJsonPath,
+        layoutJsonReady: wallPackageJsonReady,
+        layoutPdfReady: wallPackagePdfReady,
+        isRenderingLayout: isRenderingWallPackage,
+        hasActiveGeneration: activeWallPackageGeneration !== null,
+        jsonJustBecameReady,
+        hasAlreadyAttemptedAutoRender:
+          nextJsonPath !== null && autoRenderedWallPackageJsonPathsRef.current.has(nextJsonPath),
+      })
+    ) {
+      return;
+    }
+
+    if (nextJsonPath === null) {
+      return;
+    }
+
+    autoRenderedWallPackageJsonPathsRef.current.add(nextJsonPath);
+    void renderWallPackageFromJson(nextJsonPath, {
+      auto: true,
+    }).catch(() => {
+      autoRenderedWallPackageJsonPathsRef.current.delete(nextJsonPath);
+    });
+  }, [
+    activeWallPackageGeneration,
+    isRenderingWallPackage,
+    project,
+    renderWallPackageFromJson,
+    wallPackageArtifacts?.jsonPath,
+    wallPackageJsonReady,
+    wallPackagePdfReady,
+  ]);
+
+  useEffect(() => {
     if (!activeFramingGeneration || !isTerminalGenerationStatus(framingThreadStatus)) {
       return;
     }
@@ -684,8 +951,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       toastManager.add({
         type: "error",
         title: "Framing layout JSON not found",
-        description:
-          `${automationProviderLabel} finished the framing-layout thread without writing the expected JSON artifact.`,
+        description: `${automationProviderLabel} finished the framing-layout thread without writing the expected JSON artifact.`,
       });
       setActiveFramingGeneration(null);
       return;
@@ -703,6 +969,62 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     activeFramingPdfReady,
     framingThreadStatus,
     isRenderingFramingLayout,
+  ]);
+
+  useEffect(() => {
+    if (!activeWallPackageGeneration || !isTerminalGenerationStatus(wallPackageThreadStatus)) {
+      return;
+    }
+    if (completedWallPackageThreadIdsRef.current.has(activeWallPackageGeneration.threadId)) {
+      return;
+    }
+    if (!activeWallPackageJsonReady && wallPackageThreadStatus === "error") {
+      completedWallPackageThreadIdsRef.current.add(activeWallPackageGeneration.threadId);
+      toastManager.add({
+        type: "error",
+        title: "Wall package generation failed",
+        description:
+          wallPackageGenerationThread?.session?.lastError ??
+          `${automationProviderLabel} finished without producing the wall package JSON artifact.`,
+      });
+      setActiveWallPackageGeneration(null);
+      return;
+    }
+    if (
+      !activeWallPackageJsonReady &&
+      (wallPackageThreadStatus === "ready" ||
+        wallPackageThreadStatus === "stopped" ||
+        wallPackageThreadStatus === "interrupted")
+    ) {
+      completedWallPackageThreadIdsRef.current.add(activeWallPackageGeneration.threadId);
+      toastManager.add({
+        type: "error",
+        title: "Wall package JSON not found",
+        description: `${automationProviderLabel} finished the wall-package thread without writing the expected JSON artifact.`,
+      });
+      setActiveWallPackageGeneration(null);
+      return;
+    }
+    if (isRenderingWallPackage) {
+      return;
+    }
+    if (!activeWallPackagePdfReady) {
+      if (autoRenderedWallPackageJsonPathsRef.current.has(activeWallPackageGeneration.jsonPath)) {
+        completedWallPackageThreadIdsRef.current.add(activeWallPackageGeneration.threadId);
+        setActiveWallPackageGeneration(null);
+      }
+      return;
+    }
+    completedWallPackageThreadIdsRef.current.add(activeWallPackageGeneration.threadId);
+    setActiveWallPackageGeneration(null);
+  }, [
+    activeWallPackageGeneration,
+    activeWallPackageJsonReady,
+    activeWallPackagePdfReady,
+    automationProviderLabel,
+    isRenderingWallPackage,
+    wallPackageGenerationThread?.session?.lastError,
+    wallPackageThreadStatus,
   ]);
 
   if (!project) {
@@ -758,15 +1080,18 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
               Open Folder
             </Button>
             <Button
-              onClick={() => void handleGenerateWallLayout()}
+              onClick={() => void handleGenerateWallPackage()}
               disabled={
-                isGeneratingWallLayout ||
+                isStartingWallPackageGeneration ||
                 !selectedSourcePdfPath ||
-                selectedElevationOption?.classification !== "elevation"
+                selectedElevationOption?.classification !== "elevation" ||
+                !framingJsonReady
               }
             >
               <HammerIcon className="size-4" />
-              {isGeneratingWallLayout ? "Generating Wall Package..." : "Generate Wall Package"}
+              {isStartingWallPackageGeneration
+                ? "Starting Wall Package Run..."
+                : "Generate Wall Package"}
             </Button>
             <Button
               variant="outline"
@@ -800,8 +1125,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       </header>
 
       <div className="mx-auto flex h-full w-full max-w-[1600px] min-h-0 flex-col gap-6 px-6 py-6 xl:flex-row">
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
-          <div className="flex min-h-0 flex-[2_1_0%]">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto xl:pr-2">
+          <div className="flex min-h-[720px] shrink-0">
             <ProjectPdfWorkspace
               project={snapshot}
               selectedSourcePdfPath={selectedSourcePdfPath}
@@ -812,15 +1137,25 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
             />
           </div>
 
-          <Card className="flex min-h-0 flex-[1_1_0%] flex-col overflow-hidden">
+          <div className="flex min-h-[720px] shrink-0">
+            <SheathingPdfWorkspace
+              project={snapshot}
+              selectedSourcePdfPath={selectedSourcePdfPath}
+              onRenderSheathingLayoutPdf={() => void handleRenderSelectedWallPackagePdf()}
+              canRenderSheathingLayoutPdf={canRenderSelectedWallPackagePdf}
+              isRenderingSheathingLayoutPdf={isRenderingWallPackage}
+            />
+          </div>
+
+          <Card className="flex min-h-[420px] shrink-0 flex-col overflow-hidden">
             <CardHeader className="border-b border-border/70">
               <CardTitle>AI-First Wall Automation</CardTitle>
               <CardDescription>
-                The primary wall workflow runs geometry extraction, framing generation, and OSB
-                generation through {automationRuntimeLabel}, then validates and renders the PDFs
-                deterministically. The framing-only thread below remains available as an advanced
-                prompt/debug path, and its prompt preview is compiled server-side from the
-                configured templates and current wall artifacts.
+                Framing and wall-package generation both run through {automationRuntimeLabel} as
+                separate AI-first threads. Framing produces the structured framing JSON first, and
+                the wall-package flow then uses that framing artifact as the AI input for
+                sheathing/package generation before Cut2Kit validates and renders the PDF
+                deterministically.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -912,17 +1247,18 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
 
                 <div className="flex flex-col gap-2">
                   <Button
-                    onClick={() => void handleGenerateWallLayout()}
+                    onClick={() => void handleGenerateWallPackage()}
                     disabled={
-                      isGeneratingWallLayout ||
+                      isStartingWallPackageGeneration ||
                       !hasWallWorkflowSettings ||
                       !selectedSourcePdfPath ||
-                      selectedElevationOption?.classification !== "elevation"
+                      selectedElevationOption?.classification !== "elevation" ||
+                      !framingJsonReady
                     }
                   >
                     <HammerIcon className="size-4" />
-                    {isGeneratingWallLayout
-                      ? "Generating Wall Package..."
+                    {isStartingWallPackageGeneration
+                      ? "Starting Wall Package Run..."
                       : "Generate Wall Package"}
                   </Button>
                   <Button
@@ -946,6 +1282,14 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                   >
                     <BotIcon className="size-4" />
                     Open Framing Thread
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleOpenWallPackageThread()}
+                    disabled={!activeWallPackageGeneration}
+                  >
+                    <BotIcon className="size-4" />
+                    Open Wall Package Thread
                   </Button>
                   <Button
                     variant="outline"
@@ -1037,6 +1381,71 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                       {framingArtifacts?.pdfPath ?? "Pending source selection"}
                     </p>
                   </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Wall Package Status</CardTitle>
+                  <CardDescription>
+                    Framing input, expected sheathing output paths, and the current AI-run status
+                    for the wall-package workflow.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Framing JSON input</p>
+                    <p className="mt-1 break-all text-sm text-foreground">
+                      {framingArtifacts?.jsonPath ?? "Pending source selection"}
+                    </p>
+                    <div className="mt-2">
+                      <Badge variant={framingJsonReady ? "success" : "outline"}>
+                        {framingJsonReady ? "ready" : "missing"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Structured JSON</p>
+                    <p className="mt-1 break-all text-sm text-foreground">
+                      {wallPackageArtifacts?.jsonPath ?? "Pending source selection"}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Rendered PDF</p>
+                    <p className="mt-1 break-all text-sm text-foreground">
+                      {wallPackageArtifacts?.pdfPath ?? "Pending source selection"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={wallPackageJsonReady ? "success" : "outline"}>
+                      {wallPackageJsonReady ? "JSON ready" : "JSON pending"}
+                    </Badge>
+                    <Badge variant={wallPackagePdfReady ? "success" : "outline"}>
+                      {wallPackagePdfReady
+                        ? "PDF ready"
+                        : isRenderingWallPackage
+                          ? "Rendering PDF"
+                          : "PDF pending"}
+                    </Badge>
+                    {wallPackageThreadStatus ? (
+                      <Badge variant="outline">{wallPackageThreadStatus}</Badge>
+                    ) : null}
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (wallPackageArtifacts?.jsonPath) {
+                        void renderWallPackageFromJson(wallPackageArtifacts.jsonPath);
+                      }
+                    }}
+                    disabled={!canRenderSelectedWallPackagePdf}
+                  >
+                    {isRenderingWallPackage
+                      ? "Rendering Wall Package..."
+                      : wallPackagePdfReady
+                        ? "Regenerate Wall Package PDF"
+                        : "Render Wall Package PDF"}
+                  </Button>
                 </CardContent>
               </Card>
 

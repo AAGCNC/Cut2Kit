@@ -55,6 +55,8 @@ import {
 import {
   Cut2KitCompileFramingPromptInput,
   Cut2KitCompileFramingPromptResult,
+  Cut2KitCompileSheathingPromptInput,
+  Cut2KitCompileSheathingPromptResult,
   Cut2KitGenerateOutputsInput,
   Cut2KitGenerateOutputsResult,
   Cut2KitGenerateWallLayoutInput,
@@ -64,6 +66,8 @@ import {
   Cut2KitProjectError,
   Cut2KitRenderFramingLayoutInput,
   Cut2KitRenderFramingLayoutResult,
+  Cut2KitRenderSheathingLayoutInput,
+  Cut2KitRenderSheathingLayoutResult,
 } from "./cut2kit";
 import {
   TerminalClearInput,
@@ -95,10 +99,12 @@ export const WS_METHODS = {
   projectsReadFile: "projects.readFile",
   projectsWriteFile: "projects.writeFile",
   cut2kitInspectProject: "cut2kit.inspectProject",
+  cut2kitCompileSheathingPrompt: "cut2kit.compileSheathingPrompt",
   cut2kitCompileFramingPrompt: "cut2kit.compileFramingPrompt",
   cut2kitGenerateOutputs: "cut2kit.generateOutputs",
   cut2kitGenerateWallLayout: "cut2kit.generateWallLayout",
   cut2kitRenderFramingLayout: "cut2kit.renderFramingLayout",
+  cut2kitRenderSheathingLayout: "cut2kit.renderSheathingLayout",
 
   // Shell methods
   shellOpenInEditor: "shell.openInEditor",
@@ -191,6 +197,15 @@ export const WsCut2KitInspectProjectRpc = Rpc.make(WS_METHODS.cut2kitInspectProj
   error: Cut2KitProjectError,
 });
 
+export const WsCut2KitCompileSheathingPromptRpc = Rpc.make(
+  WS_METHODS.cut2kitCompileSheathingPrompt,
+  {
+    payload: Cut2KitCompileSheathingPromptInput,
+    success: Cut2KitCompileSheathingPromptResult,
+    error: Cut2KitProjectError,
+  },
+);
+
 export const WsCut2KitCompileFramingPromptRpc = Rpc.make(WS_METHODS.cut2kitCompileFramingPrompt, {
   payload: Cut2KitCompileFramingPromptInput,
   success: Cut2KitCompileFramingPromptResult,
@@ -212,6 +227,12 @@ export const WsCut2KitGenerateWallLayoutRpc = Rpc.make(WS_METHODS.cut2kitGenerat
 export const WsCut2KitRenderFramingLayoutRpc = Rpc.make(WS_METHODS.cut2kitRenderFramingLayout, {
   payload: Cut2KitRenderFramingLayoutInput,
   success: Cut2KitRenderFramingLayoutResult,
+  error: Cut2KitProjectError,
+});
+
+export const WsCut2KitRenderSheathingLayoutRpc = Rpc.make(WS_METHODS.cut2kitRenderSheathingLayout, {
+  payload: Cut2KitRenderSheathingLayoutInput,
+  success: Cut2KitRenderSheathingLayoutResult,
   error: Cut2KitProjectError,
 });
 
@@ -389,10 +410,12 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsReadFileRpc,
   WsProjectsWriteFileRpc,
   WsCut2KitInspectProjectRpc,
+  WsCut2KitCompileSheathingPromptRpc,
   WsCut2KitCompileFramingPromptRpc,
   WsCut2KitGenerateOutputsRpc,
   WsCut2KitGenerateWallLayoutRpc,
   WsCut2KitRenderFramingLayoutRpc,
+  WsCut2KitRenderSheathingLayoutRpc,
   WsShellOpenInEditorRpc,
   WsGitStatusRpc,
   WsGitPullRpc,

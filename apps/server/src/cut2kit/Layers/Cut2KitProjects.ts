@@ -8,6 +8,7 @@ import { Effect, Layer, Schema } from "effect";
 
 import {
   type Cut2KitCompileFramingPromptResult,
+  type Cut2KitCompileSheathingPromptResult,
   type Cut2KitApplication,
   type Cut2KitFileClassification,
   type Cut2KitFileRole,
@@ -24,6 +25,7 @@ import {
   type Cut2KitQueueMode,
   type Cut2KitQueueingSettings,
   type Cut2KitRenderFramingLayoutResult,
+  type Cut2KitRenderSheathingLayoutResult,
   type Cut2KitSheathingLayout,
   type Cut2KitSettings,
   type Cut2KitSourceDocument,
@@ -77,6 +79,7 @@ const IGNORED_DIRECTORY_NAMES = new Set([".git", "node_modules", ".turbo", "dist
 const SettingsJson = fromLenientJson(Cut2KitSettingsSchema);
 const ManufacturingPlanJson = fromLenientJson(Cut2KitManufacturingPlanSchema);
 const FramingLayoutJson = fromLenientJson(Cut2KitFramingLayoutSchema);
+const SheathingLayoutJson = fromLenientJson(Cut2KitSheathingLayoutSchema);
 const WallGeometryJson = fromLenientJson(Cut2KitWallGeometrySchema);
 const execFileAsync = promisify(execFile);
 
@@ -1173,6 +1176,68 @@ function normalizeCompatibleFramingLayout(value: unknown): Cut2KitFramingLayoutV
   return decoded._tag === "Success" ? decoded.value : null;
 }
 
+function normalizeCompatibleSheathingLayout(
+  value: unknown,
+  settings: Cut2KitWallWorkflowSettings | null = null,
+): Cut2KitSheathingLayout | null {
+  const record = asRecord(value);
+  if (!record) {
+    return null;
+  }
+
+  const sheets = Array.isArray(record.sheets)
+    ? record.sheets.map((sheet) => {
+        const sheetRecord = asRecord(sheet);
+        if (!sheetRecord) {
+          return sheet;
+        }
+
+        const cutouts = Array.isArray(sheetRecord.cutouts)
+          ? sheetRecord.cutouts.map((cutout) => {
+              const cutoutRecord = asRecord(cutout);
+              if (!cutoutRecord) {
+                return cutout;
+              }
+
+              const sourceOpeningId =
+                asString(cutoutRecord.sourceOpeningId) ?? asString(cutoutRecord.openingId);
+              return sourceOpeningId === null
+                ? cutoutRecord
+                : {
+                    ...cutoutRecord,
+                    sourceOpeningId,
+                  };
+            })
+          : sheetRecord.cutouts;
+
+        return {
+          ...sheetRecord,
+          cutouts,
+        };
+      })
+    : record.sheets;
+
+  const normalized = {
+    ...record,
+    sheets,
+    fastening:
+      asRecord(record.fastening) ??
+      (settings
+        ? {
+            supportedEdgeSpacing: settings.fastening.supportedEdgeSpacing,
+            fieldSpacing: settings.fastening.fieldSpacing,
+            edgeDistance: settings.fastening.edgeDistance,
+            typicalReferenceOnly: settings.fastening.typicalReferenceOnly,
+            noteLines: settings.fastening.noteLines,
+            disclaimerText: settings.fastening.disclaimerText,
+          }
+        : undefined),
+  };
+
+  const decoded = Schema.decodeUnknownExit(Cut2KitSheathingLayoutSchema)(normalized);
+  return decoded._tag === "Success" ? decoded.value : null;
+}
+
 async function readFramingLayoutFile(
   cwd: string,
   relativePath: string,
@@ -1255,6 +1320,58 @@ async function readWallGeometryFile(
         makeIssue(
           "error",
           "wall_geometry.read_failed",
+          error instanceof Error ? error.message : String(error),
+          relativePath,
+        ),
+      ],
+    };
+  }
+}
+
+async function readSheathingLayoutFile(
+  cwd: string,
+  relativePath: string,
+  settings: Cut2KitWallWorkflowSettings | null = null,
+): Promise<{ sheathingLayout: Cut2KitSheathingLayout | null; issues: Cut2KitIssue[] }> {
+  try {
+    const raw = await fsPromises.readFile(nodePath.join(cwd, relativePath), "utf8");
+    const decoded = Schema.decodeUnknownExit(SheathingLayoutJson)(raw);
+    if (decoded._tag === "Failure") {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        const normalized = normalizeCompatibleSheathingLayout(parsed, settings);
+        if (normalized !== null) {
+          return {
+            sheathingLayout: normalized,
+            issues: [],
+          };
+        }
+      } catch {
+        // Fall through to the original schema error below.
+      }
+      return {
+        sheathingLayout: null,
+        issues: [
+          makeIssue(
+            "error",
+            "sheathing_layout.invalid",
+            formatSchemaError(decoded.cause),
+            relativePath,
+          ),
+        ],
+      };
+    }
+    return {
+      sheathingLayout: decoded.value,
+      issues: [],
+    };
+  } catch (error) {
+    return {
+      sheathingLayout: null,
+      issues: [
+        makeIssue(
+          "error",
+          "sheathing_layout.read_failed",
           error instanceof Error ? error.message : String(error),
           relativePath,
         ),
@@ -2424,6 +2541,91 @@ export const makeCut2KitProjects = Effect.gen(function* () {
     };
   });
 
+  const compileSheathingPrompt: Cut2KitProjectsShape["compileSheathingPrompt"] = Effect.fn(
+    "Cut2KitProjects.compileSheathingPrompt",
+  )(function* (input): Effect.fn.Return<Cut2KitCompileSheathingPromptResult, Cut2KitProjectsError> {
+    const project = yield* inspectProject({ cwd: input.cwd });
+    const settings = project.settings;
+    if (!isWallWorkflowSettings(settings)) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "compileSheathingPrompt.validateSettings",
+        detail:
+          "Cut2Kit settings must be valid wall-workflow settings before compiling a wall-package prompt.",
+      });
+    }
+
+    const sourceDocument = project.sourceDocuments.find(
+      (document) => document.sourcePath === input.sourcePdfPath,
+    );
+    if (!sourceDocument || sourceDocument.classification !== "elevation") {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "compileSheathingPrompt.validateSourcePdf",
+        detail: "Select a source document classified as an elevation PDF.",
+      });
+    }
+
+    const artifactPaths = buildWallLayoutArtifactPaths(project, input.sourcePdfPath);
+    const { promptTemplateBundle } = yield* loadPromptTemplateBundleForProject(project);
+    const framingLayoutResult = yield* Effect.tryPromise({
+      try: () => readFramingLayoutFile(project.cwd, artifactPaths.framingJsonPath),
+      catch: (error) =>
+        new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "compileSheathingPrompt.readFramingArtifact",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+    });
+
+    if (framingLayoutResult.issues.length > 0 || framingLayoutResult.framingLayout === null) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "compileSheathingPrompt.decodeFramingArtifact",
+        detail:
+          framingLayoutResult.issues[0]?.message ??
+          "Generate the framing layout JSON before starting the wall package flow.",
+      });
+    }
+
+    const normalizedFramingLayout = normalizeCompatibleFramingLayout(
+      framingLayoutResult.framingLayout,
+    );
+    if (normalizedFramingLayout === null) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "compileSheathingPrompt.normalizeFramingArtifact",
+        detail:
+          "The framing layout JSON exists but could not be normalized for wall-package generation.",
+      });
+    }
+
+    const framingLayout = normalizeFramingLayout({
+      layout: normalizedFramingLayout,
+      geometry: normalizedFramingLayout.geometry,
+      settings,
+      sourcePdfPath: input.sourcePdfPath,
+      settingsFilePath: project.settingsFilePath ?? "cut2kit.settings.json",
+    });
+
+    return {
+      sourcePdfPath: input.sourcePdfPath,
+      prompt: buildCut2KitSheathingLayoutPrompt({
+        project,
+        sourcePdfPath: input.sourcePdfPath,
+        geometry: framingLayout.geometry,
+        framingLayout,
+        promptTemplates: {
+          systemPrompt: promptTemplateBundle.sheathingSystem,
+          userPrompt: promptTemplateBundle.sheathingUser,
+          validationChecklist: promptTemplateBundle.validationChecklist,
+        },
+      }),
+      framingJsonPath: artifactPaths.framingJsonPath,
+      sheathingJsonPath: artifactPaths.sheathingJsonPath,
+    };
+  });
+
   const generateOutputs: Cut2KitProjectsShape["generateOutputs"] = Effect.fn(
     "Cut2KitProjects.generateOutputs",
   )(function* (input): Effect.fn.Return<Cut2KitGenerateOutputsResult, Cut2KitProjectsError> {
@@ -2935,12 +3137,167 @@ export const makeCut2KitProjects = Effect.gen(function* () {
     };
   });
 
+  const renderSheathingLayout: Cut2KitProjectsShape["renderSheathingLayout"] = Effect.fn(
+    "Cut2KitProjects.renderSheathingLayout",
+  )(function* (input): Effect.fn.Return<Cut2KitRenderSheathingLayoutResult, Cut2KitProjectsError> {
+    const project = yield* inspectProject({ cwd: input.cwd });
+    const settings = project.settings;
+    if (!isWallWorkflowSettings(settings)) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "renderSheathingLayout.validateSettings",
+        detail:
+          "Cut2Kit settings must be valid wall-workflow settings before rendering a wall package PDF.",
+      });
+    }
+
+    const sheathingLayoutResult = yield* Effect.tryPromise({
+      try: () => readSheathingLayoutFile(project.cwd, input.relativePath, settings),
+      catch: (error) =>
+        new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "renderSheathingLayout.readSheathingLayoutFile",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+    });
+
+    if (sheathingLayoutResult.issues.length > 0 || sheathingLayoutResult.sheathingLayout === null) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "renderSheathingLayout.validateSheathingLayout",
+        detail:
+          sheathingLayoutResult.issues[0]?.message ??
+          "Sheathing layout JSON could not be validated.",
+      });
+    }
+
+    const sourcePdfPath = sheathingLayoutResult.sheathingLayout.sourcePdfPath;
+    const artifactPaths = buildWallLayoutArtifactPaths(project, sourcePdfPath);
+    const framingLayoutResult = yield* Effect.tryPromise({
+      try: () => readFramingLayoutFile(project.cwd, artifactPaths.framingJsonPath),
+      catch: (error) =>
+        new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "renderSheathingLayout.readFramingLayoutFile",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+    });
+
+    if (framingLayoutResult.issues.length > 0 || framingLayoutResult.framingLayout === null) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "renderSheathingLayout.validateFramingLayout",
+        detail:
+          framingLayoutResult.issues[0]?.message ??
+          "The framing layout JSON is required before the wall package can be rendered.",
+      });
+    }
+
+    const normalizedFramingLayout = normalizeCompatibleFramingLayout(
+      framingLayoutResult.framingLayout,
+    );
+    if (normalizedFramingLayout === null) {
+      return yield* new Cut2KitProjectsError({
+        cwd: project.cwd,
+        operation: "renderSheathingLayout.normalizeFramingLayout",
+        detail:
+          "The framing layout JSON exists but could not be normalized for wall-package rendering.",
+      });
+    }
+
+    const settingsFilePath = project.settingsFilePath ?? "cut2kit.settings.json";
+    const framingLayout = normalizeFramingLayout({
+      layout: normalizedFramingLayout,
+      geometry: normalizedFramingLayout.geometry,
+      settings,
+      sourcePdfPath,
+      settingsFilePath,
+    });
+    const sheathingLayout = normalizeSheathingLayout({
+      layout: sheathingLayoutResult.sheathingLayout,
+      geometry: framingLayout.geometry,
+      settings,
+      sourcePdfPath,
+      settingsFilePath,
+    });
+    const { promptTemplatePaths } = yield* loadPromptTemplateBundleForProject(project);
+    const validationReport = buildWallValidationReport({
+      sourcePdfPath,
+      settingsFilePath,
+      checklistPath: promptTemplatePaths.validationChecklist,
+      settings,
+      geometry: framingLayout.geometry,
+      framingLayout,
+      sheathingLayout,
+      confirmedAmbiguityProceeding: true,
+    });
+
+    const writtenPaths = [
+      yield* writeWorkspaceFile(
+        project.cwd,
+        artifactPaths.validationReportJsonPath,
+        encodeJsonFile(validationReport),
+      ),
+    ];
+
+    if (!validationReport.readyForPackaging) {
+      yield* workspaceEntries.invalidate(project.cwd);
+      const refreshedProject = yield* inspectProject({ cwd: project.cwd });
+      return {
+        status: "validation_blocked",
+        statusMessage:
+          validationReport.issues.find((issue) => issue.severity === "error")?.message ??
+          "Validation blocked final PDF packaging for this wall package run.",
+        project: refreshedProject,
+        jsonPath: input.relativePath,
+        pdfPath: artifactPaths.sheathingPdfPath,
+        validationReportJsonPath: artifactPaths.validationReportJsonPath,
+        writtenPaths: [...new Set(writtenPaths)],
+      };
+    }
+
+    const pdfBytes = yield* Effect.tryPromise({
+      try: () =>
+        renderSheathingLayoutPdf({
+          layout: sheathingLayout,
+          rendering: settings.rendering,
+          pages: settings.sheathing.pages,
+          fastening: settings.fastening,
+        }),
+      catch: (error) =>
+        new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "renderSheathingLayout.renderPdf",
+          detail: error instanceof Error ? error.message : String(error),
+        }),
+    });
+
+    writtenPaths.push(
+      yield* writeWorkspaceBytes(project.cwd, artifactPaths.sheathingPdfPath, pdfBytes),
+    );
+
+    yield* workspaceEntries.invalidate(project.cwd);
+    const refreshedProject = yield* inspectProject({ cwd: project.cwd });
+
+    return {
+      status: "completed",
+      statusMessage: null,
+      project: refreshedProject,
+      jsonPath: input.relativePath,
+      pdfPath: artifactPaths.sheathingPdfPath,
+      validationReportJsonPath: artifactPaths.validationReportJsonPath,
+      writtenPaths: [...new Set(writtenPaths)],
+    };
+  });
+
   return {
     inspectProject,
     compileFramingPrompt,
+    compileSheathingPrompt,
     generateOutputs,
     generateWallLayout,
     renderFramingLayout,
+    renderSheathingLayout,
   } satisfies Cut2KitProjectsShape;
 });
 

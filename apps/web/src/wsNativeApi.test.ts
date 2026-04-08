@@ -52,10 +52,12 @@ const rpcClientMock = {
   },
   cut2kit: {
     inspectProject: vi.fn(),
+    compileSheathingPrompt: vi.fn(),
     compileFramingPrompt: vi.fn(),
     generateOutputs: vi.fn(),
     generateWallLayout: vi.fn(),
     renderFramingLayout: vi.fn(),
+    renderSheathingLayout: vi.fn(),
   },
   shell: {
     openInEditor: vi.fn(),
@@ -325,6 +327,27 @@ describe("wsNativeApi", () => {
     });
 
     expect(rpcClientMock.cut2kit.compileFramingPrompt).toHaveBeenCalledWith({
+      cwd: "/tmp/project",
+      sourcePdfPath: "examples/elevation3.pdf",
+    });
+  });
+
+  it("forwards wall-package prompt compilation to the Cut2Kit RPC", async () => {
+    rpcClientMock.cut2kit.compileSheathingPrompt.mockResolvedValue({
+      sourcePdfPath: "examples/elevation3.pdf",
+      prompt: "Compiled wall package prompt",
+      framingJsonPath: "output/reports/framing-layouts/examples-elevation3.framing-layout.json",
+      sheathingJsonPath:
+        "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.json",
+    });
+
+    const api = createWsNativeApi();
+    await api.cut2kit.compileSheathingPrompt({
+      cwd: "/tmp/project",
+      sourcePdfPath: "examples/elevation3.pdf",
+    });
+
+    expect(rpcClientMock.cut2kit.compileSheathingPrompt).toHaveBeenCalledWith({
       cwd: "/tmp/project",
       sourcePdfPath: "examples/elevation3.pdf",
     });

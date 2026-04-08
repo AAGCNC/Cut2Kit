@@ -260,6 +260,18 @@ const WsRpcLayer = WsRpcGroup.toLayer(
               }),
           ),
         ),
+      [WS_METHODS.cut2kitCompileSheathingPrompt]: (input) =>
+        cut2kitProjects.compileSheathingPrompt(input).pipe(
+          Effect.mapError(
+            (cause) =>
+              new Cut2KitProjectError({
+                cwd: input.cwd,
+                operation: "cut2kit.compileSheathingPrompt",
+                detail: cause.detail,
+                cause,
+              }),
+          ),
+        ),
       [WS_METHODS.cut2kitGenerateOutputs]: (input) =>
         cut2kitProjects.generateOutputs(input).pipe(
           Effect.mapError(
@@ -291,6 +303,18 @@ const WsRpcLayer = WsRpcGroup.toLayer(
               new Cut2KitProjectError({
                 cwd: input.cwd,
                 operation: "cut2kit.renderFramingLayout",
+                detail: cause.detail,
+                cause,
+              }),
+          ),
+        ),
+      [WS_METHODS.cut2kitRenderSheathingLayout]: (input) =>
+        cut2kitProjects.renderSheathingLayout(input).pipe(
+          Effect.mapError(
+            (cause) =>
+              new Cut2KitProjectError({
+                cwd: input.cwd,
+                operation: "cut2kit.renderSheathingLayout",
                 detail: cause.detail,
                 cause,
               }),
