@@ -6,7 +6,6 @@ import {
   buildManufacturingPlanThreadTitle,
   buildSheathingLayoutArtifactPaths,
   buildWallPackageThreadTitle,
-  resolveCut2KitAutomationModelSelection,
   summarizeCut2KitProjectHealth,
 } from "@t3tools/shared/cut2kit";
 import {
@@ -32,9 +31,11 @@ import {
 } from "../features/cut2kit-pdf/lib/projectPdfFiles";
 import { openInPreferredEditor } from "../editorPreferences";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { resolveCut2KitAutomationModelSelectionForApp } from "../lib/cut2kitAutomationModelSelection";
 import { cut2kitProjectQueryOptions, cut2kitQueryKeys } from "../lib/cut2kitReactQuery";
 import { newCommandId, newMessageId, newThreadId } from "../lib/utils";
 import { readNativeApi } from "../nativeApi";
+import { useServerProviders } from "../rpc/serverState";
 import { useStore } from "../store";
 import { useProjectById } from "../storeSelectors";
 import { toastManager } from "./ui/toast";
@@ -160,6 +161,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   );
 
   const snapshot = snapshotQuery.data ?? null;
+  const serverProviders = useServerProviders();
   const snapshotErrorMessage = (() => {
     const error = snapshotQuery.error;
     if (!error) {
@@ -175,9 +177,13 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   const automationModelSelection = useMemo(
     () =>
       snapshot && project
-        ? resolveCut2KitAutomationModelSelection(snapshot, project.defaultModelSelection)
+        ? resolveCut2KitAutomationModelSelectionForApp(
+            snapshot,
+            project.defaultModelSelection,
+            serverProviders,
+          )
         : null,
-    [project, snapshot],
+    [project, serverProviders, snapshot],
   );
   const automationProviderLabel = automationModelSelection
     ? PROVIDER_DISPLAY_NAMES[automationModelSelection.provider]
@@ -605,7 +611,11 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     const threadId = newThreadId();
     const modelSelection =
       automationModelSelection ??
-      resolveCut2KitAutomationModelSelection(snapshot, project.defaultModelSelection);
+      resolveCut2KitAutomationModelSelectionForApp(
+        snapshot,
+        project.defaultModelSelection,
+        serverProviders,
+      );
 
     setIsStartingWallPackageGeneration(true);
     try {
@@ -675,6 +685,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     selectedElevationOption?.classification,
     selectedSourcePdfPath,
     snapshot,
+    serverProviders,
     wallPackageArtifacts,
   ]);
 
@@ -724,7 +735,11 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     const threadId = newThreadId();
     const modelSelection =
       automationModelSelection ??
-      resolveCut2KitAutomationModelSelection(snapshot, project.defaultModelSelection);
+      resolveCut2KitAutomationModelSelectionForApp(
+        snapshot,
+        project.defaultModelSelection,
+        serverProviders,
+      );
 
     setIsStartingManufacturingPlanGeneration(true);
     try {
@@ -797,6 +812,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     snapshot,
     wallPackageArtifacts,
     wallPackageJsonReady,
+    serverProviders,
   ]);
 
   const handleOpenInEditor = useCallback(async () => {
@@ -888,7 +904,11 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     const threadId = newThreadId();
     const modelSelection =
       automationModelSelection ??
-      resolveCut2KitAutomationModelSelection(snapshot, project.defaultModelSelection);
+      resolveCut2KitAutomationModelSelectionForApp(
+        snapshot,
+        project.defaultModelSelection,
+        serverProviders,
+      );
 
     setIsStartingFramingGeneration(true);
     try {
@@ -959,6 +979,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     project,
     selectedElevationOption?.classification,
     selectedSourcePdfPath,
+    serverProviders,
     snapshot,
   ]);
 
