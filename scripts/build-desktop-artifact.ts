@@ -278,14 +278,19 @@ const commandOutputOptions = (verbose: boolean) =>
     stderr: "inherit",
   }) as const;
 
-const runCommand = Effect.fn("runCommand")(function* (command: ChildProcess.Command) {
+const runCommand = Effect.fn("runCommand")(function* (
+  command: ChildProcess.Command,
+  description?: string,
+) {
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const child = yield* commandSpawner.spawn(command);
   const exitCode = yield* child.exitCode;
 
   if (exitCode !== 0) {
     return yield* new BuildScriptError({
-      message: `Command exited with non-zero exit code (${exitCode})`,
+      message: description
+        ? `Command '${description}' exited with non-zero exit code (${exitCode})`
+        : `Command exited with non-zero exit code (${exitCode})`,
     });
   }
 });
@@ -475,6 +480,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     appId: "com.t3tools.t3code",
     productName,
     artifactName: "T3-Code-${version}-${arch}.${ext}",
+    npmRebuild: platform === "win" ? false : undefined,
     directories: {
       buildResources: "apps/desktop/resources",
     },
@@ -517,6 +523,7 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const winConfig: Record<string, unknown> = {
       target: [target],
       icon: "icon.ico",
+      signAndEditExecutable: signed,
     };
     if (signed) {
       winConfig.azureSignOptions = yield* AzureTrustedSigningOptionsConfig;
@@ -617,10 +624,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     yield* runCommand(
       ChildProcess.make({
         cwd: repoRoot,
-        ...commandOutputOptions(options.verbose),
+        stdout: "inherit",
+        stderr: "inherit",
         // Windows needs shell mode to resolve .cmd shims (e.g. bun.cmd).
         shell: process.platform === "win32",
       })`bun run build:desktop`,
+      "bun run build:desktop",
     );
   }
 
@@ -690,6 +699,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
       // Windows needs shell mode to resolve .cmd shims (e.g. bun.cmd).
       shell: process.platform === "win32",
     })`bun install --production`,
+    "bun install --production",
   );
 
   const buildEnv: NodeJS.ProcessEnv = {
@@ -726,10 +736,12 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     ChildProcess.make({
       cwd: stageAppDir,
       env: buildEnv,
-      ...commandOutputOptions(options.verbose),
+      stdout: "inherit",
+      stderr: "inherit",
       // Windows needs shell mode to resolve .cmd shims.
       shell: process.platform === "win32",
     })`bunx electron-builder ${platformConfig.cliFlag} --${options.arch} --publish never`,
+    `bunx electron-builder ${platformConfig.cliFlag} --${options.arch} --publish never`,
   );
 
   const stageDistDir = path.join(stageAppDir, "dist");

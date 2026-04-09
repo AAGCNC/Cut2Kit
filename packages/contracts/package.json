@@ -8,22 +8,24 @@
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
-  "types": "./src/index.ts",
+  "types": "./dist/index.d.ts",
   "exports": {
     "./settings": {
-      "types": "./src/settings.ts",
+      "types": "./dist/settings.d.ts",
       "import": "./src/settings.ts",
       "require": "./src/settings.ts"
     },
     ".": {
-      "types": "./src/index.ts",
+      "types": "./dist/index.d.ts",
       "import": "./src/index.ts",
       "require": "./dist/index.cjs"
     }
   },
   "scripts": {
-    "dev": "tsdown src/index.ts --format esm,cjs --dts --watch --clean",
-    "build": "tsdown src/index.ts --format esm,cjs --dts --clean",
+    "dev": "tsdown src/index.ts --format esm,cjs --watch --clean --no-dts",
+    "build:js": "tsdown src/index.ts --format esm,cjs --clean --no-dts",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build": "bun run build:js && bun run build:types",
     "prepare": "effect-language-service patch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
