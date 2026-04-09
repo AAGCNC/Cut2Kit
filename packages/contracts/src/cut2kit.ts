@@ -459,6 +459,8 @@ const Cut2KitPromptTemplatePaths = Schema.Struct({
   framingUser: TrimmedNonEmptyString,
   sheathingSystem: TrimmedNonEmptyString,
   sheathingUser: TrimmedNonEmptyString,
+  manufacturingSystem: TrimmedNonEmptyString,
+  manufacturingUser: TrimmedNonEmptyString,
   validationChecklist: TrimmedNonEmptyString,
 });
 export type Cut2KitPromptTemplatePaths = typeof Cut2KitPromptTemplatePaths.Type;
@@ -485,6 +487,8 @@ export const Cut2KitResolvedPromptTemplates = Schema.Struct({
   framingUser: Cut2KitResolvedPromptTemplate,
   sheathingSystem: Cut2KitResolvedPromptTemplate,
   sheathingUser: Cut2KitResolvedPromptTemplate,
+  manufacturingSystem: Cut2KitResolvedPromptTemplate,
+  manufacturingUser: Cut2KitResolvedPromptTemplate,
   validationChecklist: Cut2KitResolvedPromptTemplate,
 });
 export type Cut2KitResolvedPromptTemplates = typeof Cut2KitResolvedPromptTemplates.Type;
@@ -516,6 +520,28 @@ export const Cut2KitParkPosition = Schema.Struct({
   z: Schema.Number,
 });
 export type Cut2KitParkPosition = typeof Cut2KitParkPosition.Type;
+
+export const Cut2KitSheathingManufacturingSettings = Schema.Struct({
+  toolNumber: PositiveInt,
+  toolDiameter: Schema.Number,
+  spindleDirection: Cut2KitSpindleDirection,
+  spindleRpm: PositiveInt,
+  plungeFeed: Schema.Number,
+  cutFeed: Schema.Number,
+  passCount: PositiveInt,
+});
+export type Cut2KitSheathingManufacturingSettings =
+  typeof Cut2KitSheathingManufacturingSettings.Type;
+
+export const Cut2KitManufacturingSettings = Schema.Struct({
+  enabled: Schema.Boolean,
+  targetController: Cut2KitControllerTarget,
+  defaultWorkOffset: Cut2KitWorkOffset,
+  safeZ: Schema.Number,
+  parkPosition: Cut2KitParkPosition,
+  sheathing: Cut2KitSheathingManufacturingSettings,
+});
+export type Cut2KitManufacturingSettings = typeof Cut2KitManufacturingSettings.Type;
 
 export const Cut2KitToolChangeOperation = Schema.Struct({
   type: Schema.Literal("tool_change"),
@@ -641,6 +667,7 @@ export const Cut2KitSettings = Schema.Struct({
   framing: Cut2KitFramingSettings,
   sheathing: Cut2KitSheathingSettings,
   fastening: Cut2KitFasteningSettings,
+  manufacturing: Cut2KitManufacturingSettings,
   rendering: Cut2KitRenderingSettings,
   output: Cut2KitOutputSettings,
 });
@@ -1197,6 +1224,22 @@ export const Cut2KitCompileFramingPromptResult = Schema.Struct({
   geometryLoaded: Schema.Boolean,
 });
 export type Cut2KitCompileFramingPromptResult = typeof Cut2KitCompileFramingPromptResult.Type;
+
+export const Cut2KitCompileManufacturingPromptInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  sourcePdfPath: TrimmedNonEmptyString,
+});
+export type Cut2KitCompileManufacturingPromptInput =
+  typeof Cut2KitCompileManufacturingPromptInput.Type;
+
+export const Cut2KitCompileManufacturingPromptResult = Schema.Struct({
+  sourcePdfPath: TrimmedNonEmptyString,
+  prompt: TrimmedNonEmptyString,
+  sheathingJsonPath: TrimmedNonEmptyString,
+  manufacturingPlanPath: TrimmedNonEmptyString,
+});
+export type Cut2KitCompileManufacturingPromptResult =
+  typeof Cut2KitCompileManufacturingPromptResult.Type;
 
 export const Cut2KitRenderSheathingLayoutStatus = Schema.Literals([
   "completed",

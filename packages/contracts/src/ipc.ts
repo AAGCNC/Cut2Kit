@@ -25,6 +25,8 @@ import type {
   ProjectWriteFileResult,
 } from "./project";
 import type {
+  Cut2KitCompileManufacturingPromptInput,
+  Cut2KitCompileManufacturingPromptResult,
   Cut2KitCompileFramingPromptInput,
   Cut2KitCompileFramingPromptResult,
   Cut2KitCompileSheathingPromptInput,
@@ -160,6 +162,9 @@ export interface NativeApi {
   };
   cut2kit: {
     inspectProject: (input: Cut2KitInspectProjectInput) => Promise<Cut2KitProject>;
+    compileManufacturingPrompt: (
+      input: Cut2KitCompileManufacturingPromptInput,
+    ) => Promise<Cut2KitCompileManufacturingPromptResult>;
     compileSheathingPrompt: (
       input: Cut2KitCompileSheathingPromptInput,
     ) => Promise<Cut2KitCompileSheathingPromptResult>;

@@ -22,6 +22,8 @@ export const CUT2KIT_PROMPT_TEMPLATE_KEYS = [
   "framingUser",
   "sheathingSystem",
   "sheathingUser",
+  "manufacturingSystem",
+  "manufacturingUser",
   "validationChecklist",
 ] as const;
 
@@ -126,6 +128,10 @@ function promptTemplateLabel(key: Cut2KitPromptTemplateKey): string {
       return "Sheathing system prompt";
     case "sheathingUser":
       return "Sheathing user prompt";
+    case "manufacturingSystem":
+      return "Manufacturing system prompt";
+    case "manufacturingUser":
+      return "Manufacturing user prompt";
     case "validationChecklist":
       return "Validation checklist";
   }

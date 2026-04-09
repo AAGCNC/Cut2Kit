@@ -11,6 +11,8 @@ import { Schema, ServiceMap } from "effect";
 import type { Effect } from "effect";
 
 import type {
+  Cut2KitCompileManufacturingPromptInput,
+  Cut2KitCompileManufacturingPromptResult,
   Cut2KitCompileFramingPromptInput,
   Cut2KitCompileFramingPromptResult,
   Cut2KitCompileSheathingPromptInput,
@@ -44,6 +46,9 @@ export interface Cut2KitProjectsShape {
   readonly compileFramingPrompt: (
     input: Cut2KitCompileFramingPromptInput,
   ) => Effect.Effect<Cut2KitCompileFramingPromptResult, Cut2KitProjectsError>;
+  readonly compileManufacturingPrompt: (
+    input: Cut2KitCompileManufacturingPromptInput,
+  ) => Effect.Effect<Cut2KitCompileManufacturingPromptResult, Cut2KitProjectsError>;
   readonly compileSheathingPrompt: (
     input: Cut2KitCompileSheathingPromptInput,
   ) => Effect.Effect<Cut2KitCompileSheathingPromptResult, Cut2KitProjectsError>;

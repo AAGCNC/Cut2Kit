@@ -78,6 +78,8 @@ export interface Cut2KitPromptTemplateBundle {
   readonly framingUser: string;
   readonly sheathingSystem: string;
   readonly sheathingUser: string;
+  readonly manufacturingSystem: string;
+  readonly manufacturingUser: string;
   readonly validationChecklist: string;
 }
 
@@ -91,6 +93,8 @@ function toPromptTemplateBundle(
     framingUser: resolvedPromptTemplates.framingUser.contents,
     sheathingSystem: resolvedPromptTemplates.sheathingSystem.contents,
     sheathingUser: resolvedPromptTemplates.sheathingUser.contents,
+    manufacturingSystem: resolvedPromptTemplates.manufacturingSystem.contents,
+    manufacturingUser: resolvedPromptTemplates.manufacturingUser.contents,
     validationChecklist: resolvedPromptTemplates.validationChecklist.contents,
   };
 }
@@ -108,6 +112,8 @@ export const loadCut2KitResolvedPromptTemplates = Effect.fn("loadCut2KitResolved
         framingUser: await readPromptFile(input.cwd, input.paths.framingUser),
         sheathingSystem: await readPromptFile(input.cwd, input.paths.sheathingSystem),
         sheathingUser: await readPromptFile(input.cwd, input.paths.sheathingUser),
+        manufacturingSystem: await readPromptFile(input.cwd, input.paths.manufacturingSystem),
+        manufacturingUser: await readPromptFile(input.cwd, input.paths.manufacturingUser),
         validationChecklist: await readPromptFile(input.cwd, input.paths.validationChecklist),
       }),
       catch: (error) =>

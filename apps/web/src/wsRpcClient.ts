@@ -53,6 +53,9 @@ export interface WsRpcClient {
   };
   readonly cut2kit: {
     readonly inspectProject: RpcUnaryMethod<typeof WS_METHODS.cut2kitInspectProject>;
+    readonly compileManufacturingPrompt: RpcUnaryMethod<
+      typeof WS_METHODS.cut2kitCompileManufacturingPrompt
+    >;
     readonly compileSheathingPrompt: RpcUnaryMethod<
       typeof WS_METHODS.cut2kitCompileSheathingPrompt
     >;
@@ -146,6 +149,8 @@ export function createWsRpcClient(transport = new WsTransport()): WsRpcClient {
     cut2kit: {
       inspectProject: (input) =>
         transport.request((client) => client[WS_METHODS.cut2kitInspectProject](input)),
+      compileManufacturingPrompt: (input) =>
+        transport.request((client) => client[WS_METHODS.cut2kitCompileManufacturingPrompt](input)),
       compileSheathingPrompt: (input) =>
         transport.request((client) => client[WS_METHODS.cut2kitCompileSheathingPrompt](input)),
       compileFramingPrompt: (input) =>

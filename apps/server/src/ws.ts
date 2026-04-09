@@ -260,6 +260,18 @@ const WsRpcLayer = WsRpcGroup.toLayer(
               }),
           ),
         ),
+      [WS_METHODS.cut2kitCompileManufacturingPrompt]: (input) =>
+        cut2kitProjects.compileManufacturingPrompt(input).pipe(
+          Effect.mapError(
+            (cause) =>
+              new Cut2KitProjectError({
+                cwd: input.cwd,
+                operation: "cut2kit.compileManufacturingPrompt",
+                detail: cause.detail,
+                cause,
+              }),
+          ),
+        ),
       [WS_METHODS.cut2kitCompileSheathingPrompt]: (input) =>
         cut2kitProjects.compileSheathingPrompt(input).pipe(
           Effect.mapError(

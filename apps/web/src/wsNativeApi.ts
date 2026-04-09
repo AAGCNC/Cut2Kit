@@ -48,6 +48,7 @@ export function createWsNativeApi(): NativeApi {
     },
     cut2kit: {
       inspectProject: rpcClient.cut2kit.inspectProject,
+      compileManufacturingPrompt: rpcClient.cut2kit.compileManufacturingPrompt,
       compileSheathingPrompt: rpcClient.cut2kit.compileSheathingPrompt,
       compileFramingPrompt: rpcClient.cut2kit.compileFramingPrompt,
       generateOutputs: rpcClient.cut2kit.generateOutputs,

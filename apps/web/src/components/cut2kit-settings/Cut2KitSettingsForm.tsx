@@ -90,6 +90,22 @@ const OVERWRITE_POLICY_OPTIONS = [
   { value: "version_if_exists", label: "Version if exists" },
 ] as const;
 
+const CONTROLLER_TARGET_OPTIONS = [{ value: "axyz-a2mc", label: "AXYZ A2MC" }] as const;
+
+const WORK_OFFSET_OPTIONS = [
+  { value: "G54", label: "G54" },
+  { value: "G55", label: "G55" },
+  { value: "G56", label: "G56" },
+  { value: "G57", label: "G57" },
+  { value: "G58", label: "G58" },
+  { value: "G59", label: "G59" },
+] as const;
+
+const SPINDLE_DIRECTION_OPTIONS = [
+  { value: "cw", label: "Clockwise (M3)" },
+  { value: "ccw", label: "Counterclockwise (M4)" },
+] as const;
+
 const AI_PROVIDER_OPTIONS = [
   { value: "codex", label: "OpenAI Codex OAuth" },
   { value: "opencode", label: "OpenCode via vLLM" },
@@ -153,6 +169,16 @@ const PROMPT_TEMPLATE_FIELDS = [
     key: "sheathingUser",
     label: "Sheathing user prompt",
     description: "Task prompt for sheathing-layout generation.",
+  },
+  {
+    key: "manufacturingSystem",
+    label: "Manufacturing system prompt",
+    description: "System instructions for AI-authored A2MC manufacturing-plan generation.",
+  },
+  {
+    key: "manufacturingUser",
+    label: "Manufacturing user prompt",
+    description: "Task prompt for AI-authored A2MC manufacturing-plan generation.",
   },
   {
     key: "validationChecklist",
@@ -278,6 +304,13 @@ function validateNumberValue(value: unknown, label: string) {
 function validatePositiveInteger(value: unknown, label: string) {
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     return `${label} must be a positive whole number.`;
+  }
+  return null;
+}
+
+function validatePositiveNumber(value: unknown, label: string) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return `${label} must be greater than 0.`;
   }
   return null;
 }
@@ -2268,6 +2301,316 @@ export function Cut2KitSettingsForm({
             )
           }
         />
+      </SectionCard>
+
+      <SectionCard
+        id="cut2kit-settings-manufacturing"
+        title="Manufacturing"
+        description="AI-authored A2MC manufacturing-plan settings used to convert sheathing layouts into posted NC output."
+      >
+        <ToggleField
+          label="Enable manufacturing-plan generation"
+          description="Allow Cut2Kit to generate cut2kit.manufacturing.json from sheathing-layout JSON."
+          checked={readBooleanValue(state, ["manufacturing", "enabled"])}
+          onCheckedChange={(checked) => onValueChange(["manufacturing", "enabled"], checked)}
+        />
+
+        <FieldGrid>
+          <Field label="Target controller">
+            <Select
+              value={readSelectValue(
+                state,
+                ["manufacturing", "targetController"],
+                CONTROLLER_TARGET_OPTIONS,
+              )}
+              onValueChange={(value) => onValueChange(["manufacturing", "targetController"], value)}
+            >
+              <SelectTrigger aria-label="Target controller">
+                <SelectValue>
+                  {CONTROLLER_TARGET_OPTIONS.find(
+                    (option) =>
+                      option.value ===
+                      readSelectValue(
+                        state,
+                        ["manufacturing", "targetController"],
+                        CONTROLLER_TARGET_OPTIONS,
+                      ),
+                  )?.label ?? "Select controller"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                {CONTROLLER_TARGET_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </Field>
+          <Field label="Default work offset">
+            <Select
+              value={readSelectValue(
+                state,
+                ["manufacturing", "defaultWorkOffset"],
+                WORK_OFFSET_OPTIONS,
+              )}
+              onValueChange={(value) => onValueChange(["manufacturing", "defaultWorkOffset"], value)}
+            >
+              <SelectTrigger aria-label="Default work offset">
+                <SelectValue>
+                  {WORK_OFFSET_OPTIONS.find(
+                    (option) =>
+                      option.value ===
+                      readSelectValue(
+                        state,
+                        ["manufacturing", "defaultWorkOffset"],
+                        WORK_OFFSET_OPTIONS,
+                      ),
+                  )?.label ?? "Select work offset"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                {WORK_OFFSET_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </Field>
+          <Field
+            label="Safe Z"
+            error={validatePositiveNumber(readValue(state, ["manufacturing", "safeZ"]), "Safe Z")}
+          >
+            <Input
+              type="number"
+              value={readNumericInputValue(state, ["manufacturing", "safeZ"])}
+              onChange={(event) =>
+                onValueChange(["manufacturing", "safeZ"], parseNumberInput(event.target.value))
+              }
+            />
+          </Field>
+        </FieldGrid>
+
+        <div className="space-y-4 rounded-xl border border-border/70 bg-background/40 p-3">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">Park Position</p>
+            <p className="text-xs text-muted-foreground">
+              Machine park position applied after each posted A2MC job.
+            </p>
+          </div>
+          <FieldGrid columns="compact">
+            <Field
+              label="Park X"
+              error={validateNumberValue(
+                readValue(state, ["manufacturing", "parkPosition", "x"]),
+                "Park X",
+              )}
+            >
+              <Input
+                type="number"
+                value={readNumericInputValue(state, ["manufacturing", "parkPosition", "x"])}
+                onChange={(event) =>
+                  onValueChange(
+                    ["manufacturing", "parkPosition", "x"],
+                    parseNumberInput(event.target.value),
+                  )
+                }
+              />
+            </Field>
+            <Field
+              label="Park Y"
+              error={validateNumberValue(
+                readValue(state, ["manufacturing", "parkPosition", "y"]),
+                "Park Y",
+              )}
+            >
+              <Input
+                type="number"
+                value={readNumericInputValue(state, ["manufacturing", "parkPosition", "y"])}
+                onChange={(event) =>
+                  onValueChange(
+                    ["manufacturing", "parkPosition", "y"],
+                    parseNumberInput(event.target.value),
+                  )
+                }
+              />
+            </Field>
+            <Field
+              label="Park Z"
+              error={validateNumberValue(
+                readValue(state, ["manufacturing", "parkPosition", "z"]),
+                "Park Z",
+              )}
+            >
+              <Input
+                type="number"
+                value={readNumericInputValue(state, ["manufacturing", "parkPosition", "z"])}
+                onChange={(event) =>
+                  onValueChange(
+                    ["manufacturing", "parkPosition", "z"],
+                    parseNumberInput(event.target.value),
+                  )
+                }
+              />
+            </Field>
+          </FieldGrid>
+        </div>
+
+        <div className="space-y-4 rounded-xl border border-border/70 bg-background/40 p-3">
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-foreground">Sheathing CAM</p>
+            <p className="text-xs text-muted-foreground">
+              Tooling and feed settings injected into the AI manufacturing-plan prompt for sheathing cutting.
+            </p>
+          </div>
+          <FieldGrid columns="compact">
+            <Field
+              label="Tool number"
+              error={validatePositiveInteger(
+                readValue(state, ["manufacturing", "sheathing", "toolNumber"]),
+                "Tool number",
+              )}
+            >
+              <Input
+                type="number"
+                value={readNumericInputValue(state, ["manufacturing", "sheathing", "toolNumber"])}
+                onChange={(event) =>
+                  onValueChange(
+                    ["manufacturing", "sheathing", "toolNumber"],
+                    parseNumberInput(event.target.value),
+                  )
+                }
+              />
+            </Field>
+            <Field
+              label="Tool diameter"
+              error={validatePositiveNumber(
+                readValue(state, ["manufacturing", "sheathing", "toolDiameter"]),
+                "Tool diameter",
+              )}
+            >
+              <Input
+                type="number"
+                value={readNumericInputValue(
+                  state,
+                  ["manufacturing", "sheathing", "toolDiameter"],
+                )}
+                onChange={(event) =>
+                  onValueChange(
+                    ["manufacturing", "sheathing", "toolDiameter"],
+                    parseNumberInput(event.target.value),
+                  )
+                }
+              />
+            </Field>
+            <Field label="Spindle direction">
+              <Select
+                value={readSelectValue(
+                  state,
+                  ["manufacturing", "sheathing", "spindleDirection"],
+                  SPINDLE_DIRECTION_OPTIONS,
+                )}
+                onValueChange={(value) =>
+                  onValueChange(["manufacturing", "sheathing", "spindleDirection"], value)
+                }
+              >
+                <SelectTrigger aria-label="Spindle direction">
+                  <SelectValue>
+                    {SPINDLE_DIRECTION_OPTIONS.find(
+                      (option) =>
+                        option.value ===
+                        readSelectValue(
+                          state,
+                          ["manufacturing", "sheathing", "spindleDirection"],
+                          SPINDLE_DIRECTION_OPTIONS,
+                        ),
+                    )?.label ?? "Select spindle direction"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup>
+                  {SPINDLE_DIRECTION_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectPopup>
+              </Select>
+            </Field>
+            <Field
+              label="Spindle RPM"
+              error={validatePositiveInteger(
+                readValue(state, ["manufacturing", "sheathing", "spindleRpm"]),
+                "Spindle RPM",
+              )}
+            >
+              <Input
+                type="number"
+                value={readNumericInputValue(state, ["manufacturing", "sheathing", "spindleRpm"])}
+                onChange={(event) =>
+                  onValueChange(
+                    ["manufacturing", "sheathing", "spindleRpm"],
+                    parseNumberInput(event.target.value),
+                  )
+                }
+              />
+            </Field>
+            <Field
+              label="Plunge feed"
+              error={validatePositiveNumber(
+                readValue(state, ["manufacturing", "sheathing", "plungeFeed"]),
+                "Plunge feed",
+              )}
+            >
+              <Input
+                type="number"
+                value={readNumericInputValue(state, ["manufacturing", "sheathing", "plungeFeed"])}
+                onChange={(event) =>
+                  onValueChange(
+                    ["manufacturing", "sheathing", "plungeFeed"],
+                    parseNumberInput(event.target.value),
+                  )
+                }
+              />
+            </Field>
+            <Field
+              label="Cut feed"
+              error={validatePositiveNumber(
+                readValue(state, ["manufacturing", "sheathing", "cutFeed"]),
+                "Cut feed",
+              )}
+            >
+              <Input
+                type="number"
+                value={readNumericInputValue(state, ["manufacturing", "sheathing", "cutFeed"])}
+                onChange={(event) =>
+                  onValueChange(
+                    ["manufacturing", "sheathing", "cutFeed"],
+                    parseNumberInput(event.target.value),
+                  )
+                }
+              />
+            </Field>
+            <Field
+              label="Pass count"
+              error={validatePositiveInteger(
+                readValue(state, ["manufacturing", "sheathing", "passCount"]),
+                "Pass count",
+              )}
+            >
+              <Input
+                type="number"
+                value={readNumericInputValue(state, ["manufacturing", "sheathing", "passCount"])}
+                onChange={(event) =>
+                  onValueChange(
+                    ["manufacturing", "sheathing", "passCount"],
+                    parseNumberInput(event.target.value),
+                  )
+                }
+              />
+            </Field>
+          </FieldGrid>
+        </div>
       </SectionCard>
 
       <SectionCard

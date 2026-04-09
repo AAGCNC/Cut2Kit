@@ -1,5 +1,6 @@
 import type {
   Cut2KitFramingLayoutV0_2_0,
+  Cut2KitManufacturingPlan,
   Cut2KitProject,
   Cut2KitSheathingLayout,
   Cut2KitWallGeometry,
@@ -11,6 +12,7 @@ const DEFAULT_REPORTS_DIR = "output/reports";
 const WALL_LAYOUT_OUTPUT_DIR = "wall-layouts";
 const FRAMING_LAYOUT_OUTPUT_DIR = "framing-layouts";
 const SHEATHING_LAYOUT_OUTPUT_DIR = "sheathing-layouts";
+const MANUFACTURING_PLAN_FILE_NAME = "cut2kit.manufacturing.json";
 const DEFAULT_CUT2KIT_CODEX_REASONING_EFFORT = "xhigh";
 const DEFAULT_PROMPT_REFERENCE_PATHS = {
   reusableSummaryPdf: ".docs/reusable_prompt_summary_framing_osb.pdf",
@@ -24,6 +26,8 @@ const DEFAULT_PROMPT_TEMPLATE_PATHS = {
   framingUser: ".docs/user-framing.md",
   sheathingSystem: ".docs/system-sheathing.md",
   sheathingUser: ".docs/user-sheathing.md",
+  manufacturingSystem: ".docs/system-manufacturing.md",
+  manufacturingUser: ".docs/user-manufacturing.md",
   validationChecklist: ".docs/validation-checklist.md",
 } as const;
 
@@ -149,12 +153,22 @@ export function buildSheathingLayoutArtifactPaths(
   };
 }
 
+export function buildManufacturingPlanArtifactPath(
+  project: Pick<Cut2KitProject, "manufacturingPlanFilePath">,
+) {
+  return project.manufacturingPlanFilePath ?? MANUFACTURING_PLAN_FILE_NAME;
+}
+
 export function buildFramingLayoutThreadTitle(sourcePdfPath: string): string {
   return `Framing layout · ${fileStem(sourcePdfPath)}`;
 }
 
 export function buildWallPackageThreadTitle(sourcePdfPath: string): string {
   return `Wall package · ${fileStem(sourcePdfPath)}`;
+}
+
+export function buildManufacturingPlanThreadTitle(sourcePdfPath: string): string {
+  return `A2MC output · ${fileStem(sourcePdfPath)}`;
 }
 
 export function resolveCut2KitAutomationModelSelection(
@@ -571,5 +585,150 @@ export function buildCut2KitSheathingLayoutPrompt(input: {
     }),
     "Output only valid JSON matching this schema template:",
     jsonBlock(jsonTemplate),
+  ].join("\n\n");
+}
+
+function buildManufacturingPassDepths(panelThickness: number, passCount: number) {
+  const normalizedThickness = Math.abs(panelThickness);
+  const normalizedPassCount = Math.max(1, Math.floor(passCount));
+  return Array.from({ length: normalizedPassCount }, (_, index) =>
+    -Number(((normalizedThickness * (index + 1)) / normalizedPassCount).toFixed(4)),
+  );
+}
+
+function buildManufacturingJsonTemplate(input: {
+  project: Cut2KitProject;
+  sourcePdfPath: string;
+  sheathingLayout: Cut2KitSheathingLayout;
+}): Cut2KitManufacturingPlan {
+  const manufacturingSettings = input.project.settings!.manufacturing;
+  const toolRadius = manufacturingSettings.sheathing.toolDiameter / 2;
+  const sheet = input.sheathingLayout.sheets[0];
+  const passDepths = buildManufacturingPassDepths(
+    input.sheathingLayout.wall.panelThickness,
+    manufacturingSettings.sheathing.passCount,
+  );
+
+  return {
+    schemaVersion: "0.1.0",
+    targetController: manufacturingSettings.targetController,
+    units: input.project.settings!.project.units === "metric" ? "metric" : "inch",
+    defaultWorkOffset: manufacturingSettings.defaultWorkOffset,
+    safeZ: manufacturingSettings.safeZ,
+    parkPosition: manufacturingSettings.parkPosition,
+    jobs: [
+      {
+        jobId: `${buildFramingLayoutArtifactStem(input.sourcePdfPath)}-sheet-${sheet?.index ?? 1}`,
+        sourcePath: input.sourcePdfPath,
+        workOffset: manufacturingSettings.defaultWorkOffset,
+        safeZ: manufacturingSettings.safeZ,
+        parkPosition: manufacturingSettings.parkPosition,
+        operations: [
+          {
+            type: "tool_change",
+            toolNumber: manufacturingSettings.sheathing.toolNumber,
+          },
+          {
+            type: "spindle_on",
+            direction: manufacturingSettings.sheathing.spindleDirection,
+            rpm: manufacturingSettings.sheathing.spindleRpm,
+          },
+          {
+            type: "rapid_move",
+            x: Number((-toolRadius).toFixed(4)),
+            y: Number((-toolRadius).toFixed(4)),
+          },
+          {
+            type: "linear_move",
+            z: passDepths[0] ?? -input.sheathingLayout.wall.panelThickness,
+            feed: manufacturingSettings.sheathing.plungeFeed,
+          },
+          {
+            type: "linear_move",
+            x: Number(((sheet?.right ?? input.sheathingLayout.wall.sheetNominalWidth) + toolRadius).toFixed(4)),
+            y: Number((-toolRadius).toFixed(4)),
+            feed: manufacturingSettings.sheathing.cutFeed,
+          },
+          ...passDepths.slice(1).map((depth) => ({
+            type: "linear_move" as const,
+            z: depth,
+            feed: manufacturingSettings.sheathing.plungeFeed,
+          })),
+          {
+            type: "spindle_stop",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function buildA2mcPromptRules(input: {
+  project: Cut2KitProject;
+  sourcePdfPath: string;
+  sheathingLayout: Cut2KitSheathingLayout;
+}) {
+  const manufacturingSettings = input.project.settings!.manufacturing;
+  const toolRadius = manufacturingSettings.sheathing.toolDiameter / 2;
+  const passDepths = buildManufacturingPassDepths(
+    input.sheathingLayout.wall.panelThickness,
+    manufacturingSettings.sheathing.passCount,
+  );
+
+  return [
+    "A2MC controller and Cut2Kit post rules:",
+    "- Author cut2kit.manufacturing.json only. Do not hand-write raw NC or markdown explanations.",
+    "- The deterministic runtime path is cut2kit.manufacturing.json -> A2MC post -> output/nc/*.nc.",
+    "- Use only supported manufacturing operations: tool_change, spindle_on, spindle_stop, rapid_move, linear_move, arc_move, dwell, label_template, label_image.",
+    "- A2MC output will always be uppercase, starts with G90 plus G20/G21 and a work offset, and ends with M30.",
+    "- Tool changes are emitted as M6 Tn. Spindle start is emitted as M3/M4 S<rpm>. Do not assume generic post behavior.",
+    "- The first feed move for each cut sequence must include an explicit feed rate because the post requires it.",
+    "- Avoid G53, G92, subroutines, canned cycles, or controller-specific words outside the supported operation schema.",
+    "- Prefer linear moves for sheet cutting. Only use arc_move when the path truly needs an arc and the arc is valid for A2MC.",
+    "- Cut internal closed openings before the outer perimeter. Openings that touch a sheet edge become notches in the outer profile instead of separate inner contours.",
+    "- Generate one manufacturing job per sheathing sheet so Cut2Kit can post separate NC files per sheet.",
+    `- Every generated job for this run must use sourcePath = ${input.sourcePdfPath}.`,
+    `- Use work offset ${manufacturingSettings.defaultWorkOffset}, safe Z ${manufacturingSettings.safeZ}, and park position ${jsonBlock(manufacturingSettings.parkPosition)} unless a job-level override is necessary.`,
+    `- Use tool ${manufacturingSettings.sheathing.toolNumber} with diameter ${manufacturingSettings.sheathing.toolDiameter} (${toolRadius} radius), spindle ${manufacturingSettings.sheathing.spindleDirection} at ${manufacturingSettings.sheathing.spindleRpm} RPM, plunge feed ${manufacturingSettings.sheathing.plungeFeed}, cut feed ${manufacturingSettings.sheathing.cutFeed}, and ${manufacturingSettings.sheathing.passCount} depth passes.`,
+    `- Panel thickness is ${input.sheathingLayout.wall.panelThickness}. Use these pass depths in Z, ending at the full cut depth: ${passDepths.join(", ")}.`,
+    "- Offset the outer sheet perimeter outward by tool radius so the finished part matches the sheathing sheet extents.",
+    "- Offset internal opening contours inward toward the waste/opening by tool radius so the finished opening dimensions match the sheathing cutout geometry.",
+    "- When an opening cutout intersects a sheet boundary, merge that geometry into the outer contour instead of duplicating a separate opening loop.",
+    "- Preserve unrelated jobs that already exist in cut2kit.manufacturing.json. Update or replace only the jobs for the selected source PDF when needed.",
+  ].join("\n");
+}
+
+export function buildCut2KitManufacturingPlanPrompt(input: {
+  project: Cut2KitProject;
+  sourcePdfPath: string;
+  sheathingLayout: Cut2KitSheathingLayout;
+  promptTemplates: {
+    systemPrompt: string;
+    userPrompt: string;
+    validationChecklist: string;
+  };
+}): string {
+  const settingsFilePath = input.project.settingsFilePath ?? "cut2kit.settings.json";
+  const sheathingArtifacts = buildSheathingLayoutArtifactPaths(input.project, input.sourcePdfPath);
+  const manufacturingPlanPath = buildManufacturingPlanArtifactPath(input.project);
+
+  return [
+    ...buildPromptTemplateSections({
+      promptTemplates: input.promptTemplates,
+    }),
+    `Selected elevation PDF: ${input.sourcePdfPath}`,
+    `Cut2Kit settings JSON: ${settingsFilePath}`,
+    `Sheathing layout JSON input: ${sheathingArtifacts.jsonPath}`,
+    `Write the structured manufacturing-plan JSON to: ${manufacturingPlanPath}`,
+    `Cut2Kit will deterministically post NC files from ${manufacturingPlanPath} into ${input.project.settings!.output.ncDir}`,
+    buildA2mcPromptRules(input),
+    "Resolved manufacturing settings:",
+    jsonBlock(input.project.settings!.manufacturing),
+    "Existing manufacturing plan JSON (preserve unrelated jobs when present):",
+    input.project.manufacturingPlan === null ? "(none yet)" : jsonBlock(input.project.manufacturingPlan),
+    "Sheathing layout JSON for this source PDF:",
+    jsonBlock(input.sheathingLayout),
+    "Emit JSON matching this manufacturing-plan shape:",
+    jsonBlock(buildManufacturingJsonTemplate(input)),
   ].join("\n\n");
 }
