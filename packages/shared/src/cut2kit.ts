@@ -591,8 +591,9 @@ export function buildCut2KitSheathingLayoutPrompt(input: {
 function buildManufacturingPassDepths(panelThickness: number, passCount: number) {
   const normalizedThickness = Math.abs(panelThickness);
   const normalizedPassCount = Math.max(1, Math.floor(passCount));
-  return Array.from({ length: normalizedPassCount }, (_, index) =>
-    -Number(((normalizedThickness * (index + 1)) / normalizedPassCount).toFixed(4)),
+  return Array.from(
+    { length: normalizedPassCount },
+    (_, index) => -Number(((normalizedThickness * (index + 1)) / normalizedPassCount).toFixed(4)),
   );
 }
 
@@ -645,7 +646,11 @@ function buildManufacturingJsonTemplate(input: {
           },
           {
             type: "linear_move",
-            x: Number(((sheet?.right ?? input.sheathingLayout.wall.sheetNominalWidth) + toolRadius).toFixed(4)),
+            x: Number(
+              ((sheet?.right ?? input.sheathingLayout.wall.sheetNominalWidth) + toolRadius).toFixed(
+                4,
+              ),
+            ),
             y: Number((-toolRadius).toFixed(4)),
             feed: manufacturingSettings.sheathing.cutFeed,
           },
@@ -725,7 +730,9 @@ export function buildCut2KitManufacturingPlanPrompt(input: {
     "Resolved manufacturing settings:",
     jsonBlock(input.project.settings!.manufacturing),
     "Existing manufacturing plan JSON (preserve unrelated jobs when present):",
-    input.project.manufacturingPlan === null ? "(none yet)" : jsonBlock(input.project.manufacturingPlan),
+    input.project.manufacturingPlan === null
+      ? "(none yet)"
+      : jsonBlock(input.project.manufacturingPlan),
     "Sheathing layout JSON for this source PDF:",
     jsonBlock(input.sheathingLayout),
     "Emit JSON matching this manufacturing-plan shape:",

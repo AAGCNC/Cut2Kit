@@ -2354,7 +2354,9 @@ export function Cut2KitSettingsForm({
                 ["manufacturing", "defaultWorkOffset"],
                 WORK_OFFSET_OPTIONS,
               )}
-              onValueChange={(value) => onValueChange(["manufacturing", "defaultWorkOffset"], value)}
+              onValueChange={(value) =>
+                onValueChange(["manufacturing", "defaultWorkOffset"], value)
+              }
             >
               <SelectTrigger aria-label="Default work offset">
                 <SelectValue>
@@ -2461,7 +2463,8 @@ export function Cut2KitSettingsForm({
           <div className="space-y-1">
             <p className="text-sm font-medium text-foreground">Sheathing CAM</p>
             <p className="text-xs text-muted-foreground">
-              Tooling and feed settings injected into the AI manufacturing-plan prompt for sheathing cutting.
+              Tooling and feed settings injected into the AI manufacturing-plan prompt for sheathing
+              cutting.
             </p>
           </div>
           <FieldGrid columns="compact">
@@ -2492,10 +2495,7 @@ export function Cut2KitSettingsForm({
             >
               <Input
                 type="number"
-                value={readNumericInputValue(
-                  state,
-                  ["manufacturing", "sheathing", "toolDiameter"],
-                )}
+                value={readNumericInputValue(state, ["manufacturing", "sheathing", "toolDiameter"])}
                 onChange={(event) =>
                   onValueChange(
                     ["manufacturing", "sheathing", "toolDiameter"],

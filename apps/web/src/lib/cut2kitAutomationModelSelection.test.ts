@@ -47,15 +47,15 @@ describe("resolveCut2KitAutomationModelSelectionForApp", () => {
       },
     ];
 
-    expect(
-      resolveCut2KitAutomationModelSelectionForApp(OPENCODE_PROJECT, null, providers),
-    ).toEqual({
-      provider: "codex",
-      model: "gpt-5.4",
-      options: {
-        reasoningEffort: "xhigh",
-      },
-    } satisfies ModelSelection);
+    expect(resolveCut2KitAutomationModelSelectionForApp(OPENCODE_PROJECT, null, providers)).toEqual(
+      {
+        provider: "codex",
+        model: "gpt-5.4",
+        options: {
+          reasoningEffort: "xhigh",
+        },
+      } satisfies ModelSelection,
+    );
   });
 
   it("keeps the configured OpenCode selection when OpenCode is healthy", () => {
@@ -80,12 +80,12 @@ describe("resolveCut2KitAutomationModelSelectionForApp", () => {
       },
     ];
 
-    expect(
-      resolveCut2KitAutomationModelSelectionForApp(OPENCODE_PROJECT, null, providers),
-    ).toEqual({
-      provider: "opencode",
-      model: "vllm/qwen3-coder-next",
-    } satisfies ModelSelection);
+    expect(resolveCut2KitAutomationModelSelectionForApp(OPENCODE_PROJECT, null, providers)).toEqual(
+      {
+        provider: "opencode",
+        model: "vllm/qwen3-coder-next",
+      } satisfies ModelSelection,
+    );
   });
 
   it("reuses a Codex fallback reasoning effort when switching away from OpenCode", () => {

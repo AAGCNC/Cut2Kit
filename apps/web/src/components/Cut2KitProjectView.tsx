@@ -268,7 +268,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   const manufacturingPlanGenerationThread = useStore((store) =>
     activeManufacturingPlanGeneration
       ? (store.threads.find((thread) => thread.id === activeManufacturingPlanGeneration.threadId) ??
-          null)
+        null)
       : null,
   );
   const framingJsonReady = useMemo(
@@ -364,8 +364,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   const selectedManufacturingJobCount = useMemo(
     () =>
       selectedSourcePdfPath
-        ? (snapshot?.manufacturingPlan?.jobs.filter((job) => job.sourcePath === selectedSourcePdfPath)
-            .length ?? 0)
+        ? (snapshot?.manufacturingPlan?.jobs.filter(
+            (job) => job.sourcePath === selectedSourcePdfPath,
+          ).length ?? 0)
         : 0,
     [selectedSourcePdfPath, snapshot?.manufacturingPlan],
   );
@@ -1295,7 +1296,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       return;
     }
     if (!activeManufacturingPlanReady && manufacturingPlanThreadStatus === "error") {
-      completedManufacturingPlanThreadIdsRef.current.add(activeManufacturingPlanGeneration.threadId);
+      completedManufacturingPlanThreadIdsRef.current.add(
+        activeManufacturingPlanGeneration.threadId,
+      );
       toastManager.add({
         type: "error",
         title: "Manufacturing-plan generation failed",
@@ -1312,7 +1315,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         manufacturingPlanThreadStatus === "stopped" ||
         manufacturingPlanThreadStatus === "interrupted")
     ) {
-      completedManufacturingPlanThreadIdsRef.current.add(activeManufacturingPlanGeneration.threadId);
+      completedManufacturingPlanThreadIdsRef.current.add(
+        activeManufacturingPlanGeneration.threadId,
+      );
       toastManager.add({
         type: "error",
         title: "Manufacturing-plan jobs not found",
@@ -1441,7 +1446,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
             </Button>
             <Button
               onClick={() => void handleGenerateOutputs()}
-              disabled={isGenerating || snapshot.summary.errorCount > 0 || snapshot.ncJobs.length === 0}
+              disabled={
+                isGenerating || snapshot.summary.errorCount > 0 || snapshot.ncJobs.length === 0
+              }
             >
               <HammerIcon className="size-4" />
               {isGenerating ? "Posting NC..." : "Generate NC Files"}
@@ -1676,7 +1683,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                   <Button
                     onClick={() => void handleGenerateOutputs()}
                     disabled={
-                      isGenerating || snapshot.summary.errorCount > 0 || snapshot.ncJobs.length === 0
+                      isGenerating ||
+                      snapshot.summary.errorCount > 0 ||
+                      snapshot.ncJobs.length === 0
                     }
                   >
                     <HammerIcon className="size-4" />
@@ -1835,7 +1844,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="rounded-xl border border-border/70 bg-background/60 p-3">
-                    <p className="text-xs font-medium text-muted-foreground">Sheathing JSON input</p>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Sheathing JSON input
+                    </p>
                     <p className="mt-1 break-all text-sm text-foreground">
                       {wallPackageArtifacts?.jsonPath ?? "Pending source selection"}
                     </p>
@@ -1857,7 +1868,9 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                     <Badge variant={manufacturingPlanFileReady ? "success" : "outline"}>
                       {manufacturingPlanFileReady ? "Plan file ready" : "Plan file pending"}
                     </Badge>
-                    <Badge variant={manufacturingPlanReadyForSelectedSource ? "success" : "outline"}>
+                    <Badge
+                      variant={manufacturingPlanReadyForSelectedSource ? "success" : "outline"}
+                    >
                       {manufacturingPlanReadyForSelectedSource
                         ? `${selectedManufacturingJobCount} selected-source job${selectedManufacturingJobCount === 1 ? "" : "s"}`
                         : "No selected-source jobs"}

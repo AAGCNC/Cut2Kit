@@ -1,8 +1,4 @@
-import {
-  type Cut2KitProject,
-  type ModelSelection,
-  type ServerProvider,
-} from "@t3tools/contracts";
+import { type Cut2KitProject, type ModelSelection, type ServerProvider } from "@t3tools/contracts";
 import { resolveCut2KitAutomationModelSelection } from "@t3tools/shared/cut2kit";
 
 import { getDefaultServerModel, getProviderSnapshot } from "../providerModels";
@@ -25,7 +21,10 @@ export function resolveCut2KitAutomationModelSelectionForApp(
   fallbackModelSelection: ModelSelection | null | undefined,
   providers: ReadonlyArray<ServerProvider>,
 ): ModelSelection {
-  const configuredSelection = resolveCut2KitAutomationModelSelection(project, fallbackModelSelection);
+  const configuredSelection = resolveCut2KitAutomationModelSelection(
+    project,
+    fallbackModelSelection,
+  );
   if (configuredSelection.provider !== "opencode") {
     return configuredSelection;
   }
