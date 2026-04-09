@@ -1,6 +1,7 @@
 import fsPromises from "node:fs/promises";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Cut2KitProject as Cut2KitProjectSchema } from "@t3tools/contracts";
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Path, Schema } from "effect";
 import { afterEach, vi } from "vitest";
@@ -888,6 +889,8 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
         expect(project.nestManifest.nests.length).toBeGreaterThan(0);
         expect(project.queueManifest.entries).toHaveLength(1);
         expect(project.ncJobs).toHaveLength(1);
+        expect(project.ncJobs[0]?.program.endsWith("\n")).toBe(true);
+        expect(() => Schema.decodeUnknownSync(Cut2KitProjectSchema)(project)).not.toThrow();
         expect(project.outputStatus.generated).toBe(false);
         expect(
           project.files.some(
@@ -1447,6 +1450,72 @@ it.layer(TestLayer)("Cut2KitProjectsLive", (it) => {
           expect(result.prompt).toContain("You are the sheathing-planning agent for Cut2Kit.");
           expect(result.prompt).toContain('"sourcePdfPath": "examples/elevation3.pdf"');
         }),
+    );
+  });
+
+  describe("compileManufacturingPrompt", () => {
+    it.effect(
+      "compiles the manufacturing-plan prompt from the staged sheathing layout artifact",
+      () =>
+        Effect.gen(function* () {
+          const cut2kitProjects = yield* Cut2KitProjects;
+          const projectDir = yield* makeTempDir("cut2kit-compile-manufacturing-prompt-");
+          yield* copyExampleSettings(projectDir);
+          yield* copyExampleElevation(projectDir);
+
+          yield* Effect.tryPromise({
+            try: async () => {
+              await fsPromises.mkdir(`${projectDir}/output/reports/sheathing-layouts`, {
+                recursive: true,
+              });
+              await fsPromises.writeFile(
+                `${projectDir}/output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.json`,
+                JSON.stringify(makeCompatibleSheathingDraft(), null, 2),
+                "utf8",
+              );
+            },
+            catch: (error) =>
+              new FixtureCopyError({
+                message: `Failed to seed staged sheathing artifact: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              }),
+          });
+
+          const result = yield* cut2kitProjects.compileManufacturingPrompt({
+            cwd: projectDir,
+            sourcePdfPath: "examples/elevation3.pdf",
+          });
+
+          expect(result.sheathingJsonPath).toBe(
+            "output/reports/sheathing-layouts/examples-elevation3.sheathing-layout.json",
+          );
+          expect(result.manufacturingPlanPath).toBe("cut2kit.manufacturing.json");
+          expect(result.prompt).toContain(
+            "Your job is to transform a validated single-wall sheathing layout into a machine-ready manufacturing plan for the AXYZ A2MC post.",
+          );
+          expect(result.prompt).toContain("Sheathing layout JSON input:");
+          expect(result.prompt).toContain('"sourcePdfPath": "examples/elevation3.pdf"');
+        }),
+    );
+
+    it.effect("blocks prompt compilation when the sheathing layout artifact is missing", () =>
+      Effect.gen(function* () {
+        const cut2kitProjects = yield* Cut2KitProjects;
+        const projectDir = yield* makeTempDir("cut2kit-missing-manufacturing-sheathing-");
+        yield* copyExampleSettings(projectDir);
+        yield* copyExampleElevation(projectDir);
+
+        const error = yield* cut2kitProjects
+          .compileManufacturingPrompt({
+            cwd: projectDir,
+            sourcePdfPath: "examples/elevation3.pdf",
+          })
+          .pipe(Effect.flip);
+
+        expect(error.operation).toBe("compileManufacturingPrompt.decodeSheathingArtifact");
+        expect(error.detail).toContain("examples-elevation3.sheathing-layout.json");
+      }),
     );
   });
 

@@ -1026,7 +1026,8 @@ export const NCJobRecord = Schema.Struct({
   application: Schema.NullOr(Cut2KitApplication),
   targetController: Cut2KitControllerTarget,
   operationCount: NonNegativeInt,
-  program: TrimmedNonEmptyString,
+  // G-code is multiline content and may intentionally end with a trailing newline.
+  program: Schema.String.check(Schema.isNonEmpty()),
 });
 export type NCJobRecord = typeof NCJobRecord.Type;
 

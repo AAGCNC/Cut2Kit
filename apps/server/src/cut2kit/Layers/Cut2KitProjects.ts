@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { Effect, Layer, Schema } from "effect";
 
 import {
+  type Cut2KitCompileManufacturingPromptResult,
   type Cut2KitCompileFramingPromptResult,
   type Cut2KitCompileSheathingPromptResult,
   type Cut2KitApplication,
@@ -46,8 +47,10 @@ import {
 } from "@t3tools/contracts";
 import {
   buildCut2KitFramingLayoutPrompt,
+  buildCut2KitManufacturingPlanPrompt,
   buildCut2KitSheathingLayoutPrompt,
   buildCut2KitWallGeometryPrompt,
+  buildManufacturingPlanArtifactPath,
   buildWallLayoutArtifactPaths,
   resolveCut2KitAutomationModelSelection,
   resolveCut2KitPromptTemplatePaths,
@@ -2541,6 +2544,87 @@ export const makeCut2KitProjects = Effect.gen(function* () {
     };
   });
 
+  const compileManufacturingPrompt: Cut2KitProjectsShape["compileManufacturingPrompt"] = Effect.fn(
+    "Cut2KitProjects.compileManufacturingPrompt",
+  )(
+    function* (
+      input,
+    ): Effect.fn.Return<Cut2KitCompileManufacturingPromptResult, Cut2KitProjectsError> {
+      const project = yield* inspectProject({ cwd: input.cwd });
+      const settings = project.settings;
+      if (!isWallWorkflowSettings(settings)) {
+        return yield* new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "compileManufacturingPrompt.validateSettings",
+          detail:
+            "Cut2Kit settings must be valid wall-workflow settings before compiling an A2MC manufacturing-plan prompt.",
+        });
+      }
+
+      const sourceDocument = project.sourceDocuments.find(
+        (document) => document.sourcePath === input.sourcePdfPath,
+      );
+      if (!sourceDocument || sourceDocument.classification !== "elevation") {
+        return yield* new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "compileManufacturingPrompt.validateSourcePdf",
+          detail: "Select a source document classified as an elevation PDF.",
+        });
+      }
+
+      const artifactPaths = buildWallLayoutArtifactPaths(project, input.sourcePdfPath);
+      const { promptTemplateBundle } = yield* loadPromptTemplateBundleForProject(project);
+      const sheathingLayoutResult = yield* Effect.tryPromise({
+        try: () => readSheathingLayoutFile(project.cwd, artifactPaths.sheathingJsonPath, settings),
+        catch: (error) =>
+          new Cut2KitProjectsError({
+            cwd: project.cwd,
+            operation: "compileManufacturingPrompt.readSheathingArtifact",
+            detail: error instanceof Error ? error.message : String(error),
+          }),
+      });
+
+      if (sheathingLayoutResult.issues.length > 0 || sheathingLayoutResult.sheathingLayout === null) {
+        return yield* new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "compileManufacturingPrompt.decodeSheathingArtifact",
+          detail:
+            sheathingLayoutResult.issues[0]?.message ??
+            "Generate the sheathing layout JSON before starting manufacturing-plan generation.",
+        });
+      }
+
+      const sheathingLayout = normalizeCompatibleSheathingLayout(
+        sheathingLayoutResult.sheathingLayout,
+        settings,
+      );
+      if (sheathingLayout === null) {
+        return yield* new Cut2KitProjectsError({
+          cwd: project.cwd,
+          operation: "compileManufacturingPrompt.normalizeSheathingArtifact",
+          detail:
+            "The sheathing layout JSON exists but could not be normalized for manufacturing-plan generation.",
+        });
+      }
+
+      return {
+        sourcePdfPath: input.sourcePdfPath,
+        prompt: buildCut2KitManufacturingPlanPrompt({
+          project,
+          sourcePdfPath: input.sourcePdfPath,
+          sheathingLayout,
+          promptTemplates: {
+            systemPrompt: promptTemplateBundle.manufacturingSystem,
+            userPrompt: promptTemplateBundle.manufacturingUser,
+            validationChecklist: promptTemplateBundle.validationChecklist,
+          },
+        }),
+        sheathingJsonPath: artifactPaths.sheathingJsonPath,
+        manufacturingPlanPath: buildManufacturingPlanArtifactPath(project),
+      };
+    },
+  );
+
   const compileSheathingPrompt: Cut2KitProjectsShape["compileSheathingPrompt"] = Effect.fn(
     "Cut2KitProjects.compileSheathingPrompt",
   )(function* (input): Effect.fn.Return<Cut2KitCompileSheathingPromptResult, Cut2KitProjectsError> {
@@ -3293,6 +3377,7 @@ export const makeCut2KitProjects = Effect.gen(function* () {
   return {
     inspectProject,
     compileFramingPrompt,
+    compileManufacturingPrompt,
     compileSheathingPrompt,
     generateOutputs,
     generateWallLayout,

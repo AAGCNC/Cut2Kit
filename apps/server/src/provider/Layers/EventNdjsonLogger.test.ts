@@ -163,4 +163,82 @@ describe("EventNdjsonLogger", () => {
       }
     }),
   );
+
+  it.effect("skips high-frequency delta records in observability logs", () =>
+    Effect.gen(function* () {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "t3-provider-log-"));
+
+      try {
+        const nativeLogger = yield* makeEventNdjsonLogger(path.join(tempDir, "native.ndjson"), {
+          stream: "native",
+        });
+        const canonicalLogger = yield* makeEventNdjsonLogger(
+          path.join(tempDir, "canonical.ndjson"),
+          {
+            stream: "canonical",
+          },
+        );
+        assert.notEqual(nativeLogger, undefined);
+        assert.notEqual(canonicalLogger, undefined);
+        if (!nativeLogger || !canonicalLogger) {
+          return;
+        }
+
+        yield* nativeLogger.write(
+          { method: "item/agentMessage/delta", payload: { delta: "a" } },
+          ThreadId.makeUnsafe("thread-native"),
+        );
+        yield* canonicalLogger.write(
+          { type: "content.delta", payload: { streamKind: "assistant_text", delta: "a" } },
+          ThreadId.makeUnsafe("thread-canonical"),
+        );
+        yield* nativeLogger.close();
+        yield* canonicalLogger.close();
+
+        assert.equal(fs.existsSync(path.join(tempDir, "thread-native.log")), false);
+        assert.equal(fs.existsSync(path.join(tempDir, "thread-canonical.log")), false);
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("truncates oversized payload strings before writing log lines", () =>
+    Effect.gen(function* () {
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "t3-provider-log-"));
+      const basePath = path.join(tempDir, "provider-canonical.ndjson");
+
+      try {
+        const logger = yield* makeEventNdjsonLogger(basePath, { stream: "canonical" });
+        assert.notEqual(logger, undefined);
+        if (!logger) {
+          return;
+        }
+
+        yield* logger.write(
+          {
+            type: "turn.diff.updated",
+            payload: {
+              unifiedDiff: "x".repeat(6_000),
+            },
+          },
+          ThreadId.makeUnsafe("thread-truncate"),
+        );
+        yield* logger.close();
+
+        const parsed = parseLogLine(
+          fs.readFileSync(path.join(tempDir, "thread-truncate.log"), "utf8").trim(),
+        );
+        const payload = JSON.parse(parsed.payload) as {
+          payload?: { unifiedDiff?: string };
+        };
+        const unifiedDiff = payload.payload?.unifiedDiff ?? "";
+
+        assert.ok(unifiedDiff.length < 4_300);
+        assert.include(unifiedDiff, "[truncated ");
+      } finally {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      }
+    }),
+  );
 });

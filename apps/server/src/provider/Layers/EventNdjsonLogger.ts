@@ -17,6 +17,10 @@ import { toSafeThreadAttachmentSegment } from "../../attachmentStore.ts";
 const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_MAX_FILES = 10;
 const DEFAULT_BATCH_WINDOW_MS = 200;
+const MAX_LOG_STRING_LENGTH = 4_096;
+const MAX_LOG_ARRAY_ITEMS = 64;
+const MAX_LOG_OBJECT_KEYS = 128;
+const MAX_LOG_DEPTH = 6;
 const GLOBAL_THREAD_SEGMENT = "_global";
 const LOG_SCOPE = "provider-observability";
 
@@ -74,12 +78,105 @@ function resolveStreamLabel(stream: EventNdjsonStream): string {
   }
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function shouldSkipEvent(stream: EventNdjsonStream, event: unknown): boolean {
+  const record = asRecord(event);
+  if (!record) {
+    return false;
+  }
+
+  const method = typeof record.method === "string" ? record.method : null;
+  const type = typeof record.type === "string" ? record.type : null;
+
+  return method === "item/agentMessage/delta" || (stream !== "native" && type === "content.delta");
+}
+
+function truncateString(value: string): string {
+  if (value.length <= MAX_LOG_STRING_LENGTH) {
+    return value;
+  }
+  return `${value.slice(0, MAX_LOG_STRING_LENGTH)}… [truncated ${value.length - MAX_LOG_STRING_LENGTH} chars]`;
+}
+
+function sanitizeValueForLog(value: unknown, depth: number, seen: WeakSet<object>): unknown {
+  if (typeof value === "string") {
+    return truncateString(value);
+  }
+
+  if (typeof value === "bigint") {
+    return `${value}n`;
+  }
+
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === "boolean" ||
+    typeof value === "number"
+  ) {
+    return value;
+  }
+
+  if (typeof value !== "object") {
+    return String(value);
+  }
+
+  if (seen.has(value)) {
+    return "[Circular]";
+  }
+
+  if (depth >= MAX_LOG_DEPTH) {
+    return Array.isArray(value) ? `[Array(${value.length}) truncated]` : "[Object truncated]";
+  }
+
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      const sanitizedItems = value
+        .slice(0, MAX_LOG_ARRAY_ITEMS)
+        .map((entry) => sanitizeValueForLog(entry, depth + 1, seen));
+      const omittedCount = value.length - sanitizedItems.length;
+      return omittedCount > 0
+        ? [...sanitizedItems, `[+${omittedCount} more items]`]
+        : sanitizedItems;
+    }
+
+    const record = value as Record<string, unknown>;
+    const entries = Object.entries(record);
+    const sanitized = Object.fromEntries(
+      entries
+        .slice(0, MAX_LOG_OBJECT_KEYS)
+        .map(([key, entry]) => [key, sanitizeValueForLog(entry, depth + 1, seen)]),
+    );
+    const omittedKeyCount = entries.length - Object.keys(sanitized).length;
+    if (omittedKeyCount > 0) {
+      sanitized.__truncatedKeyCount = omittedKeyCount;
+    }
+    return sanitized;
+  } finally {
+    seen.delete(value);
+  }
+}
+
+function sanitizeEventForLog(event: unknown): unknown {
+  return sanitizeValueForLog(event, 0, new WeakSet<object>());
+}
+
 const toLogMessage = Effect.fn("toLogMessage")(function* (
+  stream: EventNdjsonStream,
   event: unknown,
 ): Effect.fn.Return<string | undefined> {
+  if (shouldSkipEvent(stream, event)) {
+    return undefined;
+  }
+
   const serialized = yield* Effect.sync(() => {
     try {
-      return { ok: true as const, value: JSON.stringify(event) };
+      return { ok: true as const, value: JSON.stringify(sanitizeEventForLog(event)) };
     } catch (error) {
       return { ok: false as const, error };
     }
@@ -172,10 +269,11 @@ export const makeEventNdjsonLogger = Effect.fn("makeEventNdjsonLogger")(function
   filePath: string,
   options: EventNdjsonLoggerOptions,
 ): Effect.fn.Return<EventNdjsonLogger | undefined> {
+  const stream = options.stream;
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
   const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
   const batchWindowMs = options.batchWindowMs ?? DEFAULT_BATCH_WINDOW_MS;
-  const streamLabel = resolveStreamLabel(options.stream);
+  const streamLabel = resolveStreamLabel(stream);
 
   const directoryReady = yield* Effect.sync(() => {
     try {
@@ -225,7 +323,7 @@ export const makeEventNdjsonLogger = Effect.fn("makeEventNdjsonLogger")(function
 
   const write = Effect.fn("write")(function* (event: unknown, threadId: ThreadId | null) {
     const threadSegment = resolveThreadSegment(threadId);
-    const message = yield* toLogMessage(event);
+    const message = yield* toLogMessage(stream, event);
     if (!message) {
       return;
     }

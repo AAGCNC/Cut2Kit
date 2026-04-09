@@ -2,6 +2,8 @@ import {
   buildCut2KitAgentPrompt,
   buildFramingLayoutArtifactPaths,
   buildFramingLayoutThreadTitle,
+  buildManufacturingPlanArtifactPath,
+  buildManufacturingPlanThreadTitle,
   buildSheathingLayoutArtifactPaths,
   buildWallPackageThreadTitle,
   resolveCut2KitAutomationModelSelection,
@@ -104,6 +106,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   const { handleNewThread } = useHandleNewThread();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isStartingWallPackageGeneration, setIsStartingWallPackageGeneration] = useState(false);
+  const [isStartingManufacturingPlanGeneration, setIsStartingManufacturingPlanGeneration] =
+    useState(false);
   const [isPreparingAgent, setIsPreparingAgent] = useState(false);
   const [isSettingsEditorOpen, setIsSettingsEditorOpen] = useState(false);
   const [selectedSourcePdfPath, setSelectedSourcePdfPath] = useState<string | null>(null);
@@ -122,8 +126,15 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     jsonPath: string;
     pdfPath: string;
   } | null>(null);
+  const [activeManufacturingPlanGeneration, setActiveManufacturingPlanGeneration] = useState<{
+    threadId: ThreadId;
+    sourcePdfPath: string;
+    sheathingJsonPath: string;
+    manufacturingPlanPath: string;
+  } | null>(null);
   const completedGenerationThreadIdsRef = useRef(new Set<ThreadId>());
   const completedWallPackageThreadIdsRef = useRef(new Set<ThreadId>());
+  const completedManufacturingPlanThreadIdsRef = useRef(new Set<ThreadId>());
   const autoRenderedFramingJsonPathsRef = useRef(new Set<string>());
   const autoRenderedWallPackageJsonPathsRef = useRef(new Set<string>());
   const previousSelectedFramingJsonRef = useRef<{
@@ -149,6 +160,17 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   );
 
   const snapshot = snapshotQuery.data ?? null;
+  const snapshotErrorMessage = (() => {
+    const error = snapshotQuery.error;
+    if (!error) {
+      return null;
+    }
+    if (error instanceof Error && error.message.trim().length > 0) {
+      return error.message;
+    }
+    const fallback = String(error).trim();
+    return fallback.length > 0 ? fallback : null;
+  })();
   const hasWallWorkflowSettings = snapshot?.settings !== null && snapshot?.settings !== undefined;
   const automationModelSelection = useMemo(
     () =>
@@ -198,6 +220,10 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         : null,
     [snapshot, selectedSourcePdfPath],
   );
+  const manufacturingPlanPath = useMemo(
+    () => (snapshot ? buildManufacturingPlanArtifactPath(snapshot) : null),
+    [snapshot],
+  );
   const framingPromptQuery = useQuery({
     queryKey: [
       "cut2kit",
@@ -231,6 +257,12 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
   const wallPackageGenerationThread = useStore((store) =>
     activeWallPackageGeneration
       ? (store.threads.find((thread) => thread.id === activeWallPackageGeneration.threadId) ?? null)
+      : null,
+  );
+  const manufacturingPlanGenerationThread = useStore((store) =>
+    activeManufacturingPlanGeneration
+      ? (store.threads.find((thread) => thread.id === activeManufacturingPlanGeneration.threadId) ??
+          null)
       : null,
   );
   const framingJsonReady = useMemo(
@@ -285,6 +317,53 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       ),
     [wallPackageArtifacts, snapshot],
   );
+  const manufacturingPromptQuery = useQuery({
+    queryKey: [
+      "cut2kit",
+      "compileManufacturingPrompt",
+      snapshot?.cwd ?? null,
+      selectedSourcePdfPath,
+      snapshot?.summary.totalFiles ?? 0,
+    ],
+    enabled:
+      snapshot !== null &&
+      hasWallWorkflowSettings &&
+      selectedSourcePdfPath !== null &&
+      selectedElevationOption?.classification === "elevation" &&
+      wallPackageJsonReady,
+    queryFn: async () => {
+      const api = readNativeApi();
+      if (!api || !snapshot || !selectedSourcePdfPath) {
+        throw new Error("Cut2Kit manufacturing prompt compilation is unavailable.");
+      }
+      return api.cut2kit.compileManufacturingPrompt({
+        cwd: snapshot.cwd,
+        sourcePdfPath: selectedSourcePdfPath,
+      });
+    },
+  });
+  const manufacturingPlanFileReady = useMemo(
+    () =>
+      Boolean(
+        manufacturingPlanPath &&
+        snapshot?.files.some(
+          (file) =>
+            file.kind === "file" &&
+            file.relativePath === manufacturingPlanPath &&
+            file.role === "manufacturing-plan",
+        ),
+      ),
+    [manufacturingPlanPath, snapshot],
+  );
+  const selectedManufacturingJobCount = useMemo(
+    () =>
+      selectedSourcePdfPath
+        ? (snapshot?.manufacturingPlan?.jobs.filter((job) => job.sourcePath === selectedSourcePdfPath)
+            .length ?? 0)
+        : 0,
+    [selectedSourcePdfPath, snapshot?.manufacturingPlan],
+  );
+  const manufacturingPlanReadyForSelectedSource = selectedManufacturingJobCount > 0;
   const activeFramingJsonReady = useMemo(
     () =>
       Boolean(
@@ -337,8 +416,20 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       ),
     [activeWallPackageGeneration, snapshot],
   );
+  const activeManufacturingPlanReady = useMemo(
+    () =>
+      Boolean(
+        activeManufacturingPlanGeneration &&
+        snapshot?.manufacturingPlan?.jobs.some(
+          (job) => job.sourcePath === activeManufacturingPlanGeneration.sourcePdfPath,
+        ),
+      ),
+    [activeManufacturingPlanGeneration, snapshot?.manufacturingPlan],
+  );
   const framingThreadStatus = framingGenerationThread?.session?.orchestrationStatus ?? null;
   const wallPackageThreadStatus = wallPackageGenerationThread?.session?.orchestrationStatus ?? null;
+  const manufacturingPlanThreadStatus =
+    manufacturingPlanGenerationThread?.session?.orchestrationStatus ?? null;
   const canRenderSelectedFramingLayoutPdf = useMemo(
     () =>
       canRenderFramingPdfFromJson({
@@ -369,13 +460,13 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       queryClient.setQueryData(cut2kitQueryKeys.project(project.cwd), result.project);
       toastManager.add({
         type: "success",
-        title: "A2MC outputs generated",
+        title: "NC files generated",
         description: `${result.writtenPaths.length} files written under ${project.cwd}.`,
       });
     } catch (error) {
       toastManager.add({
         type: "error",
-        title: "Could not generate A2MC outputs",
+        title: "Could not generate NC files",
         description: error instanceof Error ? error.message : "An unexpected error occurred.",
       });
     } finally {
@@ -439,7 +530,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
           });
           toastManager.add({
             type: "success",
-            title: "Wall package PDF rendered",
+            title: "Sheathing PDF rendered",
             description: options?.auto
               ? `Detected ${result.jsonPath} and wrote ${result.pdfPath} automatically.`
               : `Wrote ${result.pdfPath} from ${result.jsonPath}.`,
@@ -447,17 +538,17 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         } else {
           toastManager.add({
             type: "error",
-            title: "Wall package validation blocked packaging",
+            title: "Sheathing validation blocked packaging",
             description:
               result.statusMessage ??
-              "Cut2Kit saved the validation report, but did not render the wall package PDF.",
+              "Cut2Kit saved the validation report, but did not render the sheathing PDF.",
           });
         }
         return result;
       } catch (error) {
         toastManager.add({
           type: "error",
-          title: "Could not render wall package PDF",
+          title: "Could not render sheathing PDF",
           description: error instanceof Error ? error.message : "An unexpected error occurred.",
         });
         throw error;
@@ -484,7 +575,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         type: "error",
         title: "Select an elevation PDF first",
         description:
-          "Wall package generation only runs from a source document classified as an elevation PDF.",
+          "Sheathing generation only runs from a source document classified as an elevation PDF.",
       });
       return;
     }
@@ -496,7 +587,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         type: "error",
         title: "Cut2Kit settings are required",
         description:
-          "Add a valid cut2kit.settings.json file to this project before starting wall package generation.",
+          "Add a valid cut2kit.settings.json file to this project before starting sheathing generation.",
       });
       return;
     }
@@ -505,7 +596,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
         type: "error",
         title: "Framing layout JSON not found",
         description:
-          "Generate the framing layout first. The wall package flow uses the framing JSON as its AI input.",
+          "Generate the framing layout first. The sheathing flow uses the framing JSON as its AI input.",
       });
       return;
     }
@@ -564,13 +655,13 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       });
       toastManager.add({
         type: "success",
-        title: "Wall package generation started",
+        title: "Sheathing generation started",
         description: `${PROVIDER_DISPLAY_NAMES[modelSelection.provider]} is generating ${wallPackageArtifacts.jsonPath} from ${framingArtifacts.jsonPath}.`,
       });
     } catch (error) {
       toastManager.add({
         type: "error",
-        title: "Could not start wall package generation",
+        title: "Could not start sheathing generation",
         description: error instanceof Error ? error.message : "An unexpected error occurred.",
       });
     } finally {
@@ -585,6 +676,127 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     selectedSourcePdfPath,
     snapshot,
     wallPackageArtifacts,
+  ]);
+
+  const handleGenerateManufacturingPlan = useCallback(async () => {
+    if (
+      !project ||
+      !snapshot ||
+      !selectedSourcePdfPath ||
+      !wallPackageArtifacts ||
+      !manufacturingPlanPath
+    ) {
+      return;
+    }
+
+    if (selectedElevationOption?.classification !== "elevation") {
+      toastManager.add({
+        type: "error",
+        title: "Select an elevation PDF first",
+        description:
+          "Manufacturing-plan generation only runs from a source document classified as an elevation PDF.",
+      });
+      return;
+    }
+
+    const api = readNativeApi();
+    if (!api) return;
+    if (!snapshot.settings) {
+      toastManager.add({
+        type: "error",
+        title: "Cut2Kit settings are required",
+        description:
+          "Add a valid cut2kit.settings.json file to this project before starting manufacturing-plan generation.",
+      });
+      return;
+    }
+    if (!wallPackageJsonReady) {
+      toastManager.add({
+        type: "error",
+        title: "Sheathing layout JSON not found",
+        description:
+          "Generate the sheathing layout first. NC output is derived from sheathing, not directly from the stud-wall layout.",
+      });
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+    const threadId = newThreadId();
+    const modelSelection =
+      automationModelSelection ??
+      resolveCut2KitAutomationModelSelection(snapshot, project.defaultModelSelection);
+
+    setIsStartingManufacturingPlanGeneration(true);
+    try {
+      const compiledPrompt =
+        manufacturingPromptQuery.data ??
+        (await api.cut2kit.compileManufacturingPrompt({
+          cwd: snapshot.cwd,
+          sourcePdfPath: selectedSourcePdfPath,
+        }));
+
+      await api.orchestration.dispatchCommand({
+        type: "thread.create",
+        commandId: newCommandId(),
+        threadId,
+        projectId: project.id,
+        title: buildManufacturingPlanThreadTitle(selectedSourcePdfPath),
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      });
+
+      await api.orchestration.dispatchCommand({
+        type: "thread.turn.start",
+        commandId: newCommandId(),
+        threadId,
+        message: {
+          messageId: newMessageId(),
+          role: "user",
+          text: compiledPrompt.prompt,
+          attachments: [],
+        },
+        modelSelection,
+        titleSeed: buildManufacturingPlanThreadTitle(selectedSourcePdfPath),
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        createdAt,
+      });
+
+      completedManufacturingPlanThreadIdsRef.current.delete(threadId);
+      setActiveManufacturingPlanGeneration({
+        threadId,
+        sourcePdfPath: selectedSourcePdfPath,
+        sheathingJsonPath: compiledPrompt.sheathingJsonPath,
+        manufacturingPlanPath: compiledPrompt.manufacturingPlanPath,
+      });
+      toastManager.add({
+        type: "success",
+        title: "Manufacturing-plan generation started",
+        description: `${PROVIDER_DISPLAY_NAMES[modelSelection.provider]} is generating ${compiledPrompt.manufacturingPlanPath} from ${compiledPrompt.sheathingJsonPath}.`,
+      });
+    } catch (error) {
+      toastManager.add({
+        type: "error",
+        title: "Could not start manufacturing-plan generation",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+      });
+    } finally {
+      setIsStartingManufacturingPlanGeneration(false);
+    }
+  }, [
+    automationModelSelection,
+    manufacturingPlanPath,
+    manufacturingPromptQuery.data,
+    project,
+    selectedElevationOption?.classification,
+    selectedSourcePdfPath,
+    snapshot,
+    wallPackageArtifacts,
+    wallPackageJsonReady,
   ]);
 
   const handleOpenInEditor = useCallback(async () => {
@@ -780,13 +992,21 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     });
   }, [activeWallPackageGeneration, navigate]);
 
+  const handleOpenManufacturingPlanThread = useCallback(async () => {
+    if (!activeManufacturingPlanGeneration) return;
+    await navigate({
+      to: "/$threadId",
+      params: { threadId: activeManufacturingPlanGeneration.threadId },
+    });
+  }, [activeManufacturingPlanGeneration, navigate]);
+
   const handleRenderSelectedWallPackagePdf = useCallback(async () => {
     if (!project || !wallPackageArtifacts || !wallPackageJsonReady) {
       toastManager.add({
         type: "error",
         title: "Sheathing layout JSON not found",
         description:
-          "Generate or write the sheathing layout JSON first, then render the wall package PDF from that artifact.",
+          "Generate or write the sheathing layout JSON first, then render the sheathing PDF from that artifact.",
       });
       return;
     }
@@ -821,6 +1041,20 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       globalThis.clearInterval(intervalId);
     };
   }, [activeWallPackageGeneration, activeWallPackagePdfReady, project, queryClient]);
+
+  useEffect(() => {
+    if (!project || !activeManufacturingPlanGeneration || activeManufacturingPlanReady) {
+      return;
+    }
+    const intervalId = globalThis.setInterval(() => {
+      void queryClient.invalidateQueries({
+        queryKey: cut2kitQueryKeys.project(project.cwd),
+      });
+    }, 3_000);
+    return () => {
+      globalThis.clearInterval(intervalId);
+    };
+  }, [activeManufacturingPlanGeneration, activeManufacturingPlanReady, project, queryClient]);
 
   useEffect(() => {
     const nextJsonPath = framingArtifacts?.jsonPath ?? null;
@@ -982,10 +1216,10 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       completedWallPackageThreadIdsRef.current.add(activeWallPackageGeneration.threadId);
       toastManager.add({
         type: "error",
-        title: "Wall package generation failed",
+        title: "Sheathing generation failed",
         description:
           wallPackageGenerationThread?.session?.lastError ??
-          `${automationProviderLabel} finished without producing the wall package JSON artifact.`,
+          `${automationProviderLabel} finished without producing the sheathing JSON artifact.`,
       });
       setActiveWallPackageGeneration(null);
       return;
@@ -999,8 +1233,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
       completedWallPackageThreadIdsRef.current.add(activeWallPackageGeneration.threadId);
       toastManager.add({
         type: "error",
-        title: "Wall package JSON not found",
-        description: `${automationProviderLabel} finished the wall-package thread without writing the expected JSON artifact.`,
+        title: "Sheathing JSON not found",
+        description: `${automationProviderLabel} finished the sheathing thread without writing the expected JSON artifact.`,
       });
       setActiveWallPackageGeneration(null);
       return;
@@ -1027,6 +1261,60 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
     wallPackageThreadStatus,
   ]);
 
+  useEffect(() => {
+    if (
+      !activeManufacturingPlanGeneration ||
+      !isTerminalGenerationStatus(manufacturingPlanThreadStatus)
+    ) {
+      return;
+    }
+    if (
+      completedManufacturingPlanThreadIdsRef.current.has(activeManufacturingPlanGeneration.threadId)
+    ) {
+      return;
+    }
+    if (!activeManufacturingPlanReady && manufacturingPlanThreadStatus === "error") {
+      completedManufacturingPlanThreadIdsRef.current.add(activeManufacturingPlanGeneration.threadId);
+      toastManager.add({
+        type: "error",
+        title: "Manufacturing-plan generation failed",
+        description:
+          manufacturingPlanGenerationThread?.session?.lastError ??
+          `${automationProviderLabel} finished without writing selected-source jobs into the manufacturing plan.`,
+      });
+      setActiveManufacturingPlanGeneration(null);
+      return;
+    }
+    if (
+      !activeManufacturingPlanReady &&
+      (manufacturingPlanThreadStatus === "ready" ||
+        manufacturingPlanThreadStatus === "stopped" ||
+        manufacturingPlanThreadStatus === "interrupted")
+    ) {
+      completedManufacturingPlanThreadIdsRef.current.add(activeManufacturingPlanGeneration.threadId);
+      toastManager.add({
+        type: "error",
+        title: "Manufacturing-plan jobs not found",
+        description: `${automationProviderLabel} finished the manufacturing-plan thread without producing jobs for ${activeManufacturingPlanGeneration.sourcePdfPath}.`,
+      });
+      setActiveManufacturingPlanGeneration(null);
+      return;
+    }
+    completedManufacturingPlanThreadIdsRef.current.add(activeManufacturingPlanGeneration.threadId);
+    toastManager.add({
+      type: "success",
+      title: "Manufacturing plan ready",
+      description: `${activeManufacturingPlanGeneration.manufacturingPlanPath} now includes jobs for ${activeManufacturingPlanGeneration.sourcePdfPath}.`,
+    });
+    setActiveManufacturingPlanGeneration(null);
+  }, [
+    activeManufacturingPlanGeneration,
+    activeManufacturingPlanReady,
+    automationProviderLabel,
+    manufacturingPlanGenerationThread?.session?.lastError,
+    manufacturingPlanThreadStatus,
+  ]);
+
   if (!project) {
     return (
       <div className="flex flex-1 items-center justify-center px-6 text-sm text-muted-foreground">
@@ -1045,8 +1333,11 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
 
   if (snapshotQuery.isError || !snapshot) {
     return (
-      <div className="flex flex-1 items-center justify-center px-6 text-sm text-muted-foreground">
-        Could not load the Cut2Kit project snapshot.
+      <div className="flex flex-1 items-center justify-center px-6">
+        <div className="max-w-2xl text-center text-sm text-muted-foreground">
+          <p>Could not load the Cut2Kit project snapshot.</p>
+          {snapshotErrorMessage ? <p className="mt-2">{snapshotErrorMessage}</p> : null}
+        </div>
       </div>
     );
   }
@@ -1090,8 +1381,22 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
             >
               <HammerIcon className="size-4" />
               {isStartingWallPackageGeneration
-                ? "Starting Wall Package Run..."
-                : "Generate Wall Package"}
+                ? "Starting Sheathing Run..."
+                : "Generate Sheathing Layout"}
+            </Button>
+            <Button
+              onClick={() => void handleGenerateManufacturingPlan()}
+              disabled={
+                isStartingManufacturingPlanGeneration ||
+                !selectedSourcePdfPath ||
+                selectedElevationOption?.classification !== "elevation" ||
+                !wallPackageJsonReady
+              }
+            >
+              <HammerIcon className="size-4" />
+              {isStartingManufacturingPlanGeneration
+                ? "Starting Manufacturing Run..."
+                : "Generate Manufacturing Plan"}
             </Button>
             <Button
               variant="outline"
@@ -1115,10 +1420,10 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
             </Button>
             <Button
               onClick={() => void handleGenerateOutputs()}
-              disabled={isGenerating || snapshot.summary.errorCount > 0}
+              disabled={isGenerating || snapshot.summary.errorCount > 0 || snapshot.ncJobs.length === 0}
             >
               <HammerIcon className="size-4" />
-              {isGenerating ? "Generating..." : "Generate A2MC Outputs"}
+              {isGenerating ? "Posting NC..." : "Generate NC Files"}
             </Button>
           </div>
         </div>
@@ -1151,11 +1456,11 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
             <CardHeader className="border-b border-border/70">
               <CardTitle>AI-First Wall Automation</CardTitle>
               <CardDescription>
-                Framing and wall-package generation both run through {automationRuntimeLabel} as
-                separate AI-first threads. Framing produces the structured framing JSON first, and
-                the wall-package flow then uses that framing artifact as the AI input for
-                sheathing/package generation before Cut2Kit validates and renders the PDF
-                deterministically.
+                Framing and sheathing run through {automationRuntimeLabel} as separate AI-first
+                threads. Framing establishes support and wall dimensions for the sheathing layout,
+                then the sheathing layout feeds an explicit manufacturing-plan thread that writes
+                `cut2kit.manufacturing.json`. Only that manufacturing plan is posted into `.nc`
+                output.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_260px]">
@@ -1245,6 +1550,31 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                   </p>
                 </div>
 
+                <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Manufacturing-plan artifacts
+                  </p>
+                  <p className="mt-2 break-all text-sm text-foreground">
+                    {manufacturingPlanPath ?? "Pending project snapshot"}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    The explicit manufacturing plan is project-wide, but jobs are tracked per
+                    selected elevation PDF.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Badge variant={manufacturingPlanFileReady ? "success" : "outline"}>
+                      {manufacturingPlanFileReady ? "Plan file ready" : "Plan file pending"}
+                    </Badge>
+                    <Badge
+                      variant={manufacturingPlanReadyForSelectedSource ? "success" : "outline"}
+                    >
+                      {manufacturingPlanReadyForSelectedSource
+                        ? `${selectedManufacturingJobCount} selected-source job${selectedManufacturingJobCount === 1 ? "" : "s"}`
+                        : "No selected-source jobs"}
+                    </Badge>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-2">
                   <Button
                     onClick={() => void handleGenerateWallPackage()}
@@ -1258,8 +1588,23 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                   >
                     <HammerIcon className="size-4" />
                     {isStartingWallPackageGeneration
-                      ? "Starting Wall Package Run..."
-                      : "Generate Wall Package"}
+                      ? "Starting Sheathing Run..."
+                      : "Generate Sheathing Layout"}
+                  </Button>
+                  <Button
+                    onClick={() => void handleGenerateManufacturingPlan()}
+                    disabled={
+                      isStartingManufacturingPlanGeneration ||
+                      !hasWallWorkflowSettings ||
+                      !selectedSourcePdfPath ||
+                      selectedElevationOption?.classification !== "elevation" ||
+                      !wallPackageJsonReady
+                    }
+                  >
+                    <HammerIcon className="size-4" />
+                    {isStartingManufacturingPlanGeneration
+                      ? "Starting Manufacturing Run..."
+                      : "Generate Manufacturing Plan"}
                   </Button>
                   <Button
                     onClick={() => void handleGenerateFramingLayout()}
@@ -1289,7 +1634,15 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                     disabled={!activeWallPackageGeneration}
                   >
                     <BotIcon className="size-4" />
-                    Open Wall Package Thread
+                    Open Sheathing Thread
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleOpenManufacturingPlanThread()}
+                    disabled={!activeManufacturingPlanGeneration}
+                  >
+                    <BotIcon className="size-4" />
+                    Open Manufacturing Thread
                   </Button>
                   <Button
                     variant="outline"
@@ -1301,10 +1654,12 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                   </Button>
                   <Button
                     onClick={() => void handleGenerateOutputs()}
-                    disabled={isGenerating || snapshot.summary.errorCount > 0}
+                    disabled={
+                      isGenerating || snapshot.summary.errorCount > 0 || snapshot.ncJobs.length === 0
+                    }
                   >
                     <HammerIcon className="size-4" />
-                    {isGenerating ? "Generating..." : "Generate A2MC Outputs"}
+                    {isGenerating ? "Posting NC..." : "Generate NC Files"}
                   </Button>
                 </div>
               </div>
@@ -1386,10 +1741,10 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Wall Package Status</CardTitle>
+                  <CardTitle>Sheathing Layout Status</CardTitle>
                   <CardDescription>
                     Framing input, expected sheathing output paths, and the current AI-run status
-                    for the wall-package workflow.
+                    for the sheathing workflow.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -1441,11 +1796,82 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                     disabled={!canRenderSelectedWallPackagePdf}
                   >
                     {isRenderingWallPackage
-                      ? "Rendering Wall Package..."
+                      ? "Rendering Sheathing PDF..."
                       : wallPackagePdfReady
-                        ? "Regenerate Wall Package PDF"
-                        : "Render Wall Package PDF"}
+                        ? "Regenerate Sheathing PDF"
+                        : "Render Sheathing PDF"}
                   </Button>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Manufacturing Plan Status</CardTitle>
+                  <CardDescription>
+                    Sheathing input, expected `cut2kit.manufacturing.json` output, and the current
+                    AI-run status for A2MC manufacturing-plan generation.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">Sheathing JSON input</p>
+                    <p className="mt-1 break-all text-sm text-foreground">
+                      {wallPackageArtifacts?.jsonPath ?? "Pending source selection"}
+                    </p>
+                    <div className="mt-2">
+                      <Badge variant={wallPackageJsonReady ? "success" : "outline"}>
+                        {wallPackageJsonReady ? "ready" : "missing"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/60 p-3">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Manufacturing plan JSON
+                    </p>
+                    <p className="mt-1 break-all text-sm text-foreground">
+                      {manufacturingPlanPath ?? "Pending project snapshot"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={manufacturingPlanFileReady ? "success" : "outline"}>
+                      {manufacturingPlanFileReady ? "Plan file ready" : "Plan file pending"}
+                    </Badge>
+                    <Badge variant={manufacturingPlanReadyForSelectedSource ? "success" : "outline"}>
+                      {manufacturingPlanReadyForSelectedSource
+                        ? `${selectedManufacturingJobCount} selected-source job${selectedManufacturingJobCount === 1 ? "" : "s"}`
+                        : "No selected-source jobs"}
+                    </Badge>
+                    {manufacturingPlanThreadStatus ? (
+                      <Badge variant="outline">{manufacturingPlanThreadStatus}</Badge>
+                    ) : null}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Stud framing informs sheathing placement, but NC output is generated only from
+                    the sheathing-derived manufacturing plan.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      onClick={() => void handleGenerateManufacturingPlan()}
+                      disabled={
+                        isStartingManufacturingPlanGeneration ||
+                        !hasWallWorkflowSettings ||
+                        !selectedSourcePdfPath ||
+                        selectedElevationOption?.classification !== "elevation" ||
+                        !wallPackageJsonReady
+                      }
+                    >
+                      {isStartingManufacturingPlanGeneration
+                        ? "Starting Manufacturing Run..."
+                        : "Generate Manufacturing Plan"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleOpenManufacturingPlanThread()}
+                      disabled={!activeManufacturingPlanGeneration}
+                    >
+                      Open Manufacturing Thread
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -1525,8 +1951,8 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                 <CardHeader>
                   <CardTitle>Planned Outputs</CardTitle>
                   <CardDescription>
-                    Deterministic manifests and A2MC jobs derived from the explicit manufacturing
-                    plan.
+                    Deterministic manifests and A2MC `.nc` files derived only from the explicit
+                    manufacturing plan.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -1561,7 +1987,7 @@ export function Cut2KitProjectView({ projectId }: { projectId: ProjectId }) {
                     <p className="mt-2 text-sm text-foreground">
                       {snapshot.outputStatus.generated
                         ? `${snapshot.outputStatus.ncFilePaths.length} A2MC NC files are present under output/nc.`
-                        : "Run Generate A2MC Outputs to write manifests and controller-safe NC files to disk."}
+                        : "Run Generate NC Files to write manifests and controller-safe NC files from cut2kit.manufacturing.json."}
                     </p>
                   </div>
 

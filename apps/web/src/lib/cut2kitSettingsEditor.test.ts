@@ -60,6 +60,18 @@ const project = {
       source: "repo_default",
       contents: "# sheathingUser\nDefault sheathingUser\n",
     },
+    manufacturingSystem: {
+      configuredPath: ".docs/system-manufacturing.md",
+      resolvedPath: "/repo/system-manufacturing.md",
+      source: "repo_default",
+      contents: "# manufacturingSystem\nDefault manufacturingSystem\n",
+    },
+    manufacturingUser: {
+      configuredPath: ".docs/user-manufacturing.md",
+      resolvedPath: "/repo/user-manufacturing.md",
+      source: "repo_default",
+      contents: "# manufacturingUser\nDefault manufacturingUser\n",
+    },
     validationChecklist: {
       configuredPath: ".docs/validation-checklist.md",
       resolvedPath: "/repo/validation-checklist.md",
